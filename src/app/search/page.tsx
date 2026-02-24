@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Search, Download, Check, CheckCircle, XCircle, Loader, SearchX, Music, RefreshCw, Disc3 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+    Search, Download, Check, CheckCircle, XCircle, Loader, SearchX,
+    Music, RefreshCw, Disc3, Play, Link2, Sparkles, TrendingUp, Headphones
+} from "lucide-react";
 import { getAllTracksFromDB } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
+import { useRouter } from "next/navigation";
 
 interface Toast {
     id: number;
-    type: "success" | "error";
+    type: "success" | "error" | "loading";
     message: string;
 }
 
@@ -20,7 +24,19 @@ interface AlbumGroup {
     trackCount: number;
 }
 
+const SUGGESTIONS = [
+    { label: "Shakira", icon: <Sparkles size={14} /> },
+    { label: "Bad Bunny", icon: <TrendingUp size={14} /> },
+    { label: "Peso Pluma", icon: <TrendingUp size={14} /> },
+    { label: "Taylor Swift", icon: <Sparkles size={14} /> },
+    { label: "Dua Lipa", icon: <Headphones size={14} /> },
+    { label: "Karol G", icon: <Sparkles size={14} /> },
+    { label: "Drake", icon: <Headphones size={14} /> },
+    { label: "The Weeknd", icon: <Headphones size={14} /> },
+];
+
 export default function SearchPage() {
+    const router = useRouter();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<ItunesTrack[]>([]);
     const [loading, setLoading] = useState(false);
@@ -28,13 +44,16 @@ export default function SearchPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [linkInput, setLinkInput] = useState("");
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [activeLinkId, setActiveLinkId] = useState<string | null>(null);
+    const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
     const [linkDownloading, setLinkDownloading] = useState(false);
     const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
     const [toasts, setToasts] = useState<Toast[]>([]);
     const [searchError, setSearchError] = useState(false);
     const [viewMode, setViewMode] = useState<"songs" | "albums">("songs");
+    const [showLinkInput, setShowLinkInput] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // Album detail modal
     const [albumModal, setAlbumModal] = useState<{
         open: boolean; album: string; artist: string; cover: string;
     }>({ open: false, album: "", artist: "", cover: "" });
@@ -45,24 +64,48 @@ export default function SearchPage() {
         });
     }, []);
 
-    const showToast = useCallback((type: "success" | "error", message: string) => {
+    const showToast = useCallback((type: "success" | "error" | "loading", message: string) => {
         const id = Date.now();
         setToasts((prev) => [...prev, { id, type, message }]);
         setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t.id !== id));
-        }, 4000);
+        }, type === "loading" ? 30000 : 4000);
     }, []);
 
-    const handleDownload = async (track: ItunesTrack | null, url: string | null, id: string) => {
+    const { playTrack } = usePlayer();
+
+    const handlePlay = (track: ItunesTrack) => {
+        const downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}&stream=true`;
+        playTrack({
+            id: `stream-${track.trackId}`,
+            title: track.trackName,
+            artist: track.artistName,
+            album: track.collectionName || "",
+            coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
+            streamUrl: downloadUrl,
+            downloadedAt: Date.now(),
+        });
+    };
+
+    const handleDownload = (track: ItunesTrack | null, url: string | null, id: string) => {
+        if (downloadingId === id) return; // ya descargando
         setDownloadingId(id);
-        const success = await downloadAndSaveTrack(track, url, id);
-        if (success) {
-            setSavedTrackIds((prev) => new Set(prev).add(id));
-            showToast("success", track ? `"${track.trackName}" descargada ✓` : "¡Descarga completada y guardada en tu biblioteca!");
-        } else {
-            showToast("error", "Error al descargar. Intenta de nuevo.");
-        }
-        setDownloadingId(null);
+
+        const trackName = track?.trackName || "enlace";
+        showToast("loading", `Descargando "${trackName}"...`);
+
+        // Descarga en background — no bloqueamos la UI
+        downloadAndSaveTrack(track, url, id, (progress) => {
+            setDownloadProgresses(prev => ({ ...prev, [id]: progress }));
+        }).then(success => {
+            if (success) {
+                setSavedTrackIds((prev) => new Set(prev).add(id));
+                showToast("success", `"${trackName}" descargada ✓`);
+            } else {
+                showToast("error", `Error al descargar "${trackName}". Intenta de nuevo.`);
+            }
+            setDownloadingId(prev => prev === id ? null : prev);
+        });
     };
 
     const handleLinkDownload = async (e: React.FormEvent) => {
@@ -71,26 +114,30 @@ export default function SearchPage() {
         const urlToDownload = linkInput.trim();
         const directId = `link-${Date.now()}`;
         setLinkDownloading(true);
+        setActiveLinkId(directId);
 
-        const success = await downloadAndSaveTrack(null, urlToDownload, directId);
+        const success = await downloadAndSaveTrack(null, urlToDownload, directId, (progress) => {
+            setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
+        });
         if (success) {
             setSavedTrackIds((prev) => new Set(prev).add(directId));
-            showToast("success", "¡Descarga completada y guardada en tu biblioteca!");
+            showToast("success", "¡Descarga completada y guardada!");
             setLinkInput("");
         } else {
-            showToast("error", "Error al descargar. Verifica el enlace e intenta de nuevo.");
+            showToast("error", "Error al descargar. Verifica el enlace.");
         }
         setLinkDownloading(false);
+        setActiveLinkId(null);
     };
 
-    const doSearch = async (term: string) => {
+    const doSearch = useCallback(async (term: string) => {
         setLoading(true);
         setHasSearched(true);
         setSearchTerm(term);
         setSearchError(false);
         try {
             const response = await fetch(
-                `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=30`
+                `/api/search?term=${encodeURIComponent(term)}`
             );
             const data = await response.json();
             setResults(data.results || []);
@@ -101,7 +148,18 @@ export default function SearchPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const urlParams = new URLSearchParams(window.location.search);
+            const q = urlParams.get("q");
+            if (q) {
+                setQuery(q);
+                doSearch(q);
+            }
+        }
+    }, [doSearch]);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -129,115 +187,174 @@ export default function SearchPage() {
     });
     albumMap.forEach(v => albumGroups.push(v));
 
-    const suggestions = ["Shakira", "Bad Bunny", "Peso Pluma", "Taylor Swift", "Dua Lipa", "Karol G"];
+    const formatDuration = (ms: number) => {
+        const mins = Math.floor(ms / 60000);
+        const secs = Math.floor((ms % 60000) / 1000);
+        return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+    };
 
     return (
-        <main className="p-4 md:p-8 max-w-7xl mx-auto">
-            <header className="mb-10 text-center animate-fade-in-up">
-                <h1 className="text-4xl font-bold mb-4">Buscar y Descargar</h1>
-                <p className="text-gray-400">Encuentra o pega enlaces para obtener nueva música offline.</p>
+        <main className="p-4 md:p-8 max-w-7xl mx-auto pb-32">
+
+            {/* ═══ Hero Header ═══ */}
+            <header className="mb-10 animate-fade-in-up relative">
+                <div className="absolute -top-20 -left-20 w-72 h-72 bg-brand-500/10 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute -top-10 right-0 w-56 h-56 bg-pink-500/8 rounded-full blur-[100px] pointer-events-none" />
+
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 rounded-2xl bg-brand-500/10 border border-brand-500/20">
+                            <Search size={22} className="text-brand-400" />
+                        </div>
+                        <span className="text-xs font-black uppercase tracking-[0.25em] text-brand-400 drop-shadow-sm">Explorar</span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 mb-3 leading-tight">
+                        Buscar y Descargar
+                    </h1>
+                    <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl">
+                        Encuentra cualquier canción, artista o álbum. Descarga a tu dispositivo o escucha en streaming al instante.
+                    </p>
+                </div>
             </header>
 
-            <section className="glass-panel rounded-3xl p-6 md:p-8 mb-8 shadow-2xl flex flex-col gap-6">
-                <form onSubmit={handleSearch} className="relative flex items-center w-full max-w-3xl mx-auto">
-                    <div className="absolute left-4 text-gray-400"><Search size={24} /></div>
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Busca una canción, artista o álbum..."
-                        className="w-full bg-slate-900/50 border border-slate-700 rounded-full py-4 pl-14 pr-32 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all text-lg"
-                    />
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="absolute right-2 top-2 bottom-2 bg-brand-600 hover:bg-brand-500 px-6 rounded-full font-medium transition-colors min-w-[100px]"
-                    >
-                        {loading ? <div className="h-5 w-5 border-2 border-white rounded-full animate-spin border-t-transparent mx-auto" /> : "Buscar"}
-                    </button>
+            {/* ═══ Search Section ═══ */}
+            <section className="mb-10 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+
+                {/* Main Search Bar */}
+                <form onSubmit={handleSearch} className="relative group mb-4">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-brand-500/20 via-purple-500/10 to-pink-500/20 rounded-[2rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                    <div className="relative flex items-center">
+                        <div className="absolute left-6 text-slate-400 group-focus-within:text-brand-400 transition-colors duration-300 z-10">
+                            <Search size={22} />
+                        </div>
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="¿Qué quieres escuchar hoy?"
+                            className="w-full bg-[#0c1225]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl py-5 pl-16 pr-40 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/30 transition-all text-lg font-medium shadow-[0_8px_40px_-15px_rgba(0,0,0,0.5)] light-mode:bg-white/80 light-mode:text-slate-900 light-mode:border-slate-200"
+                        />
+                        <button
+                            type="submit"
+                            disabled={loading || !query.trim()}
+                            className="absolute right-3 bg-brand-500 hover:bg-brand-400 disabled:bg-brand-500/50 disabled:hover:bg-brand-500/50 px-7 py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_25px_rgba(99,102,241,0.5)] min-w-[110px] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 text-white disabled:cursor-not-allowed"
+                        >
+                            {loading ? <div className="h-5 w-5 border-2 border-white rounded-full animate-spin border-t-transparent mx-auto" /> : "Buscar"}
+                        </button>
+                    </div>
                 </form>
 
-                <div className="w-full max-w-3xl mx-auto flex items-center gap-4">
-                    <div className="h-px bg-slate-700 flex-1"></div>
-                    <span className="text-slate-500 text-sm font-medium">O pega un enlace</span>
-                    <div className="h-px bg-slate-700 flex-1"></div>
+                {/* Link download toggle + input */}
+                <div className="flex items-center gap-3 mb-4">
+                    <button
+                        onClick={() => setShowLinkInput(!showLinkInput)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${showLinkInput
+                            ? "bg-brand-500/10 border border-brand-500/20 text-brand-400"
+                            : "bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.08]"
+                            }`}
+                    >
+                        <Link2 size={16} />
+                        Pegar enlace
+                    </button>
                 </div>
 
-                <form onSubmit={handleLinkDownload} className="relative flex items-center w-full max-w-3xl mx-auto">
-                    <input
-                        type="text"
-                        value={linkInput}
-                        onChange={(e) => setLinkInput(e.target.value)}
-                        disabled={linkDownloading}
-                        placeholder="Pega enlace de YouTube, iTunes, etc..."
-                        className="w-full bg-slate-900/50 border border-slate-700 rounded-full py-3 px-6 pr-36 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all text-base disabled:opacity-50"
-                    />
-                    <button
-                        type="submit"
-                        disabled={linkDownloading || !linkInput.trim()}
-                        className="absolute right-2 top-2 bottom-2 bg-slate-700 hover:bg-slate-600 px-4 rounded-full font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:hover:bg-slate-700"
-                    >
-                        {linkDownloading ? (
-                            <>
-                                <div className="h-4 w-4 border-2 border-white rounded-full animate-spin border-t-transparent" />
-                                <span className="text-sm">Descargando...</span>
-                            </>
-                        ) : (
-                            <><Download size={18} /> Descargar</>
-                        )}
-                    </button>
-                </form>
+                {showLinkInput && (
+                    <form onSubmit={handleLinkDownload} className="relative flex items-center animate-fade-in-up mb-4">
+                        <div className="absolute left-5 text-slate-500 z-10">
+                            <Link2 size={18} />
+                        </div>
+                        <input
+                            type="text"
+                            value={linkInput}
+                            onChange={(e) => setLinkInput(e.target.value)}
+                            disabled={linkDownloading}
+                            placeholder="https://youtube.com/watch?v=... o enlace de iTunes"
+                            className="w-full bg-[#0c1225]/60 backdrop-blur-md border border-white/[0.06] rounded-xl py-4 pl-14 pr-44 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/30 focus:border-slate-500/30 transition-all text-sm disabled:opacity-50 font-medium light-mode:bg-white/60 light-mode:text-slate-900"
+                        />
+                        <button
+                            type="submit"
+                            disabled={linkDownloading || !linkInput.trim()}
+                            className="absolute right-2 bg-slate-700/80 hover:bg-slate-600 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:active:scale-100 outline-none focus-visible:ring-4 focus-visible:ring-slate-400/50 text-white"
+                        >
+                            {linkDownloading ? (
+                                <><Loader size={16} className="animate-spin" /> Descargando...</>
+                            ) : (
+                                <><Download size={16} /> Descargar</>
+                            )}
+                        </button>
+                    </form>
+                )}
 
-                {linkDownloading && (
-                    <div className="w-full max-w-3xl mx-auto">
+                {linkDownloading && activeLinkId && (
+                    <div className="mb-4 animate-fade-in-up">
                         <div className="flex items-center gap-3 text-sm text-brand-400 mb-2">
                             <Loader size={16} className="animate-spin" />
-                            <span>Descargando audio... esto puede tomar unos segundos</span>
+                            <span className="font-medium">Descargando enlace... {downloadProgresses[activeLinkId] || 0}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full animate-pulse" style={{ width: '70%', animation: 'progressPulse 2s ease-in-out infinite' }} />
+                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300" style={{ width: `${downloadProgresses[activeLinkId] || 0}%` }} />
+                        </div>
+                    </div>
+                )}
+
+                {/* Quick suggestion chips (show when no search done yet) */}
+                {!hasSearched && !loading && (
+                    <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                        <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3 ml-1">Búsquedas populares</p>
+                        <div className="flex flex-wrap gap-2">
+                            {SUGGESTIONS.map((s) => (
+                                <button
+                                    key={s.label}
+                                    onClick={() => { setQuery(s.label); doSearch(s.label); }}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                                >
+                                    {s.icon}
+                                    {s.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}
             </section>
 
-            {/* Loading State */}
+            {/* ═══ Loading State ═══ */}
             {loading && (
-                <div className="flex flex-col items-center justify-center py-20 animate-fade-in-up">
-                    <div className="relative">
-                        <div className="w-16 h-16 border-4 border-brand-500/30 rounded-full"></div>
-                        <div className="absolute inset-0 w-16 h-16 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="flex flex-col items-center justify-center py-24 animate-fade-in-up">
+                    <div className="relative mb-6">
+                        <div className="w-20 h-20 border-4 border-brand-500/20 rounded-full" />
+                        <div className="absolute inset-0 w-20 h-20 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Music size={24} className="text-brand-400" />
+                        </div>
                     </div>
-                    <p className="text-slate-400 mt-6 text-lg font-medium">Buscando &quot;{query}&quot;...</p>
-                    <p className="text-slate-500 text-sm mt-2">Explorando millones de canciones</p>
+                    <p className="text-white text-xl font-bold mb-1">Buscando &quot;{query}&quot;</p>
+                    <p className="text-slate-500 text-sm font-medium">Explorando millones de canciones...</p>
                 </div>
             )}
 
-            {/* No Results */}
+            {/* ═══ No Results ═══ */}
             {!loading && hasSearched && results.length === 0 && !searchError && (
-                <div className="flex flex-col items-center justify-center py-16 animate-fade-in-up">
-                    <div className="relative mb-6">
-                        <div className="w-24 h-24 rounded-full bg-slate-800/50 border border-slate-700/50 flex items-center justify-center animate-pulse-glow">
-                            <SearchX size={40} className="text-slate-500" strokeWidth={1.5} />
+                <div className="flex flex-col items-center justify-center py-20 animate-fade-in-up">
+                    <div className="relative mb-8">
+                        <div className="w-28 h-28 rounded-3xl bg-slate-800/50 border border-slate-700/30 flex items-center justify-center rotate-6">
+                            <SearchX size={44} className="text-slate-500 -rotate-6" strokeWidth={1.5} />
                         </div>
-                        <div className="absolute -top-2 -right-2 text-2xl animate-bounce" style={{ animationDelay: '0s', animationDuration: '2s' }}>🎵</div>
-                        <div className="absolute -bottom-1 -left-3 text-xl animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '2.5s' }}>🎶</div>
-                        <div className="absolute top-0 -left-4 text-lg animate-bounce" style={{ animationDelay: '1s', animationDuration: '3s' }}>🎵</div>
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">No encontramos resultados</h3>
-                    <p className="text-slate-400 text-center max-w-md mb-2">
-                        No pudimos encontrar nada para <span className="text-brand-400 font-semibold">&quot;{searchTerm}&quot;</span>
+                    <h3 className="text-2xl font-black text-white mb-2">Sin resultados</h3>
+                    <p className="text-slate-400 text-center max-w-md mb-2 font-medium">
+                        No encontramos nada para <span className="text-brand-400 font-bold">&quot;{searchTerm}&quot;</span>
                     </p>
                     <p className="text-slate-500 text-sm text-center max-w-md mb-8">
                         Intenta con otro nombre de canción, artista o álbum.
                     </p>
                     <div className="text-center">
-                        <p className="text-slate-500 text-xs uppercase tracking-wider font-bold mb-3">Prueba buscando</p>
+                        <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3">Prueba buscando</p>
                         <div className="flex flex-wrap justify-center gap-2">
-                            {suggestions.map((s) => (
-                                <button key={s} onClick={() => { setQuery(s); doSearch(s); }}
-                                    className="px-4 py-2 rounded-full bg-white/[0.05] border border-white/[0.08] text-slate-300 text-sm font-medium hover:bg-brand-500/20 hover:border-brand-500/30 hover:text-brand-400 transition-all">
-                                    {s}
+                            {SUGGESTIONS.slice(0, 6).map((s) => (
+                                <button key={s.label} onClick={() => { setQuery(s.label); doSearch(s.label); }}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
+                                    {s.icon} {s.label}
                                 </button>
                             ))}
                         </div>
@@ -245,85 +362,148 @@ export default function SearchPage() {
                 </div>
             )}
 
-            {/* Error State */}
+            {/* ═══ Error State ═══ */}
             {!loading && hasSearched && searchError && (
-                <div className="flex flex-col items-center justify-center py-16 animate-fade-in-up">
-                    <div className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6">
-                        <XCircle size={36} className="text-red-400" />
+                <div className="flex flex-col items-center justify-center py-20 animate-fade-in-up">
+                    <div className="w-24 h-24 rounded-3xl bg-red-500/10 border border-red-500/15 flex items-center justify-center mb-6 rotate-3">
+                        <XCircle size={40} className="text-red-400 -rotate-3" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">Error de conexión</h3>
-                    <p className="text-slate-400 text-center max-w-md mb-6">No pudimos conectar con el servidor de búsqueda.</p>
+                    <h3 className="text-2xl font-black text-white mb-2">Error de conexión</h3>
+                    <p className="text-slate-400 text-center max-w-md mb-6 font-medium">No pudimos conectar con el servidor de búsqueda.</p>
                     <button onClick={() => doSearch(searchTerm)}
-                        className="flex items-center gap-2 px-6 py-3 rounded-full bg-brand-500 hover:bg-brand-600 text-white font-medium transition-all hover:scale-105">
+                        className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold transition-all hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50">
                         <RefreshCw size={18} /> Reintentar
                     </button>
                 </div>
             )}
 
-            {/* Results with tabs: Songs / Albums */}
+            {/* ═══ Results ═══ */}
             {!loading && results.length > 0 && (
                 <section className="animate-fade-in-up">
-                    <div className="flex items-center justify-between mb-6">
-                        <p className="text-slate-400 text-sm">
-                            <span className="text-white font-semibold">{results.length}</span> resultados para <span className="text-brand-400 font-medium">&quot;{searchTerm}&quot;</span>
+                    {/* Results header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <p className="text-slate-400 text-sm font-medium">
+                            <span className="text-white font-bold text-lg mr-1">{results.length}</span>
+                            resultados para <span className="text-brand-400 font-semibold">&quot;{searchTerm}&quot;</span>
                         </p>
+
                         {/* View tabs */}
-                        <div className="flex bg-white/[0.05] rounded-full p-1 border border-white/[0.08]">
+                        <div className="flex bg-white/[0.04] rounded-xl p-1 border border-white/[0.06]">
                             <button onClick={() => setViewMode("songs")}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === "songs" ? "bg-brand-500 text-white shadow" : "text-slate-400 hover:text-white"}`}>
-                                <Music size={14} className="inline mr-1.5" />Canciones
+                                className={`px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 flex items-center gap-2 ${viewMode === "songs"
+                                    ? "bg-brand-500 text-white shadow-[0_2px_15px_rgba(99,102,241,0.3)]"
+                                    : "text-slate-400 hover:text-white"
+                                    }`}>
+                                <Music size={15} /> Canciones
                             </button>
                             <button onClick={() => setViewMode("albums")}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === "albums" ? "bg-brand-500 text-white shadow" : "text-slate-400 hover:text-white"}`}>
-                                <Disc3 size={14} className="inline mr-1.5" />Álbumes ({albumGroups.length})
+                                className={`px-5 py-2 rounded-lg text-sm font-bold transition-all duration-300 flex items-center gap-2 ${viewMode === "albums"
+                                    ? "bg-brand-500 text-white shadow-[0_2px_15px_rgba(99,102,241,0.3)]"
+                                    : "text-slate-400 hover:text-white"
+                                    }`}>
+                                <Disc3 size={15} /> Álbumes ({albumGroups.length})
                             </button>
                         </div>
                     </div>
 
-                    {/* Songs View */}
+                    {/* ═══ Songs View ═══ */}
                     {viewMode === "songs" && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {results.map((track) => {
+                        <div className="flex flex-col gap-2">
+                            {results.map((track, idx) => {
                                 const strId = track.trackId.toString();
                                 const isDownloaded = savedTrackIds.has(strId);
                                 const isDownloading = downloadingId === strId;
+                                const progress = downloadProgresses[strId] || 0;
 
                                 return (
-                                    <div key={track.trackId} className="glass-panel rounded-2xl p-4 flex gap-4 items-center group hover:bg-white/[0.06] transition-all card-glow">
-                                        <div className="relative h-16 w-16 flex-shrink-0 rounded-xl overflow-hidden shadow-lg bg-slate-800">
-                                            <img src={track.artworkUrl100.replace("100x100", "200x200")} alt={track.trackName} className="w-full h-full object-cover" loading="lazy" />
+                                    <div
+                                        key={track.trackId}
+                                        className="group flex items-center gap-4 px-4 py-3 rounded-2xl hover:bg-white/[0.04] transition-all duration-300 cursor-pointer active:scale-[0.99]"
+                                        onClick={() => handlePlay(track)}
+                                    >
+                                        {/* Track number */}
+                                        <div className="w-8 text-center flex-shrink-0 relative">
+                                            <span className="text-[13px] font-bold text-slate-500 group-hover:opacity-0 transition-opacity">
+                                                {idx + 1}
+                                            </span>
+                                            <Play size={14} fill="currentColor" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-[15px] font-bold text-white truncate" title={track.trackName}>{track.trackName}</h3>
-                                            <p className="text-slate-400 text-sm truncate" title={track.artistName}>{track.artistName}</p>
-                                            {track.collectionName && (
+
+                                        {/* Artwork */}
+                                        <div className="relative w-12 h-12 flex-shrink-0">
+                                            <img
+                                                src={track.artworkUrl100.replace("100x100", "200x200")}
+                                                alt=""
+                                                className="w-full h-full rounded-lg object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-all duration-300 group-hover:shadow-[0_4px_20px_rgba(99,102,241,0.2)]"
+                                                loading="lazy"
+                                            />
+                                        </div>
+
+                                        {/* Track info */}
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <p className="text-[15px] font-bold text-white truncate group-hover:text-brand-300 transition-colors drop-shadow-sm" title={track.trackName}>
+                                                {track.trackName}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-0.5">
                                                 <button
-                                                    onClick={() => setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 })}
-                                                    className="text-slate-500 text-xs truncate mt-0.5 hover:text-brand-400 transition-colors flex items-center gap-1 group/album"
+                                                    onClick={(e) => { e.stopPropagation(); router.push(`/artist/${encodeURIComponent(track.artistName)}`); }}
+                                                    className="text-slate-400 font-medium text-[13px] truncate hover:text-brand-400 hover:underline transition-colors outline-none text-left"
+                                                    title={track.artistName}
                                                 >
-                                                    <Disc3 size={10} className="group-hover/album:animate-spin" />
-                                                    <span className="truncate">{track.collectionName}</span>
+                                                    {track.artistName}
                                                 </button>
-                                            )}
+                                                {track.collectionName && (
+                                                    <>
+                                                        <span className="text-slate-600 text-[10px]">•</span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 }); }}
+                                                            className="text-slate-500 text-[12px] truncate hover:text-brand-400 transition-colors outline-none flex items-center gap-1 font-medium"
+                                                        >
+                                                            <Disc3 size={10} />
+                                                            <span className="truncate max-w-[150px]">{track.collectionName}</span>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                        <button
-                                            className={`p-3 rounded-full transition-all flex-shrink-0 disabled:opacity-50 ${isDownloaded
-                                                ? "bg-green-500/10 text-green-500"
-                                                : "bg-brand-500/10 hover:bg-brand-500 text-brand-500 hover:text-white hover:scale-110 hover:shadow-lg hover:shadow-brand-500/20"
-                                                }`}
-                                            title={isDownloaded ? "Ya descargado" : "Descargar"}
-                                            onClick={() => { if (!isDownloaded) handleDownload(track, null, strId); }}
-                                            disabled={isDownloading || isDownloaded}
-                                        >
-                                            {isDownloading ? <div className="h-5 w-5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : isDownloaded ? <Check size={20} /> : <Download size={20} />}
-                                        </button>
+
+                                        {/* Duration */}
+                                        <span className="text-xs font-medium text-slate-500 flex-shrink-0 hidden sm:block tabular-nums mr-2">
+                                            {track.trackTimeMillis ? formatDuration(track.trackTimeMillis) : ""}
+                                        </span>
+
+                                        {/* Actions */}
+                                        <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                                className={`p-2.5 rounded-full transition-all duration-300 active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 ${isDownloaded
+                                                    ? "text-green-500 bg-green-500/10 cursor-default"
+                                                    : isDownloading
+                                                        ? "text-brand-400"
+                                                        : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-0 group-hover:opacity-100"
+                                                    }`}
+                                                onClick={() => { if (!isDownloaded && !isDownloading) handleDownload(track, null, strId); }}
+                                                disabled={isDownloading || isDownloaded}
+                                                title={isDownloaded ? "Ya descargado" : "Descargar"}
+                                                aria-label={isDownloaded ? "Ya descargado" : `Descargar ${track.trackName}`}
+                                            >
+                                                {isDownloading ? (
+                                                    <div className="relative w-full h-full flex items-center justify-center">
+                                                        <svg className="w-[36px] h-[36px] -rotate-90 transform absolute" viewBox="0 0 36 36" style={{ top: -7, left: -7 }}>
+                                                            <path className="text-white/10 stroke-current" strokeWidth="2.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                            <path className="text-brand-400 stroke-current transition-all duration-300" strokeWidth="2.5" strokeDasharray={`${progress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                        </svg>
+                                                        <span className="text-[10px] font-bold text-brand-400 leading-none">{progress > 0 ? `${progress}` : <Loader size={14} className="animate-spin" />}</span>
+                                                    </div>
+                                                ) : isDownloaded ? <Check size={18} strokeWidth={2.5} /> : <Download size={18} />}
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
                         </div>
                     )}
 
-                    {/* Albums View */}
+                    {/* ═══ Albums View ═══ */}
                     {viewMode === "albums" && (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                             {albumGroups.map((album, idx) => {
@@ -331,22 +511,23 @@ export default function SearchPage() {
                                 return (
                                     <button
                                         key={idx}
+                                        aria-label={`Explorar álbum ${album.name}`}
                                         onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })}
-                                        className="bg-white/[0.03] hover:bg-white/[0.07] rounded-2xl p-4 text-left transition-all group card-glow"
+                                        className="bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] hover:border-white/[0.08] rounded-2xl p-4 text-left transition-all duration-300 group active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40"
                                     >
-                                        <div className="w-full aspect-square rounded-xl overflow-hidden shadow-xl mb-3 bg-slate-800/50">
+                                        <div className="w-full aspect-square rounded-xl overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.3)] mb-4 bg-slate-800/80">
                                             {cover ? (
-                                                <img src={cover} alt={album.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                                <img src={cover} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" loading="lazy" />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center">
                                                     <Disc3 size={40} className="text-slate-600" />
                                                 </div>
                                             )}
                                         </div>
-                                        <h3 className="text-white font-semibold text-sm truncate">{album.name}</h3>
-                                        <p className="text-slate-400 text-xs truncate mt-0.5">{album.artist}</p>
-                                        <p className="text-slate-500/60 text-[11px] mt-1">
-                                            {album.trackCount} cancion{album.trackCount !== 1 ? "es" : ""} encontrada{album.trackCount !== 1 ? "s" : ""}
+                                        <h3 className="text-white font-bold text-sm truncate drop-shadow-sm group-hover:text-brand-300 transition-colors">{album.name}</h3>
+                                        <p className="text-slate-400 font-medium text-xs truncate mt-0.5">{album.artist}</p>
+                                        <p className="text-slate-500/70 font-bold text-[10px] mt-1.5 uppercase tracking-wide">
+                                            {album.trackCount} cancion{album.trackCount !== 1 ? "es" : ""}
                                         </p>
                                     </button>
                                 );
@@ -356,7 +537,7 @@ export default function SearchPage() {
                 </section>
             )}
 
-            {/* Album Detail Modal */}
+            {/* ═══ Album Detail Modal ═══ */}
             <AlbumDetailModal
                 isOpen={albumModal.open}
                 onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
@@ -365,17 +546,19 @@ export default function SearchPage() {
                 coverUrl={albumModal.cover}
             />
 
-            {/* Toast notifications */}
+            {/* ═══ Toast Notifications ═══ */}
             <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3 pointer-events-none">
                 {toasts.map((toast) => (
                     <div
                         key={toast.id}
-                        className={`pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border text-sm font-medium transition-all animate-slideIn ${toast.type === "success"
-                            ? "bg-green-500/20 border-green-500/30 text-green-300"
-                            : "bg-red-500/20 border-red-500/30 text-red-300"
+                        className={`pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-xl border text-sm font-semibold transition-all animate-slideIn ${toast.type === "success"
+                            ? "bg-green-500/15 border-green-500/20 text-green-300"
+                            : toast.type === "loading"
+                                ? "bg-brand-500/15 border-brand-500/20 text-brand-300"
+                                : "bg-red-500/15 border-red-500/20 text-red-300"
                             }`}
                     >
-                        {toast.type === "success" ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                        {toast.type === "success" ? <CheckCircle size={20} /> : toast.type === "loading" ? <Loader size={20} className="animate-spin" /> : <XCircle size={20} />}
                         {toast.message}
                     </div>
                 ))}

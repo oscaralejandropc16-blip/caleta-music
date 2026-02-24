@@ -6,6 +6,7 @@ import { SavedTrack } from "@/lib/db";
 interface PlayerContextType {
     currentTrack: SavedTrack | null;
     isPlaying: boolean;
+    isLoading: boolean;
     queue: SavedTrack[];
     currentIndex: number;
     playTrack: (track: SavedTrack, newQueue?: SavedTrack[]) => void;
@@ -23,11 +24,57 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const [currentTrack, setCurrentTrack] = useState<SavedTrack | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [queue, setQueue] = useState<SavedTrack[]>([]);
     const [currentIndex, setCurrentIndex] = useState(-1);
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Restore state from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedState = localStorage.getItem("caleta-player-state");
+            if (savedState) {
+                const { queue: savedQueue, currentIndex: savedIdx } = JSON.parse(savedState);
+                if (savedQueue && savedQueue.length > 0) {
+                    // Rehydrate optional blobs for offline tracks
+                    import("@/lib/db").then(({ getTrackFromDB }) => {
+                        Promise.all(savedQueue.map(async (t: any) => {
+                            if (!t.streamUrl && t.id) {
+                                const dbTrack = await getTrackFromDB(t.id);
+                                if (dbTrack) return dbTrack;
+                            }
+                            return t;
+                        })).then(restoredQueue => {
+                            setQueue(restoredQueue);
+                            setCurrentIndex(savedIdx);
+                            setCurrentTrack(restoredQueue[savedIdx] || null);
+                            // Avoid automatically playing on reload to respect browser policies
+                        });
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Failed to restore player state", e);
+        }
+    }, []);
+
+    // Save state to localStorage when it changes
+    useEffect(() => {
+        if (queue.length > 0) {
+            try {
+                // Strip blob because it can't be serialized to JSON
+                const stateToSave = {
+                    queue: queue.map(t => ({ ...t, blob: undefined })),
+                    currentIndex
+                };
+                localStorage.setItem("caleta-player-state", JSON.stringify(stateToSave));
+            } catch (e) {
+                console.error("Failed to save player state", e);
+            }
+        }
+    }, [queue, currentIndex]);
 
     useEffect(() => {
         if (!audioRef.current) {
@@ -40,58 +87,124 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onLoadedMetadata = () => setDuration(audio.duration);
         const onEnded = () => playNext();
 
+        const onWaiting = () => setIsLoading(true);
+        const onPlaying = () => setIsLoading(false);
+        const onCanPlay = () => setIsLoading(false);
+        const onLoadStart = () => setIsLoading(true);
+
         audio.addEventListener("timeupdate", onTimeUpdate);
         audio.addEventListener("loadedmetadata", onLoadedMetadata);
         audio.addEventListener("ended", onEnded);
+        audio.addEventListener("waiting", onWaiting);
+        audio.addEventListener("playing", onPlaying);
+        audio.addEventListener("canplay", onCanPlay);
+        audio.addEventListener("loadstart", onLoadStart);
 
         return () => {
             audio.removeEventListener("timeupdate", onTimeUpdate);
             audio.removeEventListener("loadedmetadata", onLoadedMetadata);
             audio.removeEventListener("ended", onEnded);
+            audio.removeEventListener("waiting", onWaiting);
+            audio.removeEventListener("playing", onPlaying);
+            audio.removeEventListener("canplay", onCanPlay);
+            audio.removeEventListener("loadstart", onLoadStart);
         };
     }, [currentIndex, queue]);
 
-    // Reproducir cancion desde localforage (soporta offline + background play via MediaSession)
+    // Reproducir cancion desde localforage o streaming (soporta offline + background play via MediaSession)
     useEffect(() => {
         if (currentTrack && audioRef.current) {
-            const blobUrl = URL.createObjectURL(currentTrack.blob);
-            audioRef.current.src = blobUrl;
-            audioRef.current.play().then(() => {
+            let srcUrl = currentTrack.streamUrl || "";
+            let blobUrl: string | null = null;
+            const isStreamSource = !currentTrack.blob && !!currentTrack.streamUrl;
+
+            if (currentTrack.blob) {
+                blobUrl = URL.createObjectURL(currentTrack.blob);
+                srcUrl = blobUrl;
+            }
+
+            if (!srcUrl) {
+                console.error("Ninguna fuente de audio disponible (sin blob ni streamUrl)");
+                return;
+            }
+
+            audioRef.current.src = srcUrl;
+
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    setIsPlaying(true);
+                }).catch(err => {
+                    if (err.name === 'NotAllowedError') {
+                        // Resucitado por localstorage o recarga automatica bloqueada por navegador
+                        setIsPlaying(false);
+                    } else if (err.name === 'AbortError') {
+                        console.log("Playback aborted, likely due to a pause call");
+                    } else {
+                        console.error("Error al reproducir fuente de audio:", err);
+                    }
+                });
+            } else {
                 setIsPlaying(true);
+            }
 
-                // Configurar Media Session para pantallas bloqueadas (Android/iOS)
-                if ("mediaSession" in navigator) {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: currentTrack.title || "Unknown Track",
-                        artist: currentTrack.artist || "Unknown Artist",
-                        album: currentTrack.album || "Caleta Music",
-                        artwork: [
-                            { src: currentTrack.coverUrl || "/logo.png", sizes: "100x100", type: "image/jpeg" },
-                            { src: currentTrack.coverUrl?.replace('100x100', '300x300') || "/logo.png", sizes: "300x300", type: "image/jpeg" },
-                            { src: currentTrack.coverUrl?.replace('100x100', '600x600') || "/logo.png", sizes: "600x600", type: "image/jpeg" }
-                        ]
-                    });
-
-                    // Vincular botones físicos y controles de pantalla bloqueada a nuestra lógica
-                    navigator.mediaSession.setActionHandler("play", () => togglePlay());
-                    navigator.mediaSession.setActionHandler("pause", () => togglePlay());
-                    navigator.mediaSession.setActionHandler("previoustrack", () => playPrev());
-                    navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
-                    navigator.mediaSession.setActionHandler("seekto", (details) => {
-                        if (details.fastSeek && 'fastSeek' in audioRef.current!) {
-                            audioRef.current.fastSeek(details.seekTime || 0);
-                        } else {
-                            seekTo(details.seekTime || 0);
+            // Si es streaming, descargar como blob en background para habilitar seeking
+            if (isStreamSource && currentTrack.streamUrl) {
+                const streamUrlToFetch = currentTrack.streamUrl;
+                const trackIdAtStart = currentTrack.id;
+                fetch(streamUrlToFetch)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        // Verificar que aún estamos reproduciendo el mismo track
+                        if (audioRef.current && currentTrack?.id === trackIdAtStart) {
+                            const currentTime = audioRef.current.currentTime;
+                            const wasPlaying = !audioRef.current.paused;
+                            const streamBlobUrl = URL.createObjectURL(blob);
+                            audioRef.current.src = streamBlobUrl;
+                            audioRef.current.currentTime = currentTime;
+                            if (wasPlaying) audioRef.current.play().catch(() => { });
+                            // Cleanup old blob URL when this one gets replaced
+                            blobUrl = streamBlobUrl;
+                            console.log("[Player] Stream convertido a blob para seeking");
                         }
+                    })
+                    .catch(() => {
+                        // Si falla, seguimos con el stream directo (sin seeking)
                     });
-                }
-            }).catch(err => {
-                console.error("Error al reproducir el blob:", err);
-                setIsPlaying(false);
-            });
+            }
+
+            // Configurar Media Session para pantallas bloqueadas (Android/iOS)
+            if ("mediaSession" in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: currentTrack.title || "Unknown Track",
+                    artist: currentTrack.artist || "Unknown Artist",
+                    album: currentTrack.album || "Caleta Music",
+                    artwork: [
+                        { src: currentTrack.coverUrl || "/logo.png", sizes: "100x100", type: "image/jpeg" },
+                        { src: currentTrack.coverUrl?.replace('100x100', '300x300') || "/logo.png", sizes: "300x300", type: "image/jpeg" },
+                        { src: currentTrack.coverUrl?.replace('100x100', '600x600') || "/logo.png", sizes: "600x600", type: "image/jpeg" }
+                    ]
+                });
+
+                // Vincular botones físicos y controles de pantalla bloqueada a nuestra lógica
+                navigator.mediaSession.setActionHandler("play", () => togglePlay());
+                navigator.mediaSession.setActionHandler("pause", () => togglePlay());
+                navigator.mediaSession.setActionHandler("previoustrack", () => playPrev());
+                navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
+                navigator.mediaSession.setActionHandler("seekto", (details) => {
+                    if (details.fastSeek && 'fastSeek' in audioRef.current!) {
+                        (audioRef.current as any).fastSeek(details.seekTime || 0);
+                    } else {
+                        seekTo(details.seekTime || 0);
+                    }
+                });
+            }
+            // .catch replaced with playPromise above
 
             return () => {
-                URL.revokeObjectURL(blobUrl);
+                if (blobUrl) {
+                    URL.revokeObjectURL(blobUrl);
+                }
             };
         }
     }, [currentTrack]);
@@ -99,8 +212,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const togglePlay = () => {
         if (audioRef.current) {
             if (audioRef.current.paused) {
-                audioRef.current.play();
-                setIsPlaying(true);
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        setIsPlaying(true);
+                    }).catch(err => {
+                        if (err.name === 'AbortError') {
+                            console.log("Playback aborted by pause");
+                        } else {
+                            console.error("Error playing audio", err);
+                        }
+                    });
+                } else {
+                    setIsPlaying(true);
+                }
             } else {
                 audioRef.current.pause();
                 setIsPlaying(false);
@@ -145,6 +270,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             value={{
                 currentTrack,
                 isPlaying,
+                isLoading,
                 queue,
                 currentIndex,
                 playTrack,

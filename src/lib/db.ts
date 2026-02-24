@@ -31,7 +31,8 @@ export interface SavedTrack {
     artist: string;
     album: string;
     coverUrl: string;
-    blob: Blob;
+    blob?: Blob; // Opcional para poder soportar streaming
+    streamUrl?: string; // URL directa para hacer streaming (ej: API de descarga route.ts)
     downloadedAt: number;
 }
 

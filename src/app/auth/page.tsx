@@ -108,7 +108,7 @@ export default function AuthPage() {
                         <Music size={36} className="text-white" />
                     </div>
                     <h1 className="text-3xl font-extrabold text-white tracking-tight">Caleta Music</h1>
-                    <p className="text-slate-500 text-sm mt-1 italic">La caleta que suena en todos lados 🎶</p>
+                    <p className="text-slate-500 text-sm mt-1 italic">La caleta que suena en todos lados</p>
                 </div>
 
                 {/* Card */}
@@ -233,7 +233,7 @@ export default function AuthPage() {
 
                 {/* Footer */}
                 <p className="text-center text-slate-600 text-xs mt-6 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
-                    Caleta Music © 2026 · Tu música, tu estilo 🎵
+                    Caleta Music © 2026 · Tu música, tu estilo
                 </p>
             </div>
         </div>

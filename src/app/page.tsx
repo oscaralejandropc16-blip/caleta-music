@@ -10,6 +10,8 @@ import { getAllTracksFromDB, toggleLike, getAllLikedTrackIds } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
+import Logo from "@/components/Logo";
+import { useRouter } from "next/navigation";
 
 const GENRES = [
   { name: "Pop", color: "from-pink-500 to-rose-600", term: "pop" },
@@ -29,6 +31,96 @@ const GENRES = [
 const TRENDING_TERMS = ["Bad Bunny", "Taylor Swift", "Peso Pluma", "Shakira", "Drake", "Karol G", "The Weeknd", "Dua Lipa"];
 
 interface AlbumGroup { name: string; artist: string; cover: string; trackCount: number; }
+
+interface TrackCardProps {
+  track: ItunesTrack;
+  size?: "normal" | "large";
+  savedTrackIds: Set<string>;
+  downloadingId: string | null;
+  downloadProgress?: number;
+  likedIds: Set<string>;
+  onPlay: (e: React.MouseEvent, track: ItunesTrack) => void;
+  onDownload: (track: ItunesTrack) => void;
+  onToggleLike: (e: React.MouseEvent, trackId: string) => void;
+  onAlbumClick: (album: string, artist: string, cover: string) => void;
+  onArtistClick: (artist: string) => void;
+}
+
+function TrackCard({
+  track,
+  size = "normal",
+  savedTrackIds,
+  downloadingId,
+  downloadProgress = 0,
+  likedIds,
+  onPlay,
+  onDownload,
+  onToggleLike,
+  onAlbumClick,
+  onArtistClick
+}: TrackCardProps) {
+  const strId = track.trackId.toString();
+  const isDownloaded = savedTrackIds.has(strId);
+  const isDownloading = downloadingId === strId;
+  const isLiked = likedIds.has(strId);
+  const w = size === "large" ? "min-w-[200px] w-[200px]" : "min-w-[170px] w-[170px]";
+
+  return (
+    <div className={`${w} flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group card-glow flex flex-col`}>
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-xl mb-3 bg-slate-800/50">
+        <img src={track.artworkUrl100.replace("100x100", "300x300")} alt={track.trackName}
+          className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-3 rounded-xl pointer-events-none">
+          <div className="flex gap-2 relative z-10 w-full justify-between items-center pointer-events-auto">
+            <button onClick={(e) => onPlay(e, track)} title="Reproducir audio" aria-label={`Reproducir ${track.trackName}`}
+              className="bg-green-500 text-white p-3 rounded-full hover:bg-green-400 transition-colors shadow-lg active:scale-95 focus-visible:ring-4 focus-visible:ring-green-400/50 outline-none">
+              <Play size={18} className="ml-0.5 fill-current" />
+            </button>
+            <div className="flex gap-2">
+              {!isDownloaded ? (
+                <button onClick={() => onDownload(track)} disabled={isDownloading} title="Descargar audio offline" aria-label={`Descargar ${track.trackName}`}
+                  className="bg-brand-500 text-white p-3 rounded-full hover:bg-brand-400 transition-colors shadow-lg shadow-brand-500/30 disabled:opacity-50 active:scale-95 focus-visible:ring-4 focus-visible:ring-brand-400/50 outline-none">
+                  {isDownloading ? (
+                    <div className="relative w-5 h-5 flex items-center justify-center">
+                      <svg className="w-[30px] h-[30px] -rotate-90 transform absolute" viewBox="0 0 36 36" style={{ top: -5, left: -5 }}>
+                        <path className="text-white/20 stroke-current" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path className="text-white stroke-current transition-all duration-300" strokeWidth="3" strokeDasharray={`${downloadProgress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                      </svg>
+                      <span className="text-[7px] font-bold text-white leading-none">{downloadProgress > 0 ? `${downloadProgress}` : <div className="h-3 w-3 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" />}</span>
+                    </div>
+                  ) : <Download size={18} />}
+                </button>
+              ) : (
+                <div className="bg-accent text-white p-3 rounded-full shadow-lg"><Check size={18} /></div>
+              )}
+
+              {isDownloaded && (
+                <button onClick={(e) => onToggleLike(e, strId)} aria-label={isLiked ? `Quitar me gusta a ${track.trackName}` : `Dar me gusta a ${track.trackName}`}
+                  className={`p-3 rounded-full transition-colors focus-visible:ring-4 focus-visible:ring-pink-500/50 outline-none active:scale-95 ${isLiked ? "text-pink-500 bg-pink-500/20" : "text-white/80 hover:text-pink-400 bg-white/20 hover:bg-white/30 backdrop-blur-md"}`}>
+                  <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      <h3 className="text-white font-semibold text-[13px] truncate leading-tight" title={track.trackName}>{track.trackName}</h3>
+      <button
+        onClick={() => onArtistClick(track.artistName)}
+        className="text-slate-400 text-xs truncate mt-0.5 text-left hover:text-brand-400 hover:underline transition-colors outline-none"
+        title={track.artistName}
+      >
+        {track.artistName}
+      </button>
+      {track.collectionName && (
+        <button onClick={() => onAlbumClick(track.collectionName || "", track.artistName, track.artworkUrl100)}
+          className="text-slate-500 text-[11px] truncate mt-1 hover:text-brand-400 transition-colors text-left flex items-center gap-1 group/album">
+          <Disc3 size={10} className="group-hover/album:animate-spin" /><span className="truncate">{track.collectionName}</span>
+        </button>
+      )}
+    </div>
+  );
+}
 
 function HorizontalScroller({ children, title, icon }: { children: React.ReactNode; title: string; icon: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,9 +166,11 @@ function HorizontalScroller({ children, title, icon }: { children: React.ReactNo
 export default function Home() {
   const [recommendations, setRecommendations] = useState<ItunesTrack[]>([]);
   const [trending, setTrending] = useState<ItunesTrack[]>([]);
+  const [newReleases, setNewReleases] = useState<ItunesTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [genreTracks, setGenreTracks] = useState<ItunesTrack[]>([]);
@@ -87,6 +181,7 @@ export default function Home() {
   }>({ open: false, album: "", artist: "", cover: "" });
 
   const { playTrack } = usePlayer();
+  const router = useRouter();
 
   useEffect(() => {
     getAllTracksFromDB().then((tracks) => {
@@ -106,15 +201,29 @@ export default function Home() {
 
     const fetchData = async () => {
       try {
-        const recRes = await fetch(`https://itunes.apple.com/search?term=top+hits+2025&entity=song&limit=12`);
-        const recData = await recRes.json();
-        setRecommendations(recData.results || []);
+        const [recRes, trendRes, newRes] = await Promise.all([
+          fetch(`https://itunes.apple.com/search?term=top+hits+2025&entity=song&limit=12`),
+          fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(TRENDING_TERMS[Math.floor(Math.random() * TRENDING_TERMS.length)])}&entity=song&limit=12`),
+          fetch(`https://itunes.apple.com/es/rss/topsongs/limit=15/json`)
+        ]);
 
-        const randomArtist = TRENDING_TERMS[Math.floor(Math.random() * TRENDING_TERMS.length)];
-        const trendRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(randomArtist)}&entity=song&limit=12`);
-        const trendData = await trendRes.json();
+        const [recData, trendData, newData] = await Promise.all([
+          recRes.json(), trendRes.json(), newRes.json()
+        ]);
+
+        setRecommendations(recData.results || []);
         setTrending(trendData.results || []);
-      } catch (error) { console.error("Error fetching recommendations", error); }
+
+        const newReleasesFormatted = (newData.feed?.entry || []).map((r: any) => ({
+          trackId: r.id?.attributes?.["im:id"] || Math.floor(Math.random() * 1000000),
+          trackName: r["im:name"]?.label || "Desconocido",
+          artistName: r["im:artist"]?.label || "Artista",
+          collectionName: r["im:collection"]?.label || "",
+          artworkUrl100: r["im:image"]?.[2]?.label || r["im:image"]?.[0]?.label || "",
+          previewUrl: ""
+        }));
+        setNewReleases(newReleasesFormatted);
+      } catch (error) { console.error("Error fetching data", error); }
       finally { setLoading(false); }
     };
     fetchData();
@@ -123,7 +232,9 @@ export default function Home() {
   const handleDownload = async (track: ItunesTrack) => {
     const strId = track.trackId.toString();
     setDownloadingId(strId);
-    const success = await downloadAndSaveTrack(track, null, strId);
+    const success = await downloadAndSaveTrack(track, null, strId, (progress) => {
+      setDownloadProgresses(prev => ({ ...prev, [strId]: progress }));
+    });
     if (success) setSavedTrackIds((prev) => new Set(prev).add(strId));
     setDownloadingId(null);
   };
@@ -133,6 +244,22 @@ export default function Home() {
     if (!savedTrackIds.has(trackId)) return;
     const nowLiked = await toggleLike(trackId);
     setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(trackId); else next.delete(trackId); return next; });
+  };
+
+  const handlePlay = (e: React.MouseEvent, track: ItunesTrack) => {
+    e.stopPropagation();
+    const strId = track.trackId.toString();
+    const downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}&stream=true`;
+
+    playTrack({
+      id: `stream-${strId}`,
+      title: track.trackName,
+      artist: track.artistName,
+      album: track.collectionName || "",
+      coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
+      streamUrl: downloadUrl,
+      downloadedAt: Date.now(),
+    });
   };
 
   const handleGenreClick = async (genre: typeof GENRES[0]) => {
@@ -154,61 +281,23 @@ export default function Home() {
     return "Buenas noches";
   };
 
-  const TrackCard = ({ track, size = "normal" }: { track: ItunesTrack; size?: "normal" | "large" }) => {
-    const strId = track.trackId.toString();
-    const isDownloaded = savedTrackIds.has(strId);
-    const isDownloading = downloadingId === strId;
-    const isLiked = likedIds.has(strId);
-    const w = size === "large" ? "min-w-[200px] w-[200px]" : "min-w-[170px] w-[170px]";
 
-    return (
-      <div className={`${w} flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-all group card-glow flex flex-col`}>
-        <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-xl mb-3 bg-slate-800/50">
-          <img src={track.artworkUrl100.replace("100x100", "300x300")} alt={track.trackName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-3">
-            {!isDownloaded ? (
-              <button onClick={() => handleDownload(track)} disabled={isDownloading}
-                className="bg-brand-500 text-white p-2.5 rounded-full hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/30 disabled:opacity-50 hover:scale-110">
-                {isDownloading ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Download size={18} />}
-              </button>
-            ) : (
-              <div className="bg-accent text-white p-2.5 rounded-full shadow-lg"><Check size={18} /></div>
-            )}
-            {isDownloaded && (
-              <button onClick={(e) => handleToggleLike(e, strId)}
-                className={`p-2 rounded-full transition-all ${isLiked ? "text-pink-500 bg-pink-500/20" : "text-white/70 hover:text-pink-400 bg-white/10"}`}>
-                <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
-              </button>
-            )}
-          </div>
-        </div>
-        <h3 className="text-white font-semibold text-[13px] truncate leading-tight" title={track.trackName}>{track.trackName}</h3>
-        <p className="text-slate-400 text-xs truncate mt-0.5">{track.artistName}</p>
-        {track.collectionName && (
-          <button onClick={() => setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 })}
-            className="text-slate-500 text-[11px] truncate mt-1 hover:text-brand-400 transition-colors text-left flex items-center gap-1 group/album">
-            <Disc3 size={10} className="group-hover/album:animate-spin" /><span className="truncate">{track.collectionName}</span>
-          </button>
-        )}
-      </div>
-    );
-  };
 
   return (
     <main className="p-4 md:p-8 max-w-[1400px] mx-auto">
       {/* Hero Header */}
       <header className="mb-12 mt-4 animate-fade-in-up">
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-brand-400" />
-          <span className="text-brand-400 text-xs font-semibold uppercase tracking-[0.2em]">Caleta Music</span>
+        <div className="mb-6 group cursor-pointer inline-block">
+          <div className="flex items-center gap-3">
+            <Logo size={32} className="shadow-brand-500/30 group-hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-shadow duration-300" />
+            <span className="text-brand-400 text-[14px] font-black uppercase tracking-[0.25em] drop-shadow-md group-hover:text-brand-300 transition-colors duration-300">Caleta Music</span>
+          </div>
+          <p className="text-slate-400/80 text-[11px] md:text-xs italic mt-1.5 ml-11 font-medium tracking-wide">La caleta que suena en todos lados</p>
         </div>
-        <h1 className="text-5xl md:text-6xl font-black mb-3 text-white leading-[1.1] tracking-tight">
+        <h1 className="text-5xl md:text-6xl font-black mb-3 text-white leading-[1.1] tracking-tight drop-shadow-sm">
           {greeting()}
         </h1>
-        <p className="text-slate-400 text-lg font-light">Descubre las canciones más populares hoy.</p>
-        <p className="text-slate-500/70 text-sm italic mt-2 font-light">La caleta que suena en todos lados 🎵</p>
+        <p className="text-slate-400 text-lg font-medium drop-shadow-sm">Descubre las canciones más populares hoy.</p>
       </header>
 
       {loading ? (
@@ -220,8 +309,15 @@ export default function Home() {
         <>
           {/* 🔥 TENDENCIAS */}
           <HorizontalScroller title="Tendencias" icon={<TrendingUp size={22} className="text-orange-400" />}>
-            {trending.map((track) => <TrackCard key={track.trackId} track={track} size="large" />)}
+            {trending.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
           </HorizontalScroller>
+
+          {/* 🌟 NUEVOS LANZAMIENTOS */}
+          {newReleases.length > 0 && (
+            <HorizontalScroller title="Nuevos Lanzamientos" icon={<Sparkles size={22} className="text-yellow-400" />}>
+              {newReleases.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+            </HorizontalScroller>
+          )}
 
           {/* 🎧 GÉNEROS */}
           <section className="mb-12 animate-fade-in-up">
@@ -230,9 +326,9 @@ export default function Home() {
             </h2>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
               {GENRES.map((genre) => (
-                <button key={genre.term} onClick={() => handleGenreClick(genre)}
-                  className={`genre-card rounded-2xl p-5 text-left ${selectedGenre === genre.term ? "ring-2 ring-white/30 ring-offset-2 ring-offset-[#0a0f1e]" : ""}`}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${genre.color} rounded-2xl`} />
+                <button key={genre.term} onClick={() => handleGenreClick(genre)} aria-label={`Explorar género ${genre.name}`}
+                  className={`genre-card rounded-3xl p-6 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40 active:scale-95 transition-all duration-300 ${selectedGenre === genre.term ? "ring-4 ring-white/50 ring-offset-4 ring-offset-[#0a0f1e] shadow-2xl scale-105" : "hover:shadow-lg"}`}>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${genre.color} rounded-3xl opacity-90 transition-opacity group-hover:opacity-100`} />
                   <div className="relative z-10">
                     <span className="text-white font-bold text-sm drop-shadow-md">{genre.name}</span>
                   </div>
@@ -248,7 +344,7 @@ export default function Home() {
                   </div>
                 ) : genreTracks.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} />)}
+                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
                   </div>
                 ) : (
                   <p className="text-slate-500 text-center py-8">No se encontraron resultados.</p>
@@ -263,10 +359,10 @@ export default function Home() {
               {albums.map((album, idx) => {
                 const cover = album.cover?.replace("100x100", "300x300")?.replace("200x200", "300x300") || "";
                 return (
-                  <button key={idx} onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })}
-                    className="min-w-[170px] w-[170px] flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-all group card-glow text-left">
-                    <div className="w-full aspect-square rounded-xl overflow-hidden shadow-xl mb-3 bg-slate-800/50">
-                      {cover ? <img src={cover} alt={album.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  <button key={idx} onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })} aria-label={`Ver álbum ${album.name}`}
+                    className="min-w-[170px] w-[170px] flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all group card-glow text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 active:scale-[0.98]">
+                    <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] mb-3 bg-slate-800/50">
+                      {cover ? <img src={cover} alt={album.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out" />
                         : <div className="w-full h-full flex items-center justify-center"><Disc3 size={40} className="text-slate-600" /></div>}
                     </div>
                     <h3 className="text-white font-semibold text-[13px] truncate">{album.name}</h3>
@@ -284,7 +380,7 @@ export default function Home() {
               <Music2 size={22} className="text-brand-400" />Recomendado para ti
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {recommendations.map((track) => <TrackCard key={track.trackId} track={track} />)}
+              {recommendations.map((track) => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
             </div>
           </section>
         </>

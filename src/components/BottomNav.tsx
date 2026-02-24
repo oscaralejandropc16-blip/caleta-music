@@ -28,11 +28,14 @@ export default function BottomNav() {
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${active ? "text-brand-500" : "text-slate-400 hover:text-slate-300 light-mode:hover:text-slate-600"
+                        aria-label={item.name}
+                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-xl m-1 ${active ? "text-brand-400" : "text-slate-400 hover:text-slate-300 light-mode:hover:text-slate-600"
                             }`}
                     >
-                        <Icon size={20} className={active ? "fill-brand-500/20" : ""} />
-                        <span className="text-[10px] font-medium">{item.name}</span>
+                        <div className={`p-1.5 rounded-full transition-all duration-300 ${active ? "bg-brand-500/15" : "bg-transparent"}`}>
+                            <Icon size={active ? 22 : 20} className={active ? "fill-brand-400/20 stroke-brand-400" : "opacity-80"} strokeWidth={active ? 2.5 : 2} />
+                        </div>
+                        <span className={`text-[10px] transition-all duration-300 ${active ? "font-bold" : "font-medium"}`}>{item.name}</span>
                     </Link>
                 );
             })}

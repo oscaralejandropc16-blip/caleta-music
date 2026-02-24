@@ -1,16 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Library, Heart, Search, ListMusic, Plus, Music, LogOut, Settings, User, ChevronUp } from "lucide-react";
+import Logo from "./Logo";
 import { useEffect, useState } from "react";
 import { getAllPlaylists, Playlist, getAllLikedTrackIds } from "@/lib/db";
 import { useAuth } from "@/context/AuthContext";
+import { usePlayer } from "@/context/PlayerContext";
 
 export default function Sidebar() {
     const pathname = usePathname();
     const { user, profile, signOut } = useAuth();
+    const { currentTrack } = usePlayer();
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [likeCount, setLikeCount] = useState(0);
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -44,20 +46,14 @@ export default function Sidebar() {
     const userEmail = user?.email || "";
 
     return (
-        <aside className="w-[260px] flex-shrink-0 hidden md:flex flex-col bg-black/30 backdrop-blur-xl border-r border-white/[0.06] h-screen overflow-y-auto">
+        <aside className={`w-[260px] flex-shrink-0 hidden md:flex flex-col bg-black/30 backdrop-blur-xl border-r border-white/[0.06] h-screen overflow-y-auto ${currentTrack ? 'pb-28' : 'pb-4'}`}>
             {/* Logo Section */}
             <div className="px-6 pt-6 pb-4">
-                <div className="flex items-center gap-3">
-                    <Image
-                        src="/logo.png"
-                        alt="Caleta Music"
-                        width={36}
-                        height={36}
-                        className="rounded-xl"
-                    />
+                <div className="flex items-center gap-3 group/logo cursor-pointer">
+                    <Logo size={42} className="shadow-brand-500/30" />
                     <div>
-                        <h1 className="text-lg font-bold text-white tracking-wide leading-none">Caleta Music</h1>
-                        <p className="text-[9px] text-slate-500 italic tracking-wider mt-0.5">La caleta que suena en todos lados</p>
+                        <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 tracking-wide leading-none group-hover/logo:from-brand-400 group-hover/logo:to-purple-400 transition-all duration-300 drop-shadow-sm">Caleta Music</h1>
+                        <p className="text-[9px] text-slate-500 italic tracking-widest mt-1 font-medium">La caleta que suena en todos lados</p>
                     </div>
                 </div>
             </div>
@@ -68,12 +64,12 @@ export default function Sidebar() {
                     <Link
                         key={item.name}
                         href={item.href}
-                        className={`flex items-center gap-3.5 px-4 py-2.5 rounded-xl font-medium text-[14px] transition-all duration-200 ${isActive(item.href)
-                            ? "bg-brand-500/15 text-brand-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.1)]"
+                        className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-[14px] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 active:scale-[0.98] ${isActive(item.href)
+                            ? "bg-brand-500/15 text-brand-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.1)] before:content-[''] before:absolute before:left-3 before:h-6 before:w-1 before:bg-brand-500 before:rounded-r-md relative"
                             : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
                             }`}
                     >
-                        <item.icon size={19} strokeWidth={isActive(item.href) ? 2.5 : 2} />
+                        <item.icon size={20} className={isActive(item.href) ? "fill-brand-400/20 stroke-brand-400" : "opacity-80"} strokeWidth={isActive(item.href) ? 2.5 : 2} />
                         {item.name}
                     </Link>
                 ))}
@@ -123,7 +119,7 @@ export default function Sidebar() {
                         </Link>
                     ) : (
                         playlists.slice(0, 8).map((pl) => (
-                            <Link key={pl.id} href={`/library?tab=playlists&playlist=${pl.id}`}
+                            <Link key={pl.id} href={`/playlist/${pl.id}`}
                                 className="flex items-center gap-3 px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all group">
                                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0 border border-white/[0.05]">
                                     <ListMusic size={14} className="text-slate-400 group-hover:text-brand-400 transition-colors" />
@@ -141,7 +137,7 @@ export default function Sidebar() {
                 <div className="border-t border-white/[0.06] pt-3">
                     <button
                         onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group cursor-pointer"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.08] transition-all group cursor-pointer active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
                     >
                         {/* Avatar */}
                         {userAvatar ? (

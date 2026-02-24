@@ -60,6 +60,19 @@ CREATE TABLE IF NOT EXISTS listening_history (
     played_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. User Library (Metadata only sync)
+CREATE TABLE IF NOT EXISTS user_library (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    song_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    artist TEXT NOT NULL,
+    cover_url TEXT DEFAULT '',
+    source_audio_url TEXT DEFAULT '',
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, song_id)
+);
+
 -- =============================================
 -- Row Level Security (RLS) - Users can only 
 -- see/modify their own data
@@ -70,34 +83,40 @@ ALTER TABLE user_playlists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE playlist_tracks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE listening_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_library ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: users can read their own, insert their own
-CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING ((select auth.uid()) = id);
+CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK ((select auth.uid()) = id);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING ((select auth.uid()) = id);
 
 -- Playlists: users manage their own
-CREATE POLICY "Users can view own playlists" ON user_playlists FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own playlists" ON user_playlists FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own playlists" ON user_playlists FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own playlists" ON user_playlists FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own playlists" ON user_playlists FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own playlists" ON user_playlists FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own playlists" ON user_playlists FOR UPDATE USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own playlists" ON user_playlists FOR DELETE USING ((select auth.uid()) = user_id);
 
 -- Playlist tracks: based on playlist ownership
 CREATE POLICY "Users can view own playlist tracks" ON playlist_tracks FOR SELECT 
-    USING (EXISTS (SELECT 1 FROM user_playlists WHERE id = playlist_tracks.playlist_id AND user_id = auth.uid()));
+    USING ((SELECT user_id FROM user_playlists WHERE id = playlist_id) = (select auth.uid()));
 CREATE POLICY "Users can insert own playlist tracks" ON playlist_tracks FOR INSERT 
-    WITH CHECK (EXISTS (SELECT 1 FROM user_playlists WHERE id = playlist_tracks.playlist_id AND user_id = auth.uid()));
+    WITH CHECK ((SELECT user_id FROM user_playlists WHERE id = playlist_id) = (select auth.uid()));
 CREATE POLICY "Users can delete own playlist tracks" ON playlist_tracks FOR DELETE 
-    USING (EXISTS (SELECT 1 FROM user_playlists WHERE id = playlist_tracks.playlist_id AND user_id = auth.uid()));
+    USING ((SELECT user_id FROM user_playlists WHERE id = playlist_id) = (select auth.uid()));
 
 -- Likes: users manage their own
-CREATE POLICY "Users can view own likes" ON user_likes FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own likes" ON user_likes FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can delete own likes" ON user_likes FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own likes" ON user_likes FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own likes" ON user_likes FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own likes" ON user_likes FOR DELETE USING ((select auth.uid()) = user_id);
 
 -- History: users manage their own
-CREATE POLICY "Users can view own history" ON listening_history FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own history" ON listening_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own history" ON listening_history FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own history" ON listening_history FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+
+-- User library: users manage their own
+CREATE POLICY "Users can view own library" ON user_library FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own library" ON user_library FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own library" ON user_library FOR DELETE USING ((select auth.uid()) = user_id);
 
 -- =============================================
 -- Indexes for performance
@@ -107,3 +126,4 @@ CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playl
 CREATE INDEX IF NOT EXISTS idx_likes_user ON user_likes(user_id);
 CREATE INDEX IF NOT EXISTS idx_history_user ON listening_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_history_played ON listening_history(played_at DESC);
+CREATE INDEX IF NOT EXISTS idx_library_user ON user_library(user_id);
