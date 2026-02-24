@@ -210,10 +210,10 @@ export default function AlbumDetailModal({
     const notDownloadedCount = itunesTracks.filter(t => !savedTrackIds.has(t.trackId.toString())).length;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4">
             <div className="absolute inset-0 bg-[#060913]/80 backdrop-blur-3xl transition-opacity animate-fade-in" onClick={onClose} />
 
-            <div className="relative z-10 w-full max-w-3xl max-h-[85vh] bg-[#060913]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.5)] md:rounded-[2rem] flex flex-col overflow-hidden animate-slideIn">
+            <div className="relative z-10 w-full h-full md:h-auto max-w-3xl md:max-h-[85vh] bg-[#060913]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.5)] md:rounded-[2rem] flex flex-col overflow-hidden animate-slideIn">
                 {/* Header */}
                 <div className="relative">
                     <div
@@ -417,7 +417,7 @@ export default function AlbumDetailModal({
                                                 onClick={(e) => { e.stopPropagation(); handleToggleLike(e, strId); }}
                                                 className={`p-2.5 rounded-full transition-all duration-300 flex-shrink-0 active:scale-90 focus-visible:ring-4 focus-visible:ring-pink-500/40 outline-none ${isLiked
                                                     ? "text-pink-500 bg-pink-500/10 hover:bg-pink-500/20"
-                                                    : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-0 group-hover:opacity-100"
+                                                    : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                                     }`}
                                                 aria-label={isLiked ? "Quitar me gusta" : "Me gusta"}
                                             >
@@ -432,7 +432,7 @@ export default function AlbumDetailModal({
                                                 ? "text-green-500 opacity-60 cursor-default"
                                                 : isDownloading
                                                     ? "text-brand-400"
-                                                    : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-0 group-hover:opacity-100 cursor-pointer"
+                                                    : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 cursor-pointer"
                                                 }`}
                                             title={isDownloaded ? "Ya descargado" : "Descargar"}
                                         >

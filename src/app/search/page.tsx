@@ -479,7 +479,7 @@ export default function SearchPage() {
                                                     ? "text-green-500 bg-green-500/10 cursor-default"
                                                     : isDownloading
                                                         ? "text-brand-400"
-                                                        : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-0 group-hover:opacity-100"
+                                                        : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                                     }`}
                                                 onClick={() => { if (!isDownloaded && !isDownloading) handleDownload(track, null, strId); }}
                                                 disabled={isDownloading || isDownloaded}

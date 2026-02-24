@@ -33,10 +33,14 @@ export async function GET(req: Request) {
 
         let ytMappedResults: any[] = [];
         try {
-            const ytResponse = await yts(term);
-            const ytVideos = ytResponse.videos.slice(0, 15);
+            // Promise.race so Vercel doesn't hit the 10s Serverless timeout if youtube blocks the search
+            const ytResponse: any = await Promise.race([
+                yts(term),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("yts timeout")), 4000))
+            ]);
+            const ytVideos = ytResponse?.videos?.slice(0, 15) || [];
 
-            ytMappedResults = ytVideos.map(vid => {
+            ytMappedResults = ytVideos.map((vid: any) => {
                 let artistName = vid.author.name;
                 let trackName = vid.title;
 
