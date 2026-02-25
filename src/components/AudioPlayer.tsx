@@ -84,13 +84,13 @@ export default function AudioPlayer() {
                             className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-700 ease-out"
                         />
                     </div>
-                    <div className="flex flex-col truncate ml-1 items-start">
-                        <span title={currentTrack.title} className="text-white font-bold text-sm truncate light-mode:text-slate-900 drop-shadow-sm cursor-pointer hover:underline decoration-brand-500/50 underline-offset-2">
+                    <div className="flex flex-col min-w-0 ml-1 items-start flex-1 overflow-hidden">
+                        <span title={currentTrack.title} className="text-white font-bold text-sm truncate w-full light-mode:text-slate-900 drop-shadow-sm cursor-pointer hover:underline decoration-brand-500/50 underline-offset-2">
                             {currentTrack.title}
                         </span>
                         <div
                             title={currentTrack.artist}
-                            className="text-slate-400 text-[11px] md:text-sm font-medium truncate light-mode:text-slate-500 max-w-full flex items-center"
+                            className="text-slate-400 text-[11px] md:text-sm font-medium truncate light-mode:text-slate-500 w-full block"
                         >
                             {currentTrack.artist.split(/(, | & | y | ft\. | feat\. )/i).map((part, i) =>
                                 i % 2 === 0 ? (

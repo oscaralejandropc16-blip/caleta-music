@@ -4,6 +4,7 @@ import fs from "fs";
 import crypto from "crypto";
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const md5 = (data: string) => crypto.createHash('md5').update(data).digest('hex');
 
