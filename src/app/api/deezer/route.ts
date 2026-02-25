@@ -146,7 +146,15 @@ export async function GET(request: NextRequest) {
         if (rangeHeader) {
             const parts = rangeHeader.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+
+            // Limit response chunk to 3MB to bypass Vercel's 4.5MB Serverless Payload Limit
+            const maxChunk = 3 * 1024 * 1024;
+            if (end - start > maxChunk) {
+                end = start + maxChunk - 1;
+            }
+            if (end >= totalSize) end = totalSize - 1;
+
             const chunksize = (end - start) + 1;
 
             const slicedBuffer = decryptedBuffer.subarray(start, end + 1);
