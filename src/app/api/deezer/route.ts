@@ -102,46 +102,30 @@ export async function GET(request: NextRequest) {
         }
 
         const blowFishKey = getBlowfishKey(track.SNG_ID);
-        const reader = response.body.getReader();
-        const contentLength = response.headers.get("Content-Length");
+        const arrayBuffer = await response.arrayBuffer();
+        const encryptedBuffer = Buffer.from(arrayBuffer);
 
-        const stream = new ReadableStream({
-            async start(controller) {
-                let i = 0;
-                let remainder = Buffer.alloc(0);
+        const chunks: Buffer[] = [];
+        let offset = 0;
+        let i = 0;
 
-                try {
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) {
-                            if (remainder.length > 0) {
-                                controller.enqueue(remainder);
-                            }
-                            controller.close();
-                            break;
-                        }
-
-                        let buffer = remainder.length > 0 ? Buffer.concat([remainder, Buffer.from(value)]) : Buffer.from(value);
-
-                        let offset = 0;
-                        while (offset + 2048 <= buffer.length) {
-                            const chunkToProcess = buffer.subarray(offset, offset + 2048);
-                            if (i % 3 === 0) {
-                                controller.enqueue(decryptChunk(chunkToProcess, blowFishKey));
-                            } else {
-                                controller.enqueue(chunkToProcess);
-                            }
-                            offset += 2048;
-                            i++;
-                        }
-
-                        remainder = buffer.subarray(offset);
-                    }
-                } catch (err) {
-                    controller.error(err);
-                }
+        while (offset + 2048 <= encryptedBuffer.length) {
+            const chunkToProcess = encryptedBuffer.subarray(offset, offset + 2048);
+            if (i % 3 === 0) {
+                chunks.push(decryptChunk(chunkToProcess, blowFishKey));
+            } else {
+                chunks.push(chunkToProcess);
             }
-        });
+            offset += 2048;
+            i++;
+        }
+
+        const remainder = encryptedBuffer.subarray(offset);
+        if (remainder.length > 0) {
+            chunks.push(remainder);
+        }
+
+        const decryptedBuffer = Buffer.concat(chunks);
 
         const coverUrl = `https://e-cdns-images.dzcdn.net/images/cover/${track.ALB_PICTURE}/500x500-000000-80-0-0.jpg`;
         const artistName = track.ART_NAME || "Desconocido";
@@ -153,13 +137,10 @@ export async function GET(request: NextRequest) {
             "X-Video-Artist": encodeURIComponent(artistName),
             "X-Video-Cover": coverUrl,
             "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+            "Content-Length": decryptedBuffer.length.toString()
         };
 
-        if (contentLength) {
-            headers["Content-Length"] = contentLength;
-        }
-
-        return new NextResponse(stream, {
+        return new NextResponse(decryptedBuffer, {
             status: 200,
             headers,
         });
