@@ -13,61 +13,81 @@ const YT_DLP_PATH = path.join(process.cwd(), "yt-dlp.exe");
 
 /**
  * Usa youtubei.js (Innertube) para buscar y obtener stream de YouTube.
- * Funciona bien en Vercel/serverless porque usa la API interna de YouTube.
+ * Usa yt.download() que es el método oficial y maneja decipher internamente.
  */
 async function searchAndStreamWithInnertube(query: string): Promise<{
-    stream: ReadableStream<Uint8Array>;
+    buffer: Buffer;
     contentType: string;
-    contentLength: string;
     title: string;
     artist: string;
     coverUrl: string;
 }> {
     const { Innertube } = await import('youtubei.js');
+    console.log("[Innertube] Creating session...");
     const yt = await Innertube.create({
         generate_session_locally: true,
     });
+    console.log("[Innertube] Session created OK");
 
     console.log("[Innertube] Searching for:", query);
     const searchResults = await yt.search(query, { type: 'video' });
 
     const firstVideo = searchResults.results?.find((r: any) => r.type === 'Video') as any;
     if (!firstVideo || !firstVideo.id) {
-        throw new Error("No video found on YouTube");
+        throw new Error("No video found on YouTube for: " + query);
     }
 
-    console.log("[Innertube] Found:", firstVideo.title?.text, "by", firstVideo.author?.name);
+    const videoId = firstVideo.id;
+    const title = firstVideo.title?.text || "Enlace Descargado";
+    const artist = firstVideo.author?.name || "Desconocido";
+    const coverUrl = firstVideo.best_thumbnail?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-    const info = await yt.getBasicInfo(firstVideo.id);
-    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    console.log("[Innertube] Found:", title, "by", artist, "ID:", videoId);
+    console.log("[Innertube] Downloading audio stream...");
 
-    const streamUrl = await format.decipher(yt.session.player);
-    if (!streamUrl) {
-        throw new Error("Could not decipher audio URL");
+    // Usar yt.download() - el método oficial que maneja todo (decipher, etc.)
+    const downloadStream = await yt.download(videoId, {
+        type: 'audio',
+        quality: 'best',
+    });
+
+    // Leer el stream completo a un buffer
+    const chunks: Uint8Array[] = [];
+    const reader = (downloadStream as any).getReader ? (downloadStream as any).getReader() : null;
+    if (reader) {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) chunks.push(value);
+        }
+    } else {
+        // Fallback for async iterable
+        for await (const chunk of downloadStream as any) {
+            chunks.push(chunk);
+        }
     }
+    const buffer = Buffer.concat(chunks);
+    console.log("[Innertube] Downloaded:", buffer.length, "bytes");
 
-    const response = await fetch(streamUrl);
-    if (!response.ok || !response.body) {
-        throw new Error(`Failed to fetch YouTube audio stream: ${response.status}`);
+    if (buffer.length < 1000) {
+        throw new Error("Downloaded audio too small, likely failed: " + buffer.length + " bytes");
     }
 
     return {
-        stream: response.body,
-        contentType: format.mime_type || 'audio/webm',
-        contentLength: format.content_length?.toString() || response.headers.get('content-length') || "",
-        title: firstVideo.title?.text || info.basic_info?.title || "Enlace Descargado",
-        artist: firstVideo.author?.name || info.basic_info?.author || "Desconocido",
-        coverUrl: firstVideo.best_thumbnail?.url || `https://i.ytimg.com/vi/${firstVideo.id}/hqdefault.jpg`,
+        buffer,
+        contentType: 'audio/webm',
+        title,
+        artist,
+        coverUrl,
     };
 }
 
 /**
- * Obtiene stream de un video específico de YouTube usando Innertube
+ * Obtiene stream de un video específico de YouTube usando yt.download()
  */
 async function streamWithInnertube(videoId: string): Promise<{
-    stream: ReadableStream<Uint8Array>;
+    buffer: Buffer;
     contentType: string;
-    contentLength: string;
     title: string;
     artist: string;
 }> {
@@ -77,22 +97,36 @@ async function streamWithInnertube(videoId: string): Promise<{
     });
 
     const info = await yt.getBasicInfo(videoId);
-    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    console.log("[Innertube] Downloading video:", videoId);
 
-    const streamUrl = await format.decipher(yt.session.player);
-    if (!streamUrl) {
-        throw new Error("Could not decipher audio URL");
+    const downloadStream = await yt.download(videoId, {
+        type: 'audio',
+        quality: 'best',
+    });
+
+    const chunks: Uint8Array[] = [];
+    const reader = (downloadStream as any).getReader ? (downloadStream as any).getReader() : null;
+    if (reader) {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) chunks.push(value);
+        }
+    } else {
+        for await (const chunk of downloadStream as any) {
+            chunks.push(chunk);
+        }
     }
+    const buffer = Buffer.concat(chunks);
+    console.log("[Innertube] Downloaded:", buffer.length, "bytes");
 
-    const response = await fetch(streamUrl);
-    if (!response.ok || !response.body) {
-        throw new Error(`Failed to fetch YouTube audio: ${response.status}`);
+    if (buffer.length < 1000) {
+        throw new Error("Downloaded audio too small: " + buffer.length + " bytes");
     }
 
     return {
-        stream: response.body,
-        contentType: format.mime_type || 'audio/webm',
-        contentLength: format.content_length?.toString() || response.headers.get('content-length') || "",
+        buffer,
+        contentType: 'audio/webm',
         title: info.basic_info?.title || "Enlace Descargado",
         artist: info.basic_info?.author || "Desconocido",
     };
@@ -322,21 +356,16 @@ export async function GET(request: NextRequest) {
                 try {
                     const result = await searchAndStreamWithInnertube(query);
 
-                    const headers: Record<string, string> = {
-                        "Content-Type": result.contentType,
-                        "X-Video-Title": encodeURIComponent(result.title),
-                        "X-Video-Artist": encodeURIComponent(result.artist),
-                        "X-Video-Cover": result.coverUrl,
-                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
-                    };
-
-                    if (result.contentLength) {
-                        headers["Content-Length"] = result.contentLength;
-                    }
-
-                    return new NextResponse(result.stream, {
+                    return new NextResponse(new Uint8Array(result.buffer), {
                         status: 200,
-                        headers,
+                        headers: {
+                            "Content-Type": result.contentType,
+                            "Content-Length": result.buffer.length.toString(),
+                            "X-Video-Title": encodeURIComponent(result.title),
+                            "X-Video-Artist": encodeURIComponent(result.artist),
+                            "X-Video-Cover": result.coverUrl,
+                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+                        },
                     });
                 } catch (innertubeErr: any) {
                     console.error("[Innertube] Failed:", innertubeErr.message);
@@ -379,21 +408,16 @@ export async function GET(request: NextRequest) {
                     try {
                         const result = await streamWithInnertube(videoId);
 
-                        const headers: Record<string, string> = {
-                            "Content-Type": result.contentType,
-                            "X-Video-Title": encodeURIComponent(result.title),
-                            "X-Video-Artist": encodeURIComponent(result.artist),
-                            "X-Video-Cover": coverUrl,
-                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
-                        };
-
-                        if (result.contentLength) {
-                            headers["Content-Length"] = result.contentLength;
-                        }
-
-                        return new NextResponse(result.stream, {
+                        return new NextResponse(new Uint8Array(result.buffer), {
                             status: 200,
-                            headers,
+                            headers: {
+                                "Content-Type": result.contentType,
+                                "Content-Length": result.buffer.length.toString(),
+                                "X-Video-Title": encodeURIComponent(result.title),
+                                "X-Video-Artist": encodeURIComponent(result.artist),
+                                "X-Video-Cover": coverUrl,
+                                "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+                            },
                         });
                     } catch (err: any) {
                         console.error("[Innertube stream] Error:", err.message);
