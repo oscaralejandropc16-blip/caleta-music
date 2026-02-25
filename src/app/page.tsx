@@ -12,6 +12,8 @@ import { usePlayer } from "@/context/PlayerContext";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
 import Logo from "@/components/Logo";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import OnboardingModal from "@/components/OnboardingModal";
 
 const GENRES = [
   { name: "Pop", color: "from-pink-500 to-rose-600", term: "pop" },
@@ -63,7 +65,7 @@ function TrackCard({
   const isDownloaded = savedTrackIds.has(strId);
   const isDownloading = downloadingId === strId;
   const isLiked = likedIds.has(strId);
-  const w = size === "large" ? "min-w-[200px] w-[200px]" : "min-w-[170px] w-[170px]";
+  const w = size === "large" ? "min-w-[140px] md:min-w-[200px] w-[140px] md:w-[200px]" : "min-w-[130px] md:min-w-[170px] w-[130px] md:w-[170px]";
 
   return (
     <div className={`${w} flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group card-glow flex flex-col`}>
@@ -142,7 +144,7 @@ function HorizontalScroller({ children, title, icon }: { children: React.ReactNo
   return (
     <section className="mb-12 animate-fade-in-up">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+        <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2 md:gap-3">
           {icon}{title}
         </h2>
         <div className="flex gap-2">
@@ -182,6 +184,24 @@ export default function Home() {
 
   const { playTrack } = usePlayer();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const [favoriteArtists, setFavoriteArtists] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setFavoriteArtists([]);
+    } else {
+      const saved = localStorage.getItem(`caleta_artists_${user.id}`);
+      if (saved) {
+        try {
+          setFavoriteArtists(JSON.parse(saved));
+        } catch (e) {
+          setFavoriteArtists([]);
+        }
+      }
+    }
+  }, [user, authLoading]);
 
   useEffect(() => {
     getAllTracksFromDB().then((tracks) => {
@@ -201,33 +221,29 @@ export default function Home() {
 
     const fetchData = async () => {
       try {
+        if (!favoriteArtists) return; // Wait until favorite artists are loaded from onboarding
+
         const [recRes, trendRes, newRes] = await Promise.all([
-          fetch(`https://itunes.apple.com/search?term=top+hits+2025&entity=song&limit=12`),
-          fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(TRENDING_TERMS[Math.floor(Math.random() * TRENDING_TERMS.length)])}&entity=song&limit=12`),
-          fetch(`https://itunes.apple.com/es/rss/topsongs/limit=15/json`)
+          fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[0] || 'top hits 2025')}`),
+          fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[1] || TRENDING_TERMS[Math.floor(Math.random() * TRENDING_TERMS.length)])}`),
+          fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[2] || 'new music releases')}`)
         ]);
 
         const [recData, trendData, newData] = await Promise.all([
           recRes.json(), trendRes.json(), newRes.json()
         ]);
 
-        setRecommendations(recData.results || []);
-        setTrending(trendData.results || []);
-
-        const newReleasesFormatted = (newData.feed?.entry || []).map((r: any) => ({
-          trackId: r.id?.attributes?.["im:id"] || Math.floor(Math.random() * 1000000),
-          trackName: r["im:name"]?.label || "Desconocido",
-          artistName: r["im:artist"]?.label || "Artista",
-          collectionName: r["im:collection"]?.label || "",
-          artworkUrl100: r["im:image"]?.[2]?.label || r["im:image"]?.[0]?.label || "",
-          previewUrl: ""
-        }));
-        setNewReleases(newReleasesFormatted);
+        setRecommendations(recData.results?.slice(0, 12) || []);
+        setTrending(trendData.results?.slice(0, 12) || []);
+        setNewReleases(newData.results?.slice(0, 15) || []);
       } catch (error) { console.error("Error fetching data", error); }
       finally { setLoading(false); }
     };
-    fetchData();
-  }, []);
+
+    if (favoriteArtists) {
+      fetchData();
+    }
+  }, [favoriteArtists]);
 
   const handleDownload = async (track: ItunesTrack) => {
     const strId = track.trackId.toString();
@@ -249,7 +265,11 @@ export default function Home() {
   const handlePlay = (e: React.MouseEvent, track: ItunesTrack) => {
     e.stopPropagation();
     const strId = track.trackId.toString();
-    const downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}&stream=true`;
+
+    // Si la pista vino de nuestra API de Deezer, usar el ID. Si no, fallback a titulo/artista en deezer
+    const downloadUrl = (track as any)._source === 'deezer'
+      ? `/api/deezer?id=${track.trackId}`
+      : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
 
     playTrack({
       id: `stream-${strId}`,
@@ -267,9 +287,9 @@ export default function Home() {
     setSelectedGenre(genre.term);
     setGenreLoading(true);
     try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(genre.term)}&entity=song&limit=12`);
+      const res = await fetch(`/api/search?term=${encodeURIComponent(genre.term + " music")}`);
       const data = await res.json();
-      setGenreTracks(data.results || []);
+      setGenreTracks(data.results?.slice(0, 12) || []);
     } catch { setGenreTracks([]); }
     setGenreLoading(false);
   };
@@ -294,7 +314,7 @@ export default function Home() {
           </div>
           <p className="text-slate-400/80 text-[11px] md:text-xs italic mt-1.5 ml-11 font-medium tracking-wide">La caleta que suena en todos lados</p>
         </div>
-        <h1 className="text-5xl md:text-6xl font-black mb-3 text-white leading-[1.1] tracking-tight drop-shadow-sm">
+        <h1 className="text-4xl md:text-6xl font-black mb-3 text-white leading-[1.1] tracking-tight drop-shadow-sm">
           {greeting()}
         </h1>
         <p className="text-slate-400 text-lg font-medium drop-shadow-sm">Descubre las canciones más populares hoy.</p>
@@ -321,7 +341,7 @@ export default function Home() {
 
           {/* 🎧 GÉNEROS */}
           <section className="mb-12 animate-fade-in-up">
-            <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3 mb-6">
+            <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2 md:gap-3 mb-6">
               <Headphones size={22} className="text-cyan-400" />Explora por Género
             </h2>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
@@ -329,8 +349,8 @@ export default function Home() {
                 <button key={genre.term} onClick={() => handleGenreClick(genre)} aria-label={`Explorar género ${genre.name}`}
                   className={`genre-card rounded-3xl p-6 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40 active:scale-95 transition-all duration-300 ${selectedGenre === genre.term ? "ring-4 ring-white/50 ring-offset-4 ring-offset-[#0a0f1e] shadow-2xl scale-105" : "hover:shadow-lg"}`}>
                   <div className={`absolute inset-0 bg-gradient-to-br ${genre.color} rounded-3xl opacity-90 transition-opacity group-hover:opacity-100`} />
-                  <div className="relative z-10">
-                    <span className="text-white font-bold text-sm drop-shadow-md">{genre.name}</span>
+                  <div className="relative z-10 flex items-center justify-center">
+                    <span className="text-white font-bold text-xs md:text-sm drop-shadow-md">{genre.name}</span>
                   </div>
                 </button>
               ))}
@@ -360,7 +380,7 @@ export default function Home() {
                 const cover = album.cover?.replace("100x100", "300x300")?.replace("200x200", "300x300") || "";
                 return (
                   <button key={idx} onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })} aria-label={`Ver álbum ${album.name}`}
-                    className="min-w-[170px] w-[170px] flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all group card-glow text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 active:scale-[0.98]">
+                    className="min-w-[140px] md:min-w-[170px] w-[140px] md:w-[170px] flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] transition-all group card-glow text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 active:scale-[0.98]">
                     <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.12)] mb-3 bg-slate-800/50">
                       {cover ? <img src={cover} alt={album.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out" />
                         : <div className="w-full h-full flex items-center justify-center"><Disc3 size={40} className="text-slate-600" /></div>}
@@ -376,7 +396,7 @@ export default function Home() {
 
           {/* 🎶 RECOMENDADO */}
           <section className="mb-12 animate-fade-in-up">
-            <h2 className="text-2xl font-bold mb-6 text-white tracking-tight flex items-center gap-3">
+            <h2 className="text-xl md:text-2xl font-bold mb-6 text-white tracking-tight flex items-center gap-2 md:gap-3">
               <Music2 size={22} className="text-brand-400" />Recomendado para ti
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -391,6 +411,12 @@ export default function Home() {
         onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
         albumName={albumModal.album} artistName={albumModal.artist} coverUrl={albumModal.cover}
       />
+      {user && (
+        <OnboardingModal
+          userId={user.id}
+          onComplete={(artists) => setFavoriteArtists(artists)}
+        />
+      )}
     </main>
   );
 }

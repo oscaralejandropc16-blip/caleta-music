@@ -12,7 +12,7 @@ import { usePlayer } from "@/context/PlayerContext";
 export default function Sidebar() {
     const pathname = usePathname();
     const { user, profile, signOut } = useAuth();
-    const { currentTrack } = usePlayer();
+    const { currentTrack, audioRef } = usePlayer();
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [likeCount, setLikeCount] = useState(0);
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -187,11 +187,25 @@ export default function Sidebar() {
                         </Link>
 
                         <button
-                            onClick={async () => {
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 setShowUserMenu(false);
-                                await signOut();
-                                // Force reload to clear all states and go to login
-                                window.location.href = "/";
+
+                                // Detener musica y limpiar cache local del reproductor de inmediato
+                                try {
+                                    if (audioRef?.current) {
+                                        audioRef.current.pause();
+                                        audioRef.current.removeAttribute('src');
+                                        audioRef.current.load();
+                                    }
+                                    localStorage.removeItem('caleta-player-state');
+                                } catch (e) { console.error("Error pausing", e); }
+
+                                signOut().finally(() => {
+                                    window.location.href = "/";
+                                    setTimeout(() => window.location.reload(), 500);
+                                });
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all border-t border-white/[0.06]"
                         >

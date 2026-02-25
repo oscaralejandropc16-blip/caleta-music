@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { User, Mail, Camera, Save, Loader, ArrowLeft, Shield, Calendar } from "lucide-react";
+import { User, Mail, Camera, Save, Loader, ArrowLeft, Shield, Calendar, LogOut } from "lucide-react";
+import { usePlayer } from "@/context/PlayerContext";
 import Link from "next/link";
 
 export default function ProfilePage() {
-    const { user, profile, updateProfile } = useAuth();
+    const { user, profile, updateProfile, signOut } = useAuth();
+    const { audioRef } = usePlayer();
     const [username, setUsername] = useState(profile?.username || "");
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -110,22 +112,47 @@ export default function ProfilePage() {
                             <p className="text-xs text-slate-600 mt-1">El email no se puede cambiar</p>
                         </div>
 
-                        <button
-                            onClick={handleSave}
-                            disabled={saving || !username.trim()}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all ${saved
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                            <button
+                                onClick={handleSave}
+                                disabled={saving || !username.trim()}
+                                className={`flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm transition-all ${saved
                                     ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                                    : "bg-brand-500 hover:bg-brand-600 text-white hover:scale-105 shadow-lg shadow-brand-500/20"
-                                } disabled:opacity-50 disabled:hover:scale-100`}
-                        >
-                            {saving ? (
-                                <><Loader size={16} className="animate-spin" /> Guardando...</>
-                            ) : saved ? (
-                                <><Save size={16} /> ¡Guardado!</>
-                            ) : (
-                                <><Save size={16} /> Guardar Cambios</>
-                            )}
-                        </button>
+                                    : "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20 active:scale-95"
+                                    } disabled:opacity-50 disabled:active:scale-100 outline-none focus-visible:ring-4 focus-visible:ring-brand-500/50`}
+                            >
+                                {saving ? (
+                                    <><Loader size={16} className="animate-spin" /> Guardando...</>
+                                ) : saved ? (
+                                    <><Save size={16} /> ¡Guardado!</>
+                                ) : (
+                                    <><Save size={16} /> Guardar Cambios</>
+                                )}
+                            </button>
+
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                        if (audioRef?.current) {
+                                            audioRef.current.pause();
+                                            audioRef.current.removeAttribute('src');
+                                            audioRef.current.load();
+                                        }
+                                        localStorage.removeItem('caleta-player-state');
+                                    } catch (err) { console.error("Error pausing", err); }
+
+                                    signOut().finally(() => {
+                                        window.location.href = "/";
+                                        setTimeout(() => window.location.reload(), 500);
+                                    });
+                                }}
+                                className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm transition-all bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/10 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-red-500/50"
+                            >
+                                <LogOut size={16} />
+                                Cerrar Sesión
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

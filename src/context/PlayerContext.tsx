@@ -148,30 +148,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 setIsPlaying(true);
             }
 
-            // Si es streaming, descargar como blob en background para habilitar seeking
-            if (isStreamSource && currentTrack.streamUrl) {
-                const streamUrlToFetch = currentTrack.streamUrl;
-                const trackIdAtStart = currentTrack.id;
-                fetch(streamUrlToFetch)
-                    .then(res => res.blob())
-                    .then(blob => {
-                        // Verificar que aún estamos reproduciendo el mismo track
-                        if (audioRef.current && currentTrack?.id === trackIdAtStart) {
-                            const currentTime = audioRef.current.currentTime;
-                            const wasPlaying = !audioRef.current.paused;
-                            const streamBlobUrl = URL.createObjectURL(blob);
-                            audioRef.current.src = streamBlobUrl;
-                            audioRef.current.currentTime = currentTime;
-                            if (wasPlaying) audioRef.current.play().catch(() => { });
-                            // Cleanup old blob URL when this one gets replaced
-                            blobUrl = streamBlobUrl;
-                            console.log("[Player] Stream convertido a blob para seeking");
-                        }
-                    })
-                    .catch(() => {
-                        // Si falla, seguimos con el stream directo (sin seeking)
-                    });
-            }
+            // Si es streaming, delegar 100% al navegador para carga instantánea
+            // NOTA: Eliminado el fetch de blob en background por que bloquea el streaming
+            // nativo haciendo que Chrome pause la etiqueta <audio> hasta descargar 10MB. 
+            // Esto permite que el stream inicie en 0 segundos.
 
             // Configurar Media Session para pantallas bloqueadas (Android/iOS)
             if ("mediaSession" in navigator) {

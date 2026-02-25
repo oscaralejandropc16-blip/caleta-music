@@ -24,10 +24,15 @@ export const downloadAndSaveTrack = async (
     try {
         let downloadUrl = "";
 
-        // Si track (iTunes object) fue provisto, enviamos artist y title para buscar en YT.
-        // Si no (descarga manual por link), enviamos directo la url.
+        // Si track (iTunes object) fue provisto, enviamos artist y title para buscar en Deezer.
+        // Si no (descarga manual por link), enviamos directo la url a la ruta de youtube antigua.
         if (track) {
-            downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+            // Si la pista vino desde nuestra búsqueda nativa de Deezer, usar el ID directamente
+            if ((track as any)._source === 'deezer' && track.trackId) {
+                downloadUrl = `/api/deezer?id=${track.trackId}`;
+            } else {
+                downloadUrl = `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+            }
         } else if (url) {
             downloadUrl = `/api/download?url=${encodeURIComponent(url)}`;
         } else {

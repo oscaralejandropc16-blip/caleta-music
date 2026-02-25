@@ -1,16 +1,4 @@
 ﻿import { NextResponse } from "next/server";
-import yts from "yt-search";
-
-// Helper to hash youtube ID to a number so we don't break existing interfaces expecting number
-function hashString(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return Math.abs(hash);
-}
 
 export async function GET(req: Request) {
     try {
@@ -18,83 +6,49 @@ export async function GET(req: Request) {
         const term = searchParams.get("term");
         if (!term) return NextResponse.json({ results: [] });
 
-        const cleanTerm = term.replace(/ ft | ft\. | feat | feat\. | y | & | x | con /gi, " ").replace(/\s+/g, " ").trim();
+        // Deezer Public API es ultra rápida y no requiere autenticación para búsqueda básica
+        const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=30`;
 
-        let itunesResults: any[] = [];
-        try {
-            const response = await fetch(
-                `https://itunes.apple.com/search?term=${encodeURIComponent(cleanTerm)}&entity=song&limit=30`
-            );
-            const data = await response.json();
-            itunesResults = data.results || [];
-        } catch (e) {
-            console.error("iTunes search failed:", e);
+        const response = await fetch(deezerUrl, {
+            // Añadir abortController para un límite estricto de timeout (15 segundos)
+            signal: AbortSignal.timeout(15000)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Deezer API returned ${response.status}`);
         }
 
-        let ytMappedResults: any[] = [];
-        try {
-            // Promise.race so Vercel doesn't hit the 10s Serverless timeout if youtube blocks the search
-            const ytResponse: any = await Promise.race([
-                yts(term),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("yts timeout")), 4000))
-            ]);
-            const ytVideos = ytResponse?.videos?.slice(0, 15) || [];
+        const data = await response.json();
+        const deezerResults = data.data || [];
 
-            ytMappedResults = ytVideos.map((vid: any) => {
-                let artistName = vid.author.name;
-                let trackName = vid.title;
+        // Mapear los resultados de Deezer a la interfaz ("ItunesTrack") que espera tu Frontend 
+        // para no romper la UI de los componentes existentes
+        const mappedResults = deezerResults.map((track: any) => ({
+            wrapperType: "track",
+            kind: "song",
+            artistId: track.artist.id,
+            collectionId: track.album.id,
+            trackId: track.id,
+            artistName: track.artist.name,
+            collectionName: track.album.title,
+            trackName: track.title,
+            previewUrl: track.preview, // Segmento de 30s nativo de Deezer
+            // Portadas en diferentes tamaños sacadas de la API oficial (vienen en 56, 250, 500 y 1000px)
+            artworkUrl30: track.album.cover_small,
+            artworkUrl60: track.album.cover_small,
+            artworkUrl100: track.album.cover_medium,
+            releaseDate: new Date().toISOString(), // Deezer no manda release date en /search simple
+            trackTimeMillis: track.duration * 1000,
+            primaryGenreName: "Música",
+            isStreamable: true,
+            _source: "deezer"
+        }));
 
-                if (vid.title.includes("-")) {
-                    const parts = vid.title.split("-");
-                    artistName = parts[0].trim();
-                    trackName = parts.slice(1).join("-").trim();
-                }
-
-                trackName = trackName.replace(/\[.*?\]|\(.*?\)|\|.*/g, "").trim();
-
-                return {
-                    wrapperType: "track",
-                    kind: "song",
-                    artistId: hashString(vid.author.url),
-                    collectionId: hashString(vid.videoId + "collection"),
-                    trackId: hashString(vid.videoId),
-                    artistName: artistName,
-                    collectionName: "YouTube Single",
-                    trackName: trackName,
-                    previewUrl: vid.url,
-                    artworkUrl30: vid.thumbnail,
-                    artworkUrl60: vid.thumbnail,
-                    artworkUrl100: vid.thumbnail,
-                    releaseDate: new Date().toISOString(),
-                    trackTimeMillis: vid.duration.seconds * 1000,
-                    primaryGenreName: "Alternativa",
-                    isStreamable: true,
-                    _isYoutubeFallback: true,
-                    _youtubeId: vid.videoId
-                };
-            });
-        } catch (e) {
-            console.error("YouTube search failed:", e);
-        }
-
-        let finalResults: any[] = [];
-
-        if (itunesResults.length < 2) {
-            finalResults = [...ytMappedResults, ...itunesResults];
-        } else {
-            // Interleave best YouTube results into top of iTunes results
-            finalResults = [...itunesResults];
-            if (ytMappedResults.length > 0) finalResults.splice(1, 0, ytMappedResults[0]);
-            if (ytMappedResults.length > 1) finalResults.splice(3, 0, ytMappedResults[1]);
-            if (ytMappedResults.length > 2) finalResults.splice(6, 0, ytMappedResults[2]);
-            if (ytMappedResults.length > 3) finalResults.splice(10, 0, ytMappedResults[3]);
-            if (ytMappedResults.length > 4) finalResults.splice(15, 0, ytMappedResults[4]);
-        }
-
-        // Deduplicate
+        // Deduplicate in case Deezer returns aliases
         const seen = new Set();
-        const uniqueResults = finalResults.filter(track => {
+        const uniqueResults = mappedResults.filter((track: any) => {
             if (!track.trackName || !track.artistName) return false;
+            // Clave única basada en Título + Artista normalizado
             const key = `${track.trackName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${track.artistName.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
             if (seen.has(key)) return false;
             seen.add(key);
@@ -102,8 +56,10 @@ export async function GET(req: Request) {
         });
 
         return NextResponse.json({ results: uniqueResults.slice(0, 30) });
-    } catch (e) {
-        console.error("Hybrid search error:", e);
-        return NextResponse.json({ error: "Search failed" }, { status: 500 });
+
+    } catch (e: any) {
+        console.error("Deezer search error:", e.message);
+        // Fallback vacío si falla la API
+        return NextResponse.json({ results: [] }, { status: 500 });
     }
 }

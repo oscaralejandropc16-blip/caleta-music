@@ -75,7 +75,10 @@ export default function SearchPage() {
     const { playTrack } = usePlayer();
 
     const handlePlay = (track: ItunesTrack) => {
-        const downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}&stream=true`;
+        const downloadUrl = (track as any)._source === 'deezer'
+            ? `/api/deezer?id=${track.trackId}`
+            : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+
         playTrack({
             id: `stream-${track.trackId}`,
             title: track.trackName,
@@ -108,26 +111,38 @@ export default function SearchPage() {
         });
     };
 
-    const handleLinkDownload = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!linkInput.trim() || linkDownloading) return;
-        const urlToDownload = linkInput.trim();
+    const executeLinkDownload = async (url: string) => {
+        if (linkDownloading) return;
         const directId = `link-${Date.now()}`;
         setLinkDownloading(true);
         setActiveLinkId(directId);
 
-        const success = await downloadAndSaveTrack(null, urlToDownload, directId, (progress) => {
+        // Si usan el main input, asegurarnos que la input de link este visible y con el testo para feedback
+        if (!showLinkInput) {
+            setShowLinkInput(true);
+            setLinkInput(url);
+        }
+
+        const success = await downloadAndSaveTrack(null, url, directId, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
         });
+
         if (success) {
             setSavedTrackIds((prev) => new Set(prev).add(directId));
             showToast("success", "¡Descarga completada y guardada!");
             setLinkInput("");
+            if (query === url) setQuery("");
         } else {
             showToast("error", "Error al descargar. Verifica el enlace.");
         }
         setLinkDownloading(false);
         setActiveLinkId(null);
+    };
+
+    const handleLinkDownload = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!linkInput.trim()) return;
+        executeLinkDownload(linkInput.trim());
     };
 
     const doSearch = useCallback(async (term: string) => {
@@ -163,8 +178,16 @@ export default function SearchPage() {
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim()) return;
-        doSearch(query.trim());
+        const trimmed = query.trim();
+        if (!trimmed) return;
+
+        // Si el usuario pega un link directo (youtube, etc) en la barra principal
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            executeLinkDownload(trimmed);
+            return;
+        }
+
+        doSearch(trimmed);
     };
 
     // Group results by album
@@ -208,11 +231,11 @@ export default function SearchPage() {
                         </div>
                         <span className="text-xs font-black uppercase tracking-[0.25em] text-brand-400 drop-shadow-sm">Explorar</span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 mb-3 leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 mb-3 leading-tight">
                         Buscar y Descargar
                     </h1>
                     <p className="text-slate-400 text-base md:text-lg font-medium max-w-xl">
-                        Encuentra cualquier canción, artista o álbum. Descarga a tu dispositivo o escucha en streaming al instante.
+                        Encuentra cualquier canción, artista o álbum. ¿No la consigues? <span className="text-pink-400">Pegar un enlace de YouTube</span> funciona también.
                     </p>
                 </div>
             </header>
@@ -232,15 +255,15 @@ export default function SearchPage() {
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="¿Qué quieres escuchar hoy?"
-                            className="w-full bg-[#0c1225]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl py-5 pl-16 pr-40 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/30 transition-all text-lg font-medium shadow-[0_8px_40px_-15px_rgba(0,0,0,0.5)] light-mode:bg-white/80 light-mode:text-slate-900 light-mode:border-slate-200"
+                            placeholder="Busca una canción, artista, o pega un link de YouTube..."
+                            className="w-full bg-[#0c1225]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl py-4 md:py-5 pl-12 md:pl-16 pr-[90px] md:pr-40 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/30 transition-all text-base md:text-lg font-medium shadow-[0_8px_40px_-15px_rgba(0,0,0,0.5)] light-mode:bg-white/80 light-mode:text-slate-900 light-mode:border-slate-200"
                         />
                         <button
                             type="submit"
                             disabled={loading || !query.trim()}
-                            className="absolute right-3 bg-brand-500 hover:bg-brand-400 disabled:bg-brand-500/50 disabled:hover:bg-brand-500/50 px-7 py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_25px_rgba(99,102,241,0.5)] min-w-[110px] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 text-white disabled:cursor-not-allowed"
+                            className="absolute right-2 md:right-3 bg-brand-500 hover:bg-brand-400 disabled:bg-brand-500/50 disabled:hover:bg-brand-500/50 px-4 md:px-7 py-2 md:py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_25px_rgba(99,102,241,0.5)] min-w-[70px] md:min-w-[110px] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 text-white text-sm md:text-base disabled:cursor-not-allowed"
                         >
-                            {loading ? <div className="h-5 w-5 border-2 border-white rounded-full animate-spin border-t-transparent mx-auto" /> : "Buscar"}
+                            {loading ? <div className="h-4 w-4 md:h-5 md:w-5 border-2 border-white rounded-full animate-spin border-t-transparent mx-auto" /> : "Buscar"}
                         </button>
                     </div>
                 </form>
@@ -248,14 +271,19 @@ export default function SearchPage() {
                 {/* Link download toggle + input */}
                 <div className="flex items-center gap-3 mb-4">
                     <button
-                        onClick={() => setShowLinkInput(!showLinkInput)}
+                        onClick={() => {
+                            setShowLinkInput(!showLinkInput);
+                            if (!showLinkInput) {
+                                setTimeout(() => document.getElementById('youtube-link-input')?.focus(), 100);
+                            }
+                        }}
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${showLinkInput
                             ? "bg-brand-500/10 border border-brand-500/20 text-brand-400"
                             : "bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.08]"
                             }`}
                     >
                         <Link2 size={16} />
-                        Pegar enlace
+                        Pegar enlace de YouTube
                     </button>
                 </div>
 
@@ -265,11 +293,12 @@ export default function SearchPage() {
                             <Link2 size={18} />
                         </div>
                         <input
+                            id="youtube-link-input"
                             type="text"
                             value={linkInput}
                             onChange={(e) => setLinkInput(e.target.value)}
                             disabled={linkDownloading}
-                            placeholder="https://youtube.com/watch?v=... o enlace de iTunes"
+                            placeholder="https://youtube.com/watch?v=..."
                             className="w-full bg-[#0c1225]/60 backdrop-blur-md border border-white/[0.06] rounded-xl py-4 pl-14 pr-44 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/30 focus:border-slate-500/30 transition-all text-sm disabled:opacity-50 font-medium light-mode:bg-white/60 light-mode:text-slate-900"
                         />
                         <button
@@ -345,9 +374,20 @@ export default function SearchPage() {
                     <p className="text-slate-400 text-center max-w-md mb-2 font-medium">
                         No encontramos nada para <span className="text-brand-400 font-bold">&quot;{searchTerm}&quot;</span>
                     </p>
-                    <p className="text-slate-500 text-sm text-center max-w-md mb-8">
-                        Intenta con otro nombre de canción, artista o álbum.
+                    <p className="text-slate-500 text-sm text-center max-w-md mb-6">
+                        Intenta con otro nombre de canción, artista o álbum. Si la música es muy nueva o poco común, ¡usa el enlace directo de YouTube!
                     </p>
+                    <button
+                        onClick={() => {
+                            setShowLinkInput(true);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                            setTimeout(() => document.getElementById('youtube-link-input')?.focus(), 500);
+                        }}
+                        className="mb-8 flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold transition-all duration-300 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_25px_rgba(99,102,241,0.5)] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
+                    >
+                        <Link2 size={18} />
+                        Descargar desde YouTube
+                    </button>
                     <div className="text-center">
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3">Prueba buscando</p>
                         <div className="flex flex-wrap justify-center gap-2">

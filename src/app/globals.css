@@ -229,6 +229,13 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
+/* Safe area insets for iOS */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 /* Light Mode Overrides */
 .light-mode {
   --background: #f1f5f9;
