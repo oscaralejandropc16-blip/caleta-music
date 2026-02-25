@@ -134,7 +134,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
 
             // Función para intentar reproducir con fallback encadenado:
-            // 1. Deezer API (canción completa) → 2. YouTube → 3. Deezer Preview (30s)
+            // 1. Deezer API (canción completa) → 2. YouTube (via Piped) → 3. Deezer Preview (30s)
             const attemptPlay = async (url: string, fallbackLevel = 0) => {
                 const audio = audioRef.current;
                 if (!audio) return;
@@ -150,21 +150,51 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         return;
                     }
                     if (err.name === 'AbortError') {
-                        console.log("Playback aborted, likely due to a pause/track change");
+                        console.log("Playback aborted");
                         return;
                     }
 
                     console.error("Error al reproducir fuente de audio:", err);
 
-                    // Fallback level 0 → Try YouTube
+                    // Fallback level 0 → Resolve YouTube audio URL via Piped API
                     if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                        console.log("[Player] Deezer stream failed, falling back to YouTube...");
-                        const ytFallback = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&stream=true`;
-                        attemptPlay(ytFallback, 1);
-                        return;
+                        console.log("[Player] Deezer stream failed, resolving YouTube URL...");
+                        try {
+                            const apiUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                            const res = await fetch(apiUrl);
+
+                            if (res.ok) {
+                                const contentType = res.headers.get('content-type') || '';
+
+                                if (contentType.includes('application/json')) {
+                                    // Vercel: API devuelve JSON con URL directa
+                                    const data = await res.json();
+                                    if (data.audioUrl) {
+                                        console.log("[Player] Got direct audio URL from Piped, playing...");
+                                        attemptPlay(data.audioUrl, 1);
+                                        return;
+                                    }
+                                } else {
+                                    // Local: API devuelve audio binario directamente
+                                    const blob = await res.blob();
+                                    const blobPlayUrl = URL.createObjectURL(blob);
+                                    attemptPlay(blobPlayUrl, 1);
+                                    return;
+                                }
+                            }
+                        } catch (fetchErr) {
+                            console.error("[Player] YouTube API fetch failed:", fetchErr);
+                        }
+
+                        // Si YouTube falló, ir directo al preview
+                        if (currentTrack.previewUrl) {
+                            console.log("[Player] YouTube failed, using Deezer preview (30s)...");
+                            attemptPlay(currentTrack.previewUrl, 2);
+                            return;
+                        }
                     }
 
-                    // Fallback level 1 → Try Deezer preview URL (30s clip, siempre funciona)
+                    // Fallback level 1 → Try Deezer preview URL (30s clip)
                     if (fallbackLevel === 1 && currentTrack.previewUrl) {
                         console.log("[Player] YouTube also failed, using Deezer preview (30s)...");
                         attemptPlay(currentTrack.previewUrl, 2);

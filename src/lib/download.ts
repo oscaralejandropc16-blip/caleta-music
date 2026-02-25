@@ -15,8 +15,7 @@ export interface ItunesTrack {
 }
 
 /**
- * Procesa el response de descarga: lee el stream, crea blob, extrae metadatos
- * y guarda la canción en la biblioteca.
+ * Procesa el response de descarga: lee el stream, crea blob, guarda en biblioteca.
  */
 async function processDownloadResponse(
     response: Response,
@@ -55,7 +54,6 @@ async function processDownloadResponse(
         type: response.headers.get("Content-Type") || "audio/mpeg"
     });
 
-    // Extraer metadatos del header si el servidor los provee (yt-dlp / deezer)
     let resolvedTitle = track?.trackName || "Enlace Descargado";
     let resolvedArtist = track?.artistName || "Desconocido";
     let resolvedCover = track?.artworkUrl100?.replace("100x100", "500x500") || "";
@@ -75,6 +73,76 @@ async function processDownloadResponse(
         artist: resolvedArtist,
         album: track?.collectionName || "",
         coverUrl: resolvedCover,
+    };
+
+    const sourceUrlToSave = url || (track
+        ? `https://itunes.apple.com/search?term=${encodeURIComponent(track.trackName + " " + track.artistName)}`
+        : "");
+
+    await addSongToLibrary(trackData, sourceUrlToSave, blob);
+
+    if (onComplete) onComplete();
+    return true;
+}
+
+/**
+ * Descarga audio directamente desde una URL (usado cuando la API devuelve 
+ * una URL directa en JSON en vez de audio binario).
+ */
+async function downloadFromDirectUrl(
+    audioUrl: string,
+    metadata: { title: string; artist: string; coverUrl: string },
+    track: ItunesTrack | null,
+    url: string | null,
+    id: string,
+    onProgress?: (progress: number) => void,
+    onComplete?: () => void
+): Promise<boolean> {
+    if (onProgress) onProgress(50);
+
+    console.log("[Download] Fetching audio from direct URL...");
+    const audioRes = await fetch(audioUrl);
+
+    if (!audioRes.ok || !audioRes.body) {
+        throw new Error("Failed to fetch audio from direct URL");
+    }
+
+    // Leer el audio
+    const reader = audioRes.body.getReader();
+    const chunks: Uint8Array[] = [];
+    const totalBytes = parseInt(audioRes.headers.get("Content-Length") || "0", 10);
+    let loadedBytes = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+            chunks.push(value);
+            loadedBytes += value.length;
+            if (totalBytes > 0 && onProgress) {
+                onProgress(Math.min(99, Math.round(50 + (loadedBytes / totalBytes) * 50)));
+            } else if (onProgress) {
+                onProgress(85);
+            }
+        }
+    }
+
+    if (onProgress) onProgress(100);
+
+    const blob = new Blob(chunks as unknown as BlobPart[], {
+        type: audioRes.headers.get("Content-Type") || "audio/mp4"
+    });
+
+    if (blob.size < 10000) {
+        throw new Error("Downloaded audio too small: " + blob.size + " bytes");
+    }
+
+    const trackData = {
+        id,
+        title: metadata.title || track?.trackName || "Enlace Descargado",
+        artist: metadata.artist || track?.artistName || "Desconocido",
+        album: track?.collectionName || "",
+        coverUrl: metadata.coverUrl || track?.artworkUrl100?.replace("100x100", "500x500") || "",
     };
 
     const sourceUrlToSave = url || (track
@@ -113,7 +181,7 @@ export const downloadAndSaveTrack = async (
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 120000);
 
-        // Simular progreso mientras el servidor procesa
+        // Simular progreso
         let fakeProgressInterval: NodeJS.Timeout | null = null;
         if (onProgress) {
             let fp = 0;
@@ -130,32 +198,36 @@ export const downloadAndSaveTrack = async (
         clearTimeout(timeout);
         if (fakeProgressInterval) clearInterval(fakeProgressInterval);
 
-        // Si Deezer falló (500, etc), intentar fallback con YouTube
+        // Si Deezer falló (500), intentar fallback con YouTube
         if (!response.ok && downloadUrl.includes('/api/deezer') && track) {
             console.warn("[Download] Deezer API failed, falling back to YouTube...");
+            if (onProgress) onProgress(30);
+
             const fallbackUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+            const fallbackRes = await fetch(fallbackUrl);
 
-            const controller2 = new AbortController();
-            const timeout2 = setTimeout(() => controller2.abort(), 120000);
-
-            let fp2 = 30;
-            const fakeProgress2 = onProgress ? setInterval(() => {
-                if (fp2 < 90) {
-                    fp2 += Math.random() * 3 + 1;
-                    if (fp2 > 90) fp2 = 90;
-                    onProgress(Math.floor(fp2));
-                }
-            }, 600) : null;
-
-            const fallbackResponse = await fetch(fallbackUrl, { signal: controller2.signal });
-            clearTimeout(timeout2);
-            if (fakeProgress2) clearInterval(fakeProgress2);
-
-            if (!fallbackResponse.ok) {
-                throw new Error("Failed to download (both Deezer and YouTube failed)");
+            if (!fallbackRes.ok) {
+                throw new Error("Both Deezer and YouTube failed");
             }
 
-            return processDownloadResponse(fallbackResponse, track, url, id, onProgress, onComplete);
+            const contentType = fallbackRes.headers.get('content-type') || '';
+
+            // Si la respuesta es JSON (Vercel devuelve URL directa)
+            if (contentType.includes('application/json')) {
+                const data = await fallbackRes.json();
+                if (data.audioUrl) {
+                    console.log("[Download] Got direct audio URL, downloading from CDN...");
+                    return downloadFromDirectUrl(
+                        data.audioUrl,
+                        { title: data.title, artist: data.artist, coverUrl: data.coverUrl },
+                        track, url, id, onProgress, onComplete
+                    );
+                }
+                throw new Error("API returned JSON but no audioUrl");
+            }
+
+            // Si la respuesta es audio binario (local/yt-dlp)
+            return processDownloadResponse(fallbackRes, track, url, id, onProgress, onComplete);
         }
 
         if (!response.ok) throw new Error("Failed to download file");
