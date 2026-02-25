@@ -86,6 +86,7 @@ export default function SearchPage() {
             album: track.collectionName || "",
             coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
             streamUrl: downloadUrl,
+            previewUrl: track.previewUrl || "",
             downloadedAt: Date.now(),
         });
     };

@@ -133,8 +133,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            // Función para intentar reproducir con fallback a YouTube si Deezer falla
-            const attemptPlay = async (url: string, isFallback = false) => {
+            // Función para intentar reproducir con fallback encadenado:
+            // 1. Deezer API (canción completa) → 2. YouTube → 3. Deezer Preview (30s)
+            const attemptPlay = async (url: string, fallbackLevel = 0) => {
                 const audio = audioRef.current;
                 if (!audio) return;
 
@@ -145,7 +146,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     setIsPlaying(true);
                 } catch (err: any) {
                     if (err.name === 'NotAllowedError') {
-                        // Bloqueado por política del navegador (autoplay sin interacción)
                         setIsPlaying(false);
                         return;
                     }
@@ -156,12 +156,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                     console.error("Error al reproducir fuente de audio:", err);
 
-                    // Si falló con /api/deezer y NO es ya un fallback, intentar con /api/download (YouTube)
-                    if (!isFallback && currentTrack.streamUrl?.includes('/api/deezer') && currentTrack.title && currentTrack.artist) {
+                    // Fallback level 0 → Try YouTube
+                    if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
                         console.log("[Player] Deezer stream failed, falling back to YouTube...");
-                        const fallbackUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&stream=true`;
-                        attemptPlay(fallbackUrl, true);
+                        const ytFallback = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&stream=true`;
+                        attemptPlay(ytFallback, 1);
+                        return;
                     }
+
+                    // Fallback level 1 → Try Deezer preview URL (30s clip, siempre funciona)
+                    if (fallbackLevel === 1 && currentTrack.previewUrl) {
+                        console.log("[Player] YouTube also failed, using Deezer preview (30s)...");
+                        attemptPlay(currentTrack.previewUrl, 2);
+                        return;
+                    }
+
+                    // All fallbacks exhausted
+                    console.error("[Player] All audio sources failed");
+                    setIsLoading(false);
                 }
             };
 

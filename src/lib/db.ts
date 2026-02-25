@@ -33,6 +33,7 @@ export interface SavedTrack {
     coverUrl: string;
     blob?: Blob; // Opcional para poder soportar streaming
     streamUrl?: string; // URL directa para hacer streaming (ej: API de descarga route.ts)
+    previewUrl?: string; // URL de preview de Deezer (30s) como último fallback
     downloadedAt: number;
 }
 

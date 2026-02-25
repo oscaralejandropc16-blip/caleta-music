@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-// yt-search removed — uses yt-dlp for search instead
 import { execFile } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -7,47 +6,104 @@ import os from "os";
 
 // Forzar el runtime de Node.js
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 // Ruta al binario yt-dlp (raíz del proyecto)
 const YT_DLP_PATH = path.join(process.cwd(), "yt-dlp.exe");
 
-async function downloadWithYtdlCore(videoUrl: string): Promise<{ stream: ReadableStream<Uint8Array>, contentType: string, contentLength: string }> {
-    const ytdl = (await import('@distube/ytdl-core')).default;
-    const info = await ytdl.getInfo(videoUrl);
+/**
+ * Usa youtubei.js (Innertube) para buscar y obtener stream de YouTube.
+ * Funciona bien en Vercel/serverless porque usa la API interna de YouTube.
+ */
+async function searchAndStreamWithInnertube(query: string): Promise<{
+    stream: ReadableStream<Uint8Array>;
+    contentType: string;
+    contentLength: string;
+    title: string;
+    artist: string;
+    coverUrl: string;
+}> {
+    const { Innertube } = await import('youtubei.js');
+    const yt = await Innertube.create({
+        generate_session_locally: true,
+    });
 
-    // get best audio format
-    const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+    console.log("[Innertube] Searching for:", query);
+    const searchResults = await yt.search(query, { type: 'video' });
 
-    if (!format || !format.url) {
-        throw new Error("No audio format found");
+    const firstVideo = searchResults.results?.find((r: any) => r.type === 'Video') as any;
+    if (!firstVideo || !firstVideo.id) {
+        throw new Error("No video found on YouTube");
     }
 
-    const response = await fetch(format.url);
-    if (!response.ok) throw new Error("Failed to fetch stream from YouTube");
+    console.log("[Innertube] Found:", firstVideo.title?.text, "by", firstVideo.author?.name);
+
+    const info = await yt.getBasicInfo(firstVideo.id);
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+
+    const streamUrl = await format.decipher(yt.session.player);
+    if (!streamUrl) {
+        throw new Error("Could not decipher audio URL");
+    }
+
+    const response = await fetch(streamUrl);
+    if (!response.ok || !response.body) {
+        throw new Error(`Failed to fetch YouTube audio stream: ${response.status}`);
+    }
 
     return {
-        stream: response.body as ReadableStream<Uint8Array>,
-        contentType: format.mimeType || 'audio/webm',
-        contentLength: format.contentLength || response.headers.get('content-length') || ""
+        stream: response.body,
+        contentType: format.mime_type || 'audio/webm',
+        contentLength: format.content_length?.toString() || response.headers.get('content-length') || "",
+        title: firstVideo.title?.text || info.basic_info?.title || "Enlace Descargado",
+        artist: firstVideo.author?.name || info.basic_info?.author || "Desconocido",
+        coverUrl: firstVideo.best_thumbnail?.url || `https://i.ytimg.com/vi/${firstVideo.id}/hqdefault.jpg`,
     };
 }
 
 /**
- * Obtiene metadatos del video (título y uploader) usando yt-dlp.
+ * Obtiene stream de un video específico de YouTube usando Innertube
+ */
+async function streamWithInnertube(videoId: string): Promise<{
+    stream: ReadableStream<Uint8Array>;
+    contentType: string;
+    contentLength: string;
+    title: string;
+    artist: string;
+}> {
+    const { Innertube } = await import('youtubei.js');
+    const yt = await Innertube.create({
+        generate_session_locally: true,
+    });
+
+    const info = await yt.getBasicInfo(videoId);
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+
+    const streamUrl = await format.decipher(yt.session.player);
+    if (!streamUrl) {
+        throw new Error("Could not decipher audio URL");
+    }
+
+    const response = await fetch(streamUrl);
+    if (!response.ok || !response.body) {
+        throw new Error(`Failed to fetch YouTube audio: ${response.status}`);
+    }
+
+    return {
+        stream: response.body,
+        contentType: format.mime_type || 'audio/webm',
+        contentLength: format.content_length?.toString() || response.headers.get('content-length') || "",
+        title: info.basic_info?.title || "Enlace Descargado",
+        artist: info.basic_info?.author || "Desconocido",
+    };
+}
+
+/**
+ * Obtiene metadatos del video usando yt-dlp (solo local/Windows).
  */
 async function getVideoMetadata(videoUrl: string): Promise<{ title: string; uploader: string }> {
-    // Si estamos en Vercel, usamos ytdl-core para los metadatos porque yt-dlp.exe no funcionará
     if (process.env.VERCEL || !fs.existsSync(YT_DLP_PATH)) {
-        try {
-            const ytdl = (await import('@distube/ytdl-core')).default;
-            const info = await ytdl.getInfo(videoUrl);
-            return {
-                title: info.videoDetails.title || "Enlace Descargado",
-                uploader: info.videoDetails.author.name || "Desconocido"
-            };
-        } catch {
-            return { title: "Enlace Descargado", uploader: "Desconocido" };
-        }
+        return { title: "Enlace Descargado", uploader: "Desconocido" };
     }
 
     return new Promise((resolve) => {
@@ -75,12 +131,10 @@ async function getVideoMetadata(videoUrl: string): Promise<{ title: string; uplo
 }
 
 /**
- * Usa yt-dlp para buscar en YouTube y obtener la URL de streaming directa
- * en un solo paso. Mucho más rápido y confiable que yt-search.
+ * Usa yt-dlp para buscar en YouTube y obtener la URL de streaming directa.
  */
 async function searchAndGetStreamUrl(query: string): Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }> {
     return new Promise((resolve, reject) => {
-        // ytsearch1: busca en YouTube y se queda con el primer resultado
         const searchQuery = `ytsearch1:${query}`;
         execFile(YT_DLP_PATH, [
             "--encoding", "utf8",
@@ -117,38 +171,8 @@ async function searchAndGetStreamUrl(query: string): Promise<{ streamUrl: string
     });
 }
 
-async function getStreamUrlWithYtDlp(videoUrl: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        execFile(YT_DLP_PATH, [
-            "--encoding", "utf8",
-            "--no-playlist",
-            "-f", "ba",
-            "--no-warnings",
-            "--print", "url",
-            videoUrl
-        ], {
-            timeout: 15000,
-        }, (error, stdout, stderr) => {
-            if (error) {
-                console.error("[yt-dlp] Error getting URL:", error.message);
-                reject(new Error(`yt-dlp failed: ${error.message}`));
-                return;
-            }
-
-            const urls = stdout.split("\n").map(l => l.trim()).filter(l => l && !l.startsWith("WARNING:"));
-            if (urls.length > 0) {
-                resolve(urls[urls.length - 1]);
-            } else {
-                reject(new Error("yt-dlp didn't output a valid URL"));
-            }
-        });
-    });
-}
-
 /**
- * Descarga el audio completo con yt-dlp a un archivo temporal,
- * luego lo sirve. Más confiable que proxy directo porque yt-dlp
- * maneja las restricciones del CDN de YouTube internamente.
+ * Descarga el audio completo con yt-dlp a un archivo temporal.
  */
 async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; contentType: string }> {
     const uniqueId = `mv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -158,7 +182,7 @@ async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; 
         const args = [
             "--encoding", "utf8",
             "--no-playlist",
-            "-f", "ba",              // best audio
+            "-f", "ba",
             "-o", tmpFile,
             "--no-warnings",
             "--force-overwrites",
@@ -169,15 +193,12 @@ async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; 
         console.log("[yt-dlp] Downloading:", videoUrl);
 
         execFile(YT_DLP_PATH, args, {
-            timeout: 90000,  // 90s max
+            timeout: 90000,
         }, (error, stdout, stderr) => {
             if (error) {
                 console.error("[yt-dlp] Error:", error.message);
-                // Aún podría haber descargado el archivo antes del error (ej: post-process warning)
-                // Intentar encontrar el archivo de todas formas
             }
 
-            // Intentar usar stdout
             const outputPath = stdout?.trim();
             if (outputPath && fs.existsSync(outputPath)) {
                 console.log("[yt-dlp] Downloaded to:", outputPath);
@@ -187,12 +208,10 @@ async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; 
                 return;
             }
 
-            // Fallback: buscar el archivo con el uniqueId en el tmp dir
             const tmpDir = os.tmpdir();
             const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(uniqueId));
             if (files.length > 0) {
                 const fallbackPath = path.join(tmpDir, files[0]);
-                console.log("[yt-dlp] Fallback file found:", fallbackPath, "size:", fs.statSync(fallbackPath).size, "bytes");
                 const ext = path.extname(fallbackPath).toLowerCase();
                 const ct = ext === ".m4a" ? "audio/mp4" : ext === ".webm" ? "audio/webm" : "audio/mpeg";
                 resolve({ filePath: fallbackPath, contentType: ct });
@@ -208,9 +227,6 @@ async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; 
     });
 }
 
-/**
- * Verifica si una URL es de YouTube
- */
 function isYouTubeUrl(url: string): boolean {
     try {
         const parsed = new URL(url);
@@ -224,9 +240,6 @@ function isYouTubeUrl(url: string): boolean {
     }
 }
 
-/**
- * Extrae el video ID de una URL de YouTube
- */
 function extractYouTubeVideoId(url: string): string | null {
     try {
         const parsed = new URL(url);
@@ -239,10 +252,6 @@ function extractYouTubeVideoId(url: string): string | null {
     }
 }
 
-/**
- * Limpia una URL de YouTube, removiendo parámetros de playlist/radio que
- * pueden causar problemas con yt-dlp o hacer que tarde más de lo esperado.
- */
 function cleanYouTubeUrl(url: string): string {
     try {
         const parsed = new URL(url);
@@ -270,29 +279,26 @@ export async function GET(request: NextRequest) {
     try {
         let videoUrlToDownload = directUrl;
 
-        // 1. Si no hay URL directa y tenemos title+artist, usar yt-dlp para buscar y descargar
+        // 1. Si no hay URL directa y tenemos title+artist, buscar y descargar
         if (!videoUrlToDownload && title && artist) {
             const query = `${artist} - ${title}`;
-            console.log("[Search] Buscando con yt-dlp:", query);
+            console.log("[Search] Buscando:", query);
 
-            // yt-dlp.exe available: use it for search + download
+            // yt-dlp.exe disponible (local/Windows): usar para buscar + descargar
             if (fs.existsSync(YT_DLP_PATH)) {
                 try {
-                    // Paso 1: Buscar y obtener metadatos
                     const searchResult = await searchAndGetStreamUrl(query);
                     console.log("[Search] Encontrado:", searchResult.title, "by", searchResult.uploader);
 
                     const coverUrl = searchResult.videoId ? `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg` : "";
                     const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
 
-                    // Paso 2: Descargar archivo con yt-dlp (más confiable que proxy directo)
                     console.log("[Download] Descargando con yt-dlp:", ytUrl);
                     const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
 
                     const fileBuffer = fs.readFileSync(filePath);
                     console.log("[Download] Archivo listo:", filePath, "Size:", fileBuffer.length, "bytes");
 
-                    // Limpiar archivo temporal
                     try { fs.unlinkSync(filePath); } catch { /* ignore */ }
 
                     return new NextResponse(fileBuffer, {
@@ -311,18 +317,44 @@ export async function GET(request: NextRequest) {
                     return NextResponse.json({ error: "No se pudo descargar la canción" }, { status: 500 });
                 }
             } else {
-                // Fallback for Vercel: use ytdl-core search + stream
+                // Vercel/serverless: usar youtubei.js (Innertube)
+                console.log("[Download] Using youtubei.js (Innertube) for Vercel...");
                 try {
-                    const ytdl = (await import('@distube/ytdl-core')).default;
-                    // Use yt-search as last resort on Vercel
-                    const yts = (await import('yt-search')).default;
-                    const r = await yts(query);
-                    if (r.videos.length === 0) {
-                        return NextResponse.json({ error: "No video found" }, { status: 404 });
+                    const result = await searchAndStreamWithInnertube(query);
+
+                    const headers: Record<string, string> = {
+                        "Content-Type": result.contentType,
+                        "X-Video-Title": encodeURIComponent(result.title),
+                        "X-Video-Artist": encodeURIComponent(result.artist),
+                        "X-Video-Cover": result.coverUrl,
+                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+                    };
+
+                    if (result.contentLength) {
+                        headers["Content-Length"] = result.contentLength;
                     }
-                    videoUrlToDownload = r.videos[0].url;
-                } catch {
-                    return NextResponse.json({ error: "Search failed" }, { status: 500 });
+
+                    return new NextResponse(result.stream, {
+                        status: 200,
+                        headers,
+                    });
+                } catch (innertubeErr: any) {
+                    console.error("[Innertube] Failed:", innertubeErr.message);
+
+                    // Last resort: try ytdl-core + yt-search
+                    try {
+                        console.log("[Download] Innertube failed, trying ytdl-core fallback...");
+                        const ytdl = (await import('@distube/ytdl-core')).default;
+                        const yts = (await import('yt-search')).default;
+                        const r = await yts(query);
+                        if (r.videos.length === 0) {
+                            return NextResponse.json({ error: "No video found" }, { status: 404 });
+                        }
+                        videoUrlToDownload = r.videos[0].url;
+                    } catch (ytdlErr: any) {
+                        console.error("[ytdl-core] Also failed:", ytdlErr.message);
+                        return NextResponse.json({ error: "All YouTube backends failed" }, { status: 500 });
+                    }
                 }
             }
         }
@@ -333,41 +365,79 @@ export async function GET(request: NextRequest) {
 
         // 2. Si es una URL de YouTube, descargar
         if (isYouTubeUrl(videoUrlToDownload)) {
-            // Limpiar URL de YouTube: quitar parámetros de playlist/radio
             videoUrlToDownload = cleanYouTubeUrl(videoUrlToDownload);
             console.log("[Download] Iniciando descarga para:", videoUrlToDownload);
 
-            // Obtener thumbnail de YouTube
             const videoId = extractYouTubeVideoId(videoUrlToDownload);
             const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
 
-            // Lógica rápida para streaming usando ytdl-core (Vercel/Linux)
+            // Vercel: usar Innertube para streaming
             if (process.env.VERCEL || !fs.existsSync(YT_DLP_PATH)) {
-                console.log("[Download] Usando ytdl-core fallback (Vercel/Linux)");
-                const [ytdlData, metadata] = await Promise.all([
-                    downloadWithYtdlCore(videoUrlToDownload),
-                    getVideoMetadata(videoUrlToDownload)
-                ]);
+                console.log("[Download] Streaming with Innertube (Vercel)...");
 
-                const headers: Record<string, string> = {
-                    "Content-Type": ytdlData.contentType,
-                    "X-Video-Title": encodeURIComponent(metadata.title),
-                    "X-Video-Artist": encodeURIComponent(metadata.uploader),
-                    "X-Video-Cover": coverUrl,
-                    "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
-                };
+                if (videoId) {
+                    try {
+                        const result = await streamWithInnertube(videoId);
 
-                if (ytdlData.contentLength) {
-                    headers["Content-Length"] = ytdlData.contentLength;
+                        const headers: Record<string, string> = {
+                            "Content-Type": result.contentType,
+                            "X-Video-Title": encodeURIComponent(result.title),
+                            "X-Video-Artist": encodeURIComponent(result.artist),
+                            "X-Video-Cover": coverUrl,
+                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+                        };
+
+                        if (result.contentLength) {
+                            headers["Content-Length"] = result.contentLength;
+                        }
+
+                        return new NextResponse(result.stream, {
+                            status: 200,
+                            headers,
+                        });
+                    } catch (err: any) {
+                        console.error("[Innertube stream] Error:", err.message);
+                        // Fall through to ytdl-core
+                    }
                 }
 
-                return new NextResponse(ytdlData.stream, {
-                    status: 200,
-                    headers,
-                });
+                // Fallback: ytdl-core
+                try {
+                    console.log("[Download] Fallback to ytdl-core...");
+                    const ytdl = (await import('@distube/ytdl-core')).default;
+                    const info = await ytdl.getInfo(videoUrlToDownload);
+                    const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+
+                    if (!format || !format.url) throw new Error("No audio format found");
+
+                    const audioResponse = await fetch(format.url);
+                    if (!audioResponse.ok) throw new Error("Failed to fetch YouTube audio");
+
+                    const metadata = await getVideoMetadata(videoUrlToDownload);
+
+                    const headers: Record<string, string> = {
+                        "Content-Type": format.mimeType || 'audio/webm',
+                        "X-Video-Title": encodeURIComponent(metadata.title),
+                        "X-Video-Artist": encodeURIComponent(metadata.uploader),
+                        "X-Video-Cover": coverUrl,
+                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
+                    };
+
+                    if (format.contentLength) {
+                        headers["Content-Length"] = format.contentLength;
+                    }
+
+                    return new NextResponse(audioResponse.body, {
+                        status: 200,
+                        headers,
+                    });
+                } catch (ytdlErr: any) {
+                    console.error("[ytdl-core] Failed:", ytdlErr.message);
+                    return NextResponse.json({ error: "YouTube download failed on all backends" }, { status: 500 });
+                }
             }
 
-            // Windows/Local: descargar con yt-dlp (proxy directo a YouTube CDN falla con ECONNRESET)
+            // Windows/Local: descargar con yt-dlp
             console.log("[Download] Descargando con yt-dlp.exe...");
             const [{ filePath, contentType }, metadata] = await Promise.all([
                 downloadWithYtDlp(videoUrlToDownload),
@@ -377,7 +447,6 @@ export async function GET(request: NextRequest) {
             const fileBuffer = fs.readFileSync(filePath);
             console.log("[Download] Archivo descargado:", filePath, "Size:", fileBuffer.length, "bytes");
 
-            // Limpiar archivo temporal
             try { fs.unlinkSync(filePath); } catch { /* ignore */ }
 
             return new NextResponse(fileBuffer, {

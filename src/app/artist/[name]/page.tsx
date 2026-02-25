@@ -128,7 +128,9 @@ export default function ArtistProfile() {
             return;
         }
 
-        const downloadUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}&stream=true`;
+        const downloadUrl = (track as any)._source === 'deezer'
+            ? `/api/deezer?id=${track.trackId}`
+            : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
 
         playTrack({
             id: `stream-${strId}`,
@@ -137,6 +139,7 @@ export default function ArtistProfile() {
             album: track.collectionName || "",
             coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
             streamUrl: downloadUrl,
+            previewUrl: track.previewUrl || "",
             downloadedAt: Date.now(),
         });
     };
