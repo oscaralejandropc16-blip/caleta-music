@@ -18,10 +18,16 @@ const getBlowfishKey = (trackId: string) => {
     return bfKey;
 };
 
+// Blowfish en JavaScript puro - funciona en CUALQUIER versión de Node.js
+// (OpenSSL 3.0 en Node 17+ no soporta bf-cbc)
+// @ts-ignore
+import { Blowfish } from 'egoroof-blowfish';
+
 const decryptChunk = (chunk: Buffer, blowFishKey: string) => {
-    const cipher = crypto.createDecipheriv('bf-cbc', blowFishKey, Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
-    cipher.setAutoPadding(false);
-    return Buffer.concat([cipher.update(chunk), cipher.final()]);
+    const bf = new Blowfish(blowFishKey, Blowfish.MODE.CBC, Blowfish.PADDING.NULL);
+    bf.setIv(Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
+    const decrypted = bf.decode(chunk, Blowfish.TYPE.UINT8_ARRAY);
+    return Buffer.from(decrypted);
 };
 
 let isDeezerInitialized = false;
