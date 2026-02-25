@@ -28,7 +28,7 @@ let isDeezerInitialized = false;
 let lastInitTime = 0;
 
 // The ARL passed by the user
-const DEEZER_ARL = process.env.DEEZER_ARL || "ee974bbd9ccb632b067cb6e2406a60cd9f0bd782d7f62f2a3d8448a63010c92658cb84d0f46721294621af6c326cdce2cd7260c324fcc97604ef79dd9a96de88eff778d36668bd61d77a0d8de9beca82a93c7c1f8a676c67100838e612aa46cd";
+const DEEZER_ARL = process.env.DEEZER_ARL || "3852504531ee9ab73064ee5dde805831b030f72338fe8f15a63288851f44a8863e17023e7b60ecd2df93dfa5e5879af85b50874d4cfde64ce586b5088653c8878a27848219fb1dbcac2e3a1b55307764288d9427eb7c5bde148718fa8834ec08";
 
 // Re-init every 15 minutes in case ARL session expired in-memory
 const REINIT_INTERVAL_MS = 15 * 60 * 1000;
