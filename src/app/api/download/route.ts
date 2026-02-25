@@ -11,146 +11,233 @@ export const maxDuration = 60;
 // Ruta al binario yt-dlp (raíz del proyecto)
 const YT_DLP_PATH = path.join(process.cwd(), "yt-dlp.exe");
 
+// ============== PIPED API (Public YouTube Proxy) ==============
+// Las URLs de audio de Piped son proxied por sus servidores,
+// así que NO son bloqueadas por YouTube incluso desde Vercel.
+const PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.in.projectsegfault.com",
+];
+
+interface PipedSearchResult {
+    url: string;
+    title: string;
+    uploaderName: string;
+    thumbnail: string;
+    duration: number;
+}
+
+interface PipedStream {
+    title: string;
+    uploader: string;
+    thumbnailUrl: string;
+    audioStreams: Array<{
+        url: string;
+        mimeType: string;
+        bitrate: number;
+        contentLength: number;
+    }>;
+}
+
 /**
- * Usa youtubei.js (Innertube) para buscar y obtener stream de YouTube.
- * Usa yt.download() que es el método oficial y maneja decipher internamente.
+ * Busca y descarga audio usando la API de Piped (proxy público de YouTube).
+ * Esto funciona desde Vercel porque Piped proxea las URLs de audio.
  */
-async function searchAndStreamWithInnertube(query: string): Promise<{
+async function searchAndDownloadWithPiped(query: string): Promise<{
     buffer: Buffer;
     contentType: string;
     title: string;
     artist: string;
     coverUrl: string;
 }> {
-    const { Innertube } = await import('youtubei.js');
-    console.log("[Innertube] Creating session...");
-    const yt = await Innertube.create({
-        generate_session_locally: true,
-    });
-    console.log("[Innertube] Session created OK");
+    let lastError = "";
 
-    console.log("[Innertube] Searching for:", query);
-    const searchResults = await yt.search(query, { type: 'video' });
+    for (const instance of PIPED_INSTANCES) {
+        try {
+            console.log(`[Piped] Trying instance: ${instance}`);
 
-    const firstVideo = searchResults.results?.find((r: any) => r.type === 'Video') as any;
-    if (!firstVideo || !firstVideo.id) {
-        throw new Error("No video found on YouTube for: " + query);
-    }
+            // 1. Buscar
+            const searchUrl = `${instance}/search?q=${encodeURIComponent(query)}&filter=music_songs`;
+            const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10000) });
 
-    const videoId = firstVideo.id;
-    const title = firstVideo.title?.text || "Enlace Descargado";
-    const artist = firstVideo.author?.name || "Desconocido";
-    const coverUrl = firstVideo.best_thumbnail?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+            if (!searchRes.ok) {
+                console.log(`[Piped] Search failed on ${instance}: ${searchRes.status}`);
+                continue;
+            }
 
-    console.log("[Innertube] Found:", title, "by", artist, "ID:", videoId);
-    console.log("[Innertube] Downloading audio stream...");
+            const searchData = await searchRes.json();
+            const items = searchData.items || searchData.results || [];
 
-    // Usar yt.download() - el método oficial que maneja todo (decipher, etc.)
-    const downloadStream = await yt.download(videoId, {
-        type: 'audio',
-        quality: 'best',
-    });
+            if (!items || items.length === 0) {
+                // Retry with video filter
+                const searchUrl2 = `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`;
+                const searchRes2 = await fetch(searchUrl2, { signal: AbortSignal.timeout(10000) });
+                if (searchRes2.ok) {
+                    const data2 = await searchRes2.json();
+                    if (data2.items?.length > 0) {
+                        items.push(...data2.items);
+                    }
+                }
+            }
 
-    // Leer el stream completo a un buffer
-    const chunks: Uint8Array[] = [];
-    const reader = (downloadStream as any).getReader ? (downloadStream as any).getReader() : null;
-    if (reader) {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) chunks.push(value);
+            if (!items || items.length === 0) {
+                console.log(`[Piped] No results on ${instance}`);
+                continue;
+            }
+
+            const video = items[0] as PipedSearchResult;
+            // url format: "/watch?v=VIDEO_ID"
+            const videoId = video.url?.replace("/watch?v=", "") || "";
+            if (!videoId) {
+                console.log("[Piped] No video ID in result");
+                continue;
+            }
+
+            console.log(`[Piped] Found: "${video.title}" by ${video.uploaderName} (ID: ${videoId})`);
+
+            // 2. Obtener streams
+            const streamsUrl = `${instance}/streams/${videoId}`;
+            const streamsRes = await fetch(streamsUrl, { signal: AbortSignal.timeout(15000) });
+
+            if (!streamsRes.ok) {
+                console.log(`[Piped] Streams failed on ${instance}: ${streamsRes.status}`);
+                continue;
+            }
+
+            const streamsData: PipedStream = await streamsRes.json();
+
+            if (!streamsData.audioStreams || streamsData.audioStreams.length === 0) {
+                console.log("[Piped] No audio streams available");
+                continue;
+            }
+
+            // Elegir el mejor stream de audio (mayor bitrate)
+            const sortedStreams = [...streamsData.audioStreams]
+                .filter(s => s.url && s.mimeType)
+                .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+            if (sortedStreams.length === 0) {
+                console.log("[Piped] No valid audio streams");
+                continue;
+            }
+
+            const bestStream = sortedStreams[0];
+            console.log(`[Piped] Best audio: ${bestStream.mimeType} @ ${bestStream.bitrate}bps, ${bestStream.contentLength} bytes`);
+
+            // 3. Descargar el audio
+            const audioRes = await fetch(bestStream.url, { signal: AbortSignal.timeout(45000) });
+            if (!audioRes.ok || !audioRes.body) {
+                console.log(`[Piped] Audio fetch failed: ${audioRes.status}`);
+                continue;
+            }
+
+            // Leer todo el audio a un buffer
+            const reader = audioRes.body.getReader();
+            const chunks: Uint8Array[] = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) chunks.push(value);
+            }
+
+            const buffer = Buffer.concat(chunks);
+            console.log(`[Piped] Downloaded audio: ${buffer.length} bytes`);
+
+            if (buffer.length < 10000) {
+                console.log("[Piped] Audio too small, likely failed");
+                continue;
+            }
+
+            return {
+                buffer,
+                contentType: bestStream.mimeType?.split(";")[0] || "audio/mp4",
+                title: streamsData.title || video.title || "Enlace Descargado",
+                artist: streamsData.uploader || video.uploaderName || "Desconocido",
+                coverUrl: streamsData.thumbnailUrl || video.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            };
+        } catch (err: any) {
+            lastError = err.message;
+            console.error(`[Piped] Instance ${instance} error:`, err.message);
+            continue;
         }
-    } else {
-        // Fallback for async iterable
-        for await (const chunk of downloadStream as any) {
-            chunks.push(chunk);
-        }
-    }
-    const buffer = Buffer.concat(chunks);
-    console.log("[Innertube] Downloaded:", buffer.length, "bytes");
-
-    if (buffer.length < 1000) {
-        throw new Error("Downloaded audio too small, likely failed: " + buffer.length + " bytes");
     }
 
-    return {
-        buffer,
-        contentType: 'audio/webm',
-        title,
-        artist,
-        coverUrl,
-    };
+    throw new Error(`All Piped instances failed. Last error: ${lastError}`);
 }
 
 /**
- * Obtiene stream de un video específico de YouTube usando yt.download()
+ * Descarga audio de un video específico de YouTube usando Piped.
  */
-async function streamWithInnertube(videoId: string): Promise<{
+async function downloadWithPiped(videoId: string): Promise<{
     buffer: Buffer;
     contentType: string;
     title: string;
     artist: string;
+    coverUrl: string;
 }> {
-    const { Innertube } = await import('youtubei.js');
-    const yt = await Innertube.create({
-        generate_session_locally: true,
-    });
+    let lastError = "";
 
-    const info = await yt.getBasicInfo(videoId);
-    console.log("[Innertube] Downloading video:", videoId);
+    for (const instance of PIPED_INSTANCES) {
+        try {
+            const streamsUrl = `${instance}/streams/${videoId}`;
+            console.log(`[Piped] Getting streams from ${instance} for ${videoId}`);
+            const streamsRes = await fetch(streamsUrl, { signal: AbortSignal.timeout(15000) });
 
-    const downloadStream = await yt.download(videoId, {
-        type: 'audio',
-        quality: 'best',
-    });
+            if (!streamsRes.ok) continue;
 
-    const chunks: Uint8Array[] = [];
-    const reader = (downloadStream as any).getReader ? (downloadStream as any).getReader() : null;
-    if (reader) {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) chunks.push(value);
-        }
-    } else {
-        for await (const chunk of downloadStream as any) {
-            chunks.push(chunk);
+            const data: PipedStream = await streamsRes.json();
+
+            if (!data.audioStreams?.length) continue;
+
+            const bestStream = [...data.audioStreams]
+                .filter(s => s.url && s.mimeType)
+                .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+
+            if (!bestStream) continue;
+
+            const audioRes = await fetch(bestStream.url, { signal: AbortSignal.timeout(45000) });
+            if (!audioRes.ok || !audioRes.body) continue;
+
+            const reader = audioRes.body.getReader();
+            const chunks: Uint8Array[] = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) chunks.push(value);
+            }
+
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length < 10000) continue;
+
+            return {
+                buffer,
+                contentType: bestStream.mimeType?.split(";")[0] || "audio/mp4",
+                title: data.title || "Enlace Descargado",
+                artist: data.uploader || "Desconocido",
+                coverUrl: data.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            };
+        } catch (err: any) {
+            lastError = err.message;
+            continue;
         }
     }
-    const buffer = Buffer.concat(chunks);
-    console.log("[Innertube] Downloaded:", buffer.length, "bytes");
 
-    if (buffer.length < 1000) {
-        throw new Error("Downloaded audio too small: " + buffer.length + " bytes");
-    }
-
-    return {
-        buffer,
-        contentType: 'audio/webm',
-        title: info.basic_info?.title || "Enlace Descargado",
-        artist: info.basic_info?.author || "Desconocido",
-    };
+    throw new Error(`Piped download failed for ${videoId}: ${lastError}`);
 }
 
-/**
- * Obtiene metadatos del video usando yt-dlp (solo local/Windows).
- */
+// ============== YT-DLP FUNCTIONS (LOCAL/WINDOWS ONLY) ==============
+
 async function getVideoMetadata(videoUrl: string): Promise<{ title: string; uploader: string }> {
     if (process.env.VERCEL || !fs.existsSync(YT_DLP_PATH)) {
         return { title: "Enlace Descargado", uploader: "Desconocido" };
     }
 
     return new Promise((resolve) => {
-        const args = [
-            "--encoding", "utf8",
-            "--no-playlist",
-            "--no-warnings",
-            "--print", "%(title)s\n%(uploader)s",
-            "--skip-download",
-            videoUrl
-        ];
-
-        execFile(YT_DLP_PATH, args, { timeout: 15000 }, (error, stdout) => {
+        execFile(YT_DLP_PATH, [
+            "--encoding", "utf8", "--no-playlist", "--no-warnings",
+            "--print", "%(title)s\n%(uploader)s", "--skip-download", videoUrl
+        ], { timeout: 15000 }, (error, stdout) => {
             if (error || !stdout.trim()) {
                 resolve({ title: "Enlace Descargado", uploader: "Desconocido" });
                 return;
@@ -164,147 +251,81 @@ async function getVideoMetadata(videoUrl: string): Promise<{ title: string; uplo
     });
 }
 
-/**
- * Usa yt-dlp para buscar en YouTube y obtener la URL de streaming directa.
- */
 async function searchAndGetStreamUrl(query: string): Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }> {
     return new Promise((resolve, reject) => {
-        const searchQuery = `ytsearch1:${query}`;
         execFile(YT_DLP_PATH, [
-            "--encoding", "utf8",
-            "--no-playlist",
-            "-f", "ba",
-            "--no-warnings",
-            "--print", "url",
-            "--print", "%(title)s",
-            "--print", "%(uploader)s",
-            "--print", "%(id)s",
-            searchQuery
-        ], {
-            timeout: 20000,
-        }, (error, stdout, stderr) => {
-            if (error) {
-                console.error("[yt-dlp search] Error:", error.message);
-                reject(new Error(`yt-dlp search failed: ${error.message}`));
-                return;
-            }
-
+            "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
+            "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
+            `ytsearch1:${query}`
+        ], { timeout: 20000 }, (error, stdout) => {
+            if (error) { reject(new Error(`yt-dlp search failed: ${error.message}`)); return; }
             const lines = stdout.trim().split("\n").map(l => l.trim());
-            if (lines.length < 4 || !lines[0]) {
-                reject(new Error("yt-dlp search didn't return expected output"));
-                return;
-            }
-
-            resolve({
-                streamUrl: lines[0],
-                title: lines[1] || "Enlace Descargado",
-                uploader: lines[2] || "Desconocido",
-                videoId: lines[3] || "",
-            });
+            if (lines.length < 4 || !lines[0]) { reject(new Error("yt-dlp no output")); return; }
+            resolve({ streamUrl: lines[0], title: lines[1] || "Enlace Descargado", uploader: lines[2] || "Desconocido", videoId: lines[3] || "" });
         });
     });
 }
 
-/**
- * Descarga el audio completo con yt-dlp a un archivo temporal.
- */
 async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; contentType: string }> {
     const uniqueId = `mv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const tmpFile = path.join(os.tmpdir(), `${uniqueId}.%(ext)s`);
 
     return new Promise((resolve, reject) => {
-        const args = [
-            "--encoding", "utf8",
-            "--no-playlist",
-            "-f", "ba",
-            "-o", tmpFile,
-            "--no-warnings",
-            "--force-overwrites",
-            "--print", "after_move:filepath",
-            videoUrl
-        ];
-
-        console.log("[yt-dlp] Downloading:", videoUrl);
-
-        execFile(YT_DLP_PATH, args, {
-            timeout: 90000,
-        }, (error, stdout, stderr) => {
-            if (error) {
-                console.error("[yt-dlp] Error:", error.message);
-            }
+        execFile(YT_DLP_PATH, [
+            "--encoding", "utf8", "--no-playlist", "-f", "ba", "-o", tmpFile,
+            "--no-warnings", "--force-overwrites", "--print", "after_move:filepath", videoUrl
+        ], { timeout: 90000 }, (error, stdout) => {
+            if (error) console.error("[yt-dlp] Error:", error.message);
 
             const outputPath = stdout?.trim();
             if (outputPath && fs.existsSync(outputPath)) {
-                console.log("[yt-dlp] Downloaded to:", outputPath);
                 const ext = path.extname(outputPath).toLowerCase();
-                const contentType = ext === ".m4a" ? "audio/mp4" : ext === ".webm" ? "audio/webm" : "audio/mpeg";
-                resolve({ filePath: outputPath, contentType });
+                resolve({ filePath: outputPath, contentType: ext === ".m4a" ? "audio/mp4" : ext === ".webm" ? "audio/webm" : "audio/mpeg" });
                 return;
             }
 
-            const tmpDir = os.tmpdir();
-            const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(uniqueId));
+            const files = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(uniqueId));
             if (files.length > 0) {
-                const fallbackPath = path.join(tmpDir, files[0]);
-                const ext = path.extname(fallbackPath).toLowerCase();
-                const ct = ext === ".m4a" ? "audio/mp4" : ext === ".webm" ? "audio/webm" : "audio/mpeg";
-                resolve({ filePath: fallbackPath, contentType: ct });
+                const fp = path.join(os.tmpdir(), files[0]);
+                const ext = path.extname(fp).toLowerCase();
+                resolve({ filePath: fp, contentType: ext === ".m4a" ? "audio/mp4" : ext === ".webm" ? "audio/webm" : "audio/mpeg" });
                 return;
             }
 
-            if (error) {
-                reject(new Error(`yt-dlp failed: ${error.message}`));
-            } else {
-                reject(new Error("yt-dlp did not produce output file"));
-            }
+            reject(error ? new Error(`yt-dlp failed: ${error.message}`) : new Error("yt-dlp no output"));
         });
     });
 }
 
+// ============== UTILITIES ==============
+
 function isYouTubeUrl(url: string): boolean {
     try {
-        const parsed = new URL(url);
-        return (
-            parsed.hostname.includes("youtube.com") ||
-            parsed.hostname.includes("youtu.be") ||
-            parsed.hostname.includes("music.youtube.com")
-        );
-    } catch {
-        return false;
-    }
+        const h = new URL(url).hostname;
+        return h.includes("youtube.com") || h.includes("youtu.be") || h.includes("music.youtube.com");
+    } catch { return false; }
 }
 
 function extractYouTubeVideoId(url: string): string | null {
     try {
         const parsed = new URL(url);
-        if (parsed.hostname.includes("youtu.be")) {
-            return parsed.pathname.slice(1);
-        }
+        if (parsed.hostname.includes("youtu.be")) return parsed.pathname.slice(1);
         return parsed.searchParams.get("v");
-    } catch {
-        return null;
-    }
+    } catch { return null; }
 }
 
 function cleanYouTubeUrl(url: string): string {
-    try {
-        const parsed = new URL(url);
-        const videoId = extractYouTubeVideoId(url);
-        if (videoId && (parsed.hostname.includes("youtube.com") || parsed.hostname.includes("music.youtube.com"))) {
-            return `https://www.youtube.com/watch?v=${videoId}`;
-        }
-        return url;
-    } catch {
-        return url;
-    }
+    const videoId = extractYouTubeVideoId(url);
+    return videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
 }
+
+// ============== MAIN HANDLER ==============
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const title = searchParams.get("title");
     const artist = searchParams.get("artist");
     const directUrl = searchParams.get("url");
-    const isStream = searchParams.get("stream") === "true";
 
     if (!title && !artist && !directUrl) {
         return NextResponse.json({ error: "No title/artist or direct URL provided" }, { status: 400 });
@@ -313,26 +334,20 @@ export async function GET(request: NextRequest) {
     try {
         let videoUrlToDownload = directUrl;
 
-        // 1. Si no hay URL directa y tenemos title+artist, buscar y descargar
+        // 1. Si tenemos title+artist pero no URL directa, buscar en YouTube
         if (!videoUrlToDownload && title && artist) {
             const query = `${artist} - ${title}`;
-            console.log("[Search] Buscando:", query);
+            console.log("[Download] Buscando:", query);
 
-            // yt-dlp.exe disponible (local/Windows): usar para buscar + descargar
+            // LOCAL: usar yt-dlp.exe
             if (fs.existsSync(YT_DLP_PATH)) {
                 try {
                     const searchResult = await searchAndGetStreamUrl(query);
-                    console.log("[Search] Encontrado:", searchResult.title, "by", searchResult.uploader);
-
-                    const coverUrl = searchResult.videoId ? `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg` : "";
                     const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
+                    const coverUrl = `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`;
 
-                    console.log("[Download] Descargando con yt-dlp:", ytUrl);
                     const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
-
                     const fileBuffer = fs.readFileSync(filePath);
-                    console.log("[Download] Archivo listo:", filePath, "Size:", fileBuffer.length, "bytes");
-
                     try { fs.unlinkSync(filePath); } catch { /* ignore */ }
 
                     return new NextResponse(fileBuffer, {
@@ -347,44 +362,30 @@ export async function GET(request: NextRequest) {
                         },
                     });
                 } catch (err: any) {
-                    console.error("[Search] yt-dlp failed:", err.message);
-                    return NextResponse.json({ error: "No se pudo descargar la canción" }, { status: 500 });
+                    console.error("[yt-dlp] Failed:", err.message);
+                    return NextResponse.json({ error: "Download failed" }, { status: 500 });
                 }
-            } else {
-                // Vercel/serverless: usar youtubei.js (Innertube)
-                console.log("[Download] Using youtubei.js (Innertube) for Vercel...");
-                try {
-                    const result = await searchAndStreamWithInnertube(query);
+            }
 
-                    return new NextResponse(new Uint8Array(result.buffer), {
-                        status: 200,
-                        headers: {
-                            "Content-Type": result.contentType,
-                            "Content-Length": result.buffer.length.toString(),
-                            "X-Video-Title": encodeURIComponent(result.title),
-                            "X-Video-Artist": encodeURIComponent(result.artist),
-                            "X-Video-Cover": result.coverUrl,
-                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
-                        },
-                    });
-                } catch (innertubeErr: any) {
-                    console.error("[Innertube] Failed:", innertubeErr.message);
+            // VERCEL: usar Piped API (proxy de YouTube - no bloqueado!)
+            console.log("[Download] Using Piped API for Vercel...");
+            try {
+                const result = await searchAndDownloadWithPiped(query);
 
-                    // Last resort: try ytdl-core + yt-search
-                    try {
-                        console.log("[Download] Innertube failed, trying ytdl-core fallback...");
-                        const ytdl = (await import('@distube/ytdl-core')).default;
-                        const yts = (await import('yt-search')).default;
-                        const r = await yts(query);
-                        if (r.videos.length === 0) {
-                            return NextResponse.json({ error: "No video found" }, { status: 404 });
-                        }
-                        videoUrlToDownload = r.videos[0].url;
-                    } catch (ytdlErr: any) {
-                        console.error("[ytdl-core] Also failed:", ytdlErr.message);
-                        return NextResponse.json({ error: "All YouTube backends failed" }, { status: 500 });
-                    }
-                }
+                return new NextResponse(new Uint8Array(result.buffer), {
+                    status: 200,
+                    headers: {
+                        "Content-Type": result.contentType,
+                        "Content-Length": result.buffer.length.toString(),
+                        "X-Video-Title": encodeURIComponent(result.title),
+                        "X-Video-Artist": encodeURIComponent(result.artist),
+                        "X-Video-Cover": result.coverUrl,
+                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+                    },
+                });
+            } catch (pipedErr: any) {
+                console.error("[Piped] Failed:", pipedErr.message);
+                return NextResponse.json({ error: "YouTube download failed: " + pipedErr.message }, { status: 500 });
             }
         }
 
@@ -392,22 +393,17 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Failed to determine video URL" }, { status: 500 });
         }
 
-        // 2. Si es una URL de YouTube, descargar
+        // 2. Si es una URL de YouTube directa, descargar
         if (isYouTubeUrl(videoUrlToDownload)) {
             videoUrlToDownload = cleanYouTubeUrl(videoUrlToDownload);
-            console.log("[Download] Iniciando descarga para:", videoUrlToDownload);
-
             const videoId = extractYouTubeVideoId(videoUrlToDownload);
             const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
 
-            // Vercel: usar Innertube para streaming
+            // VERCEL: usar Piped
             if (process.env.VERCEL || !fs.existsSync(YT_DLP_PATH)) {
-                console.log("[Download] Streaming with Innertube (Vercel)...");
-
                 if (videoId) {
                     try {
-                        const result = await streamWithInnertube(videoId);
-
+                        const result = await downloadWithPiped(videoId);
                         return new NextResponse(new Uint8Array(result.buffer), {
                             status: 200,
                             headers: {
@@ -420,57 +416,20 @@ export async function GET(request: NextRequest) {
                             },
                         });
                     } catch (err: any) {
-                        console.error("[Innertube stream] Error:", err.message);
-                        // Fall through to ytdl-core
+                        console.error("[Piped direct] Error:", err.message);
+                        return NextResponse.json({ error: "YouTube download failed" }, { status: 500 });
                     }
                 }
-
-                // Fallback: ytdl-core
-                try {
-                    console.log("[Download] Fallback to ytdl-core...");
-                    const ytdl = (await import('@distube/ytdl-core')).default;
-                    const info = await ytdl.getInfo(videoUrlToDownload);
-                    const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
-
-                    if (!format || !format.url) throw new Error("No audio format found");
-
-                    const audioResponse = await fetch(format.url);
-                    if (!audioResponse.ok) throw new Error("Failed to fetch YouTube audio");
-
-                    const metadata = await getVideoMetadata(videoUrlToDownload);
-
-                    const headers: Record<string, string> = {
-                        "Content-Type": format.mimeType || 'audio/webm',
-                        "X-Video-Title": encodeURIComponent(metadata.title),
-                        "X-Video-Artist": encodeURIComponent(metadata.uploader),
-                        "X-Video-Cover": coverUrl,
-                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
-                    };
-
-                    if (format.contentLength) {
-                        headers["Content-Length"] = format.contentLength;
-                    }
-
-                    return new NextResponse(audioResponse.body, {
-                        status: 200,
-                        headers,
-                    });
-                } catch (ytdlErr: any) {
-                    console.error("[ytdl-core] Failed:", ytdlErr.message);
-                    return NextResponse.json({ error: "YouTube download failed on all backends" }, { status: 500 });
-                }
+                return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
             }
 
-            // Windows/Local: descargar con yt-dlp
-            console.log("[Download] Descargando con yt-dlp.exe...");
+            // LOCAL: usar yt-dlp
             const [{ filePath, contentType }, metadata] = await Promise.all([
                 downloadWithYtDlp(videoUrlToDownload),
                 getVideoMetadata(videoUrlToDownload)
             ]);
 
             const fileBuffer = fs.readFileSync(filePath);
-            console.log("[Download] Archivo descargado:", filePath, "Size:", fileBuffer.length, "bytes");
-
             try { fs.unlinkSync(filePath); } catch { /* ignore */ }
 
             return new NextResponse(fileBuffer, {
@@ -486,22 +445,20 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // 3. Fallback: enlace directo
+        // 3. Fallback: enlace directo (no-YouTube)
         console.log("[Download] Fetching direct URL:", videoUrlToDownload);
         const response = await fetch(videoUrlToDownload);
         if (!response.ok) {
-            return NextResponse.json({ error: "Failed to fetch remote audio stream" }, { status: response.status });
+            return NextResponse.json({ error: "Failed to fetch remote audio" }, { status: response.status });
         }
 
         return new NextResponse(response.body, {
             status: 200,
-            headers: {
-                "Content-Type": response.headers.get("Content-Type") || "audio/mpeg",
-            },
+            headers: { "Content-Type": response.headers.get("Content-Type") || "audio/mpeg" },
         });
 
     } catch (error: any) {
         console.error("[Download] Error:", error);
-        return NextResponse.json({ error: error.message || "Failed to download stream" }, { status: 500 });
+        return NextResponse.json({ error: error.message || "Failed to download" }, { status: 500 });
     }
 }
