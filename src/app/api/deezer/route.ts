@@ -25,14 +25,28 @@ const decryptChunk = (chunk: Buffer, blowFishKey: string) => {
 };
 
 let isDeezerInitialized = false;
+let lastInitTime = 0;
 
 // The ARL passed by the user
-const DEEZER_ARL = "ee974bbd9ccb632b067cb6e2406a60cd9f0bd782d7f62f2a3d8448a63010c92658cb84d0f46721294621af6c326cdce2cd7260c324fcc97604ef79dd9a96de88eff778d36668bd61d77a0d8de9beca82a93c7c1f8a676c67100838e612aa46cd";
+const DEEZER_ARL = process.env.DEEZER_ARL || "ee974bbd9ccb632b067cb6e2406a60cd9f0bd782d7f62f2a3d8448a63010c92658cb84d0f46721294621af6c326cdce2cd7260c324fcc97604ef79dd9a96de88eff778d36668bd61d77a0d8de9beca82a93c7c1f8a676c67100838e612aa46cd";
 
-async function initializeDeezer() {
-    if (!isDeezerInitialized) {
-        await dfi.initDeezerApi(DEEZER_ARL);
-        isDeezerInitialized = true;
+// Re-init every 15 minutes in case ARL session expired in-memory
+const REINIT_INTERVAL_MS = 15 * 60 * 1000;
+
+async function initializeDeezer(forceReinit = false) {
+    const now = Date.now();
+    if (!isDeezerInitialized || forceReinit || (now - lastInitTime > REINIT_INTERVAL_MS)) {
+        console.log("[Deezer] Initializing d-fi-core with ARL... (force:", forceReinit, ")");
+        try {
+            await dfi.initDeezerApi(DEEZER_ARL);
+            isDeezerInitialized = true;
+            lastInitTime = now;
+            console.log("[Deezer] Initialization successful");
+        } catch (initErr: any) {
+            isDeezerInitialized = false;
+            console.error("[Deezer] Initialization FAILED:", initErr.message);
+            throw new Error("Deezer authentication failed. ARL may be expired.");
+        }
     }
 }
 
@@ -145,7 +159,14 @@ export async function GET(request: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error("[Deezer Downloader] Error:", error);
-        return NextResponse.json({ error: error.message || "Failed to process Deezer download" }, { status: 500 });
+        console.error("[Deezer Downloader] Error:", error.message);
+
+        // Si falla, marcar como no-inicializado para que el próximo request re-autentique
+        isDeezerInitialized = false;
+
+        return NextResponse.json(
+            { error: error.message || "Failed to process Deezer download" },
+            { status: 500 }
+        );
     }
 }

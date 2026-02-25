@@ -91,6 +91,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onPlaying = () => setIsLoading(false);
         const onCanPlay = () => setIsLoading(false);
         const onLoadStart = () => setIsLoading(true);
+        const onError = () => {
+            console.error("[AudioPlayer] Audio element error, source may be unavailable");
+            setIsLoading(false);
+        };
 
         audio.addEventListener("timeupdate", onTimeUpdate);
         audio.addEventListener("loadedmetadata", onLoadedMetadata);
@@ -99,6 +103,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         audio.addEventListener("playing", onPlaying);
         audio.addEventListener("canplay", onCanPlay);
         audio.addEventListener("loadstart", onLoadStart);
+        audio.addEventListener("error", onError);
 
         return () => {
             audio.removeEventListener("timeupdate", onTimeUpdate);
@@ -108,6 +113,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             audio.removeEventListener("playing", onPlaying);
             audio.removeEventListener("canplay", onCanPlay);
             audio.removeEventListener("loadstart", onLoadStart);
+            audio.removeEventListener("error", onError);
         };
     }, [currentIndex, queue]);
 
@@ -116,7 +122,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (currentTrack && audioRef.current) {
             let srcUrl = currentTrack.streamUrl || "";
             let blobUrl: string | null = null;
-            const isStreamSource = !currentTrack.blob && !!currentTrack.streamUrl;
 
             if (currentTrack.blob) {
                 blobUrl = URL.createObjectURL(currentTrack.blob);
@@ -128,30 +133,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            audioRef.current.src = srcUrl;
+            // Función para intentar reproducir con fallback a YouTube si Deezer falla
+            const attemptPlay = async (url: string, isFallback = false) => {
+                const audio = audioRef.current;
+                if (!audio) return;
 
-            const playPromise = audioRef.current.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
+                audio.src = url;
+
+                try {
+                    await audio.play();
                     setIsPlaying(true);
-                }).catch(err => {
+                } catch (err: any) {
                     if (err.name === 'NotAllowedError') {
-                        // Resucitado por localstorage o recarga automatica bloqueada por navegador
+                        // Bloqueado por política del navegador (autoplay sin interacción)
                         setIsPlaying(false);
-                    } else if (err.name === 'AbortError') {
-                        console.log("Playback aborted, likely due to a pause call");
-                    } else {
-                        console.error("Error al reproducir fuente de audio:", err);
+                        return;
                     }
-                });
-            } else {
-                setIsPlaying(true);
-            }
+                    if (err.name === 'AbortError') {
+                        console.log("Playback aborted, likely due to a pause/track change");
+                        return;
+                    }
 
-            // Si es streaming, delegar 100% al navegador para carga instantánea
-            // NOTA: Eliminado el fetch de blob en background por que bloquea el streaming
-            // nativo haciendo que Chrome pause la etiqueta <audio> hasta descargar 10MB. 
-            // Esto permite que el stream inicie en 0 segundos.
+                    console.error("Error al reproducir fuente de audio:", err);
+
+                    // Si falló con /api/deezer y NO es ya un fallback, intentar con /api/download (YouTube)
+                    if (!isFallback && currentTrack.streamUrl?.includes('/api/deezer') && currentTrack.title && currentTrack.artist) {
+                        console.log("[Player] Deezer stream failed, falling back to YouTube...");
+                        const fallbackUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&stream=true`;
+                        attemptPlay(fallbackUrl, true);
+                    }
+                }
+            };
+
+            attemptPlay(blobUrl || srcUrl);
 
             // Configurar Media Session para pantallas bloqueadas (Android/iOS)
             if ("mediaSession" in navigator) {
@@ -166,7 +180,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     ]
                 });
 
-                // Vincular botones físicos y controles de pantalla bloqueada a nuestra lógica
                 navigator.mediaSession.setActionHandler("play", () => togglePlay());
                 navigator.mediaSession.setActionHandler("pause", () => togglePlay());
                 navigator.mediaSession.setActionHandler("previoustrack", () => playPrev());
@@ -179,7 +192,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     }
                 });
             }
-            // .catch replaced with playPromise above
 
             return () => {
                 if (blobUrl) {
