@@ -127,22 +127,46 @@ export async function GET(request: NextRequest) {
 
         const decryptedBuffer = Buffer.concat(chunks);
 
+        const totalSize = decryptedBuffer.length;
+        const rangeHeader = request.headers.get("range");
+
         const coverUrl = `https://e-cdns-images.dzcdn.net/images/cover/${track.ALB_PICTURE}/500x500-000000-80-0-0.jpg`;
         const artistName = track.ART_NAME || "Desconocido";
         const trackTitle = track.SNG_TITLE || "Enlace Descargado";
 
-        const headers: Record<string, string> = {
+        const baseHeaders: Record<string, string> = {
             "Content-Type": "audio/mpeg",
+            "Accept-Ranges": "bytes",
             "X-Video-Title": encodeURIComponent(trackTitle),
             "X-Video-Artist": encodeURIComponent(artistName),
             "X-Video-Cover": coverUrl,
             "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
-            "Content-Length": decryptedBuffer.length.toString()
         };
+
+        if (rangeHeader) {
+            const parts = rangeHeader.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+            const chunksize = (end - start) + 1;
+
+            const slicedBuffer = decryptedBuffer.subarray(start, end + 1);
+
+            return new NextResponse(slicedBuffer, {
+                status: 206,
+                headers: {
+                    ...baseHeaders,
+                    "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+                    "Content-Length": chunksize.toString(),
+                },
+            });
+        }
 
         return new NextResponse(decryptedBuffer, {
             status: 200,
-            headers,
+            headers: {
+                ...baseHeaders,
+                "Content-Length": totalSize.toString()
+            },
         });
 
     } catch (error: any) {
