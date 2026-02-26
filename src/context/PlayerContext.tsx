@@ -56,7 +56,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 }
             }
         } catch (e) {
-            console.error("Failed to restore player state", e);
+            console.warn("Failed to restore player state", e);
         }
     }, []);
 
@@ -71,7 +71,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 };
                 localStorage.setItem("caleta-player-state", JSON.stringify(stateToSave));
             } catch (e) {
-                console.error("Failed to save player state", e);
+                console.warn("Failed to save player state", e);
             }
         }
     }, [queue, currentIndex]);
@@ -92,7 +92,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onCanPlay = () => setIsLoading(false);
         const onLoadStart = () => setIsLoading(true);
         const onError = () => {
-            console.error("[AudioPlayer] Audio element error, source may be unavailable");
+            const errCode = audioRef.current?.error?.code;
+            console.warn(`[AudioPlayer] Audio element error (code: ${errCode}), source may be unavailable`);
             setIsLoading(false);
         };
 
@@ -129,7 +130,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!srcUrl) {
-                console.error("Ninguna fuente de audio disponible (sin blob ni streamUrl)");
+                console.warn("Ninguna fuente de audio disponible (sin blob ni streamUrl)");
                 return;
             }
 
@@ -139,7 +140,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 const audio = audioRef.current;
                 if (!audio) return;
 
-                audio.src = url;
+                // Si la URL es la API de desacarga, descargar el blob primero para evitar que
+                // el navegador haga "Range requests" a mitad de canción y cause que se pare.
+                if (url.includes('/api/download')) {
+                    setIsLoading(true);
+                    try {
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const contentType = res.headers.get('content-type') || '';
+                            if (!contentType.includes('application/json')) {
+                                const blob = await res.blob();
+                                const blobUrlTemp = URL.createObjectURL(blob);
+                                audio.src = blobUrlTemp;
+                            } else {
+                                const data = await res.json();
+                                if (data.audioUrl) {
+                                    audio.src = data.audioUrl;
+                                } else {
+                                    throw new Error("No URL in JSON");
+                                }
+                            }
+                        } else {
+                            throw new Error("API Download Fetch Failed");
+                        }
+                    } catch (err: any) {
+                        console.warn("[Player] Fallo al hacer fetch preventivo del blob:", err);
+                        audio.src = url; // Fallback al comportamiento por defecto si falla el fetch
+                    }
+                } else {
+                    audio.src = url;
+                }
 
                 try {
                     await audio.play();
@@ -154,7 +184,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         return;
                     }
 
-                    console.error("Error al reproducir fuente de audio:", err);
+                    console.warn("Error al reproducir fuente de audio:", err?.message || err);
 
                     // Fallback level 0 → Resolve YouTube audio URL via Piped API
                     if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
@@ -183,7 +213,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                                 }
                             }
                         } catch (fetchErr) {
-                            console.error("[Player] YouTube API fetch failed:", fetchErr);
+                            console.warn("[Player] YouTube API fetch failed:", fetchErr);
                         }
 
                         // Si YouTube falló, ir directo al preview
@@ -202,7 +232,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     }
 
                     // All fallbacks exhausted
-                    console.error("[Player] All audio sources failed");
+                    console.warn("[Player] All audio sources failed");
                     setIsLoading(false);
                 }
             };
@@ -254,7 +284,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         if (err.name === 'AbortError') {
                             console.log("Playback aborted by pause");
                         } else {
-                            console.error("Error playing audio", err);
+                            console.warn("Error playing audio", err);
                         }
                     });
                 } else {
