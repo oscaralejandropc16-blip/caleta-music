@@ -36,14 +36,27 @@ async function fetchWithChunks(
 
         if (!firstHeaders) firstHeaders = res.headers;
 
+        contentType = res.headers.get("Content-Type") || contentType;
+
+        // Vercel fallback: if JSON is returned with audioUrl, we must fetch from that URL instead
+        if (contentType.includes("application/json") && downloadedBytes === 0) {
+            const data = await res.json();
+            if (data.audioUrl) {
+                // Restart process using the direct audio URL
+                url = data.audioUrl;
+                firstHeaders = null;
+                continue;
+            } else {
+                throw new Error("Invalid JSON response: missing audioUrl");
+            }
+        }
+
         const contentRange = res.headers.get("Content-Range");
         if (contentRange) {
             totalBytes = parseInt(contentRange.split("/")[1], 10);
         } else if (!totalBytes) {
             totalBytes = parseInt(res.headers.get("Content-Length") || "0", 10);
         }
-
-        contentType = res.headers.get("Content-Type") || contentType;
 
         const buffer = await res.arrayBuffer();
         chunks.push(new Uint8Array(buffer));
