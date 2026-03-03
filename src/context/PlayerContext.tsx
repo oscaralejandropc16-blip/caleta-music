@@ -30,6 +30,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const currentTrackRef = useRef<SavedTrack | null>(null);
+    const hasRetriedRef = useRef(false);
 
     // Restore state from localStorage on mount
     useEffect(() => {
@@ -85,7 +87,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
         const onTimeUpdate = () => setProgress(audio.currentTime);
         const onLoadedMetadata = () => setDuration(audio.duration);
-        const onEnded = () => playNext();
+
+        // Detección de corte prematuro: si el track termina a <50% de la duración
+        // reportada, significa que el archivo descargado está incompleto.
+        // En ese caso, re-streamear desde la API automáticamente.
+        const onEnded = () => {
+            const track = currentTrackRef.current;
+            const actualTime = audio.currentTime;
+            const reportedDuration = audio.duration;
+
+            // Si la canción terminó a menos del 50% de su duración reportada
+            // y la duración es > 60s (no es un preview corto o jingle)
+            // y no ya reintentamos → re-streamear desde API
+            if (track && !hasRetriedRef.current &&
+                actualTime > 5 && reportedDuration > 60 &&
+                actualTime < reportedDuration * 0.5 &&
+                track.streamUrl) {
+                hasRetriedRef.current = true;
+                console.warn(`[Player] ⚠️ Track cortado a ${actualTime.toFixed(0)}s / ${reportedDuration.toFixed(0)}s → Re-streameando desde API...`);
+                // Re-reproducir sin el blob (forzar streaming desde API)
+                setCurrentTrack({ ...track, blob: undefined });
+                return;
+            }
+
+            playNext();
+        };
 
         const onWaiting = () => setIsLoading(true);
         const onPlaying = () => setIsLoading(false);
@@ -118,11 +144,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         };
     }, [currentIndex, queue]);
 
-    // Reproducir cancion desde localforage o streaming (soporta offline + background play via MediaSession)
+    // Reproducir cancion desde localforage o streaming directo
     useEffect(() => {
         if (currentTrack && audioRef.current) {
+            // Actualizar ref y resetear retry FLAG cuando cambia el track
+            currentTrackRef.current = currentTrack;
+            hasRetriedRef.current = false;
+
             let srcUrl = currentTrack.streamUrl || "";
             let blobUrl: string | null = null;
+            let cancelled = false;
 
             if (currentTrack.blob) {
                 blobUrl = URL.createObjectURL(currentTrack.blob);
@@ -134,105 +165,77 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            // Función para intentar reproducir con fallback encadenado:
-            // 1. Deezer API (canción completa) → 2. YouTube (via Piped) → 3. Deezer Preview (30s)
             const attemptPlay = async (url: string, fallbackLevel = 0) => {
                 const audio = audioRef.current;
-                if (!audio) return;
+                if (!audio || cancelled) return;
 
-                // Si la URL es la API de desacarga, descargar el blob primero para evitar que
-                // el navegador haga "Range requests" a mitad de canción y cause que se pare.
-                if (url.includes('/api/download')) {
+                // Para URLs de API que devuelven JSON (Vercel), necesitamos resolver la URL real.
+                // Para URLs de API locales o blobs, asignar directamente (reproducción instantánea).
+                if ((url.includes('/api/deezer') || url.includes('/api/download')) && !url.startsWith('blob:')) {
                     setIsLoading(true);
                     try {
-                        const res = await fetch(url);
-                        if (res.ok) {
-                            const contentType = res.headers.get('content-type') || '';
-                            if (!contentType.includes('application/json')) {
-                                const blob = await res.blob();
-                                const blobUrlTemp = URL.createObjectURL(blob);
-                                audio.src = blobUrlTemp;
+                        const res = await fetch(url, { signal: AbortSignal.timeout(90000) });
+                        if (cancelled) return;
+                        if (!res.ok) throw new Error(`API returned ${res.status}`);
+
+                        const contentType = res.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            // Vercel: JSON con URL directa
+                            const data = await res.json();
+                            if (data.audioUrl) {
+                                audio.src = data.audioUrl;
                             } else {
-                                const data = await res.json();
-                                if (data.audioUrl) {
-                                    audio.src = data.audioUrl;
-                                } else {
-                                    throw new Error("No URL in JSON");
-                                }
+                                throw new Error("No audioUrl in JSON");
                             }
                         } else {
-                            throw new Error("API Download Fetch Failed");
+                            // Local: audio binario directo → blob para reproducción estable
+                            const blob = await res.blob();
+                            if (cancelled) return;
+                            if (blob.size < 50000) throw new Error(`Audio too small (${blob.size} bytes)`);
+                            const blobUrlTemp = URL.createObjectURL(blob);
+                            audio.src = blobUrlTemp;
                         }
                     } catch (err: any) {
-                        console.warn("[Player] Fallo al hacer fetch preventivo del blob:", err);
-                        audio.src = url; // Fallback al comportamiento por defecto si falla el fetch
+                        if (cancelled) return;
+                        console.warn("[Player] API fetch failed:", err?.message);
+
+                        if (url.includes('/api/deezer') && fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
+                            const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                            attemptPlay(ytUrl, 1);
+                            return;
+                        }
+                        if (fallbackLevel <= 1 && currentTrack.previewUrl) {
+                            audio.src = currentTrack.previewUrl;
+                        } else {
+                            setIsLoading(false);
+                            return;
+                        }
                     }
                 } else {
                     audio.src = url;
                 }
 
+                setIsLoading(false);
+
                 try {
+                    if (cancelled) return;
                     await audio.play();
                     setIsPlaying(true);
                 } catch (err: any) {
-                    if (err.name === 'NotAllowedError') {
-                        setIsPlaying(false);
-                        return;
-                    }
-                    if (err.name === 'AbortError') {
-                        console.log("Playback aborted");
-                        return;
-                    }
+                    if (cancelled) return;
+                    if (err.name === 'NotAllowedError') { setIsPlaying(false); return; }
+                    if (err.name === 'AbortError') return;
 
-                    console.warn("Error al reproducir fuente de audio:", err?.message || err);
-
-                    // Fallback level 0 → Resolve YouTube audio URL via Piped API
+                    console.warn("[Player] Play error:", err?.message);
                     if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                        console.log("[Player] Deezer stream failed, resolving YouTube URL...");
-                        try {
-                            const apiUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
-                            const res = await fetch(apiUrl);
-
-                            if (res.ok) {
-                                const contentType = res.headers.get('content-type') || '';
-
-                                if (contentType.includes('application/json')) {
-                                    // Vercel: API devuelve JSON con URL directa
-                                    const data = await res.json();
-                                    if (data.audioUrl) {
-                                        console.log("[Player] Got direct audio URL from Piped, playing...");
-                                        attemptPlay(data.audioUrl, 1);
-                                        return;
-                                    }
-                                } else {
-                                    // Local: API devuelve audio binario directamente
-                                    const blob = await res.blob();
-                                    const blobPlayUrl = URL.createObjectURL(blob);
-                                    attemptPlay(blobPlayUrl, 1);
-                                    return;
-                                }
-                            }
-                        } catch (fetchErr) {
-                            console.warn("[Player] YouTube API fetch failed:", fetchErr);
-                        }
-
-                        // Si YouTube falló, ir directo al preview
-                        if (currentTrack.previewUrl) {
-                            console.log("[Player] YouTube failed, using Deezer preview (30s)...");
-                            attemptPlay(currentTrack.previewUrl, 2);
-                            return;
-                        }
+                        const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                        attemptPlay(ytUrl, 1);
+                        return;
                     }
-
-                    // Fallback level 1 → Try Deezer preview URL (30s clip)
                     if (fallbackLevel === 1 && currentTrack.previewUrl) {
-                        console.log("[Player] YouTube also failed, using Deezer preview (30s)...");
                         attemptPlay(currentTrack.previewUrl, 2);
                         return;
                     }
-
-                    // All fallbacks exhausted
-                    console.warn("[Player] All audio sources failed");
                     setIsLoading(false);
                 }
             };
@@ -266,9 +269,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
 
             return () => {
-                if (blobUrl) {
-                    URL.revokeObjectURL(blobUrl);
-                }
+                cancelled = true;
+                if (blobUrl) URL.revokeObjectURL(blobUrl);
             };
         }
     }, [currentTrack]);

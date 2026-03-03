@@ -90,20 +90,34 @@ export async function GET(request: NextRequest) {
 
         // 9 = 320kbps, 3 = 128kbps, 1 = FLAC
         // We request 320kbps, library will fallback to 128kbps if needed
-        const trackUrlRes = await dfi.getTrackDownloadUrl(track, 9);
+        let trackUrlRes = await dfi.getTrackDownloadUrl(track, 9);
         if (!trackUrlRes || !trackUrlRes.trackUrl) {
-            return NextResponse.json({ error: "Could not get stream URL" }, { status: 500 });
+            // Retry with 128kbps
+            trackUrlRes = await dfi.getTrackDownloadUrl(track, 3);
+            if (!trackUrlRes || !trackUrlRes.trackUrl) {
+                return NextResponse.json({ error: "Could not get stream URL" }, { status: 500 });
+            }
         }
 
-        console.log(`[Deezer] Streaming encrypted file from Deezer CDN...`);
+        const trackDuration = parseInt(track.DURATION || '0', 10);
+        console.log(`[Deezer] Streaming encrypted file from Deezer CDN... (duration: ${trackDuration}s)`);
         const response = await fetch(trackUrlRes.trackUrl);
         if (!response.ok || !response.body) {
             throw new Error(`Failed to fetch from Deezer CDN: ${response.status}`);
         }
 
+        // Verificar Content-Length del CDN
+        const expectedCdnLength = parseInt(response.headers.get('content-length') || '0', 10);
+
         const blowFishKey = getBlowfishKey(track.SNG_ID);
         const arrayBuffer = await response.arrayBuffer();
         const encryptedBuffer = Buffer.from(arrayBuffer);
+
+        // Validar que el archivo no está truncado
+        if (expectedCdnLength > 0 && encryptedBuffer.length < expectedCdnLength * 0.9) {
+            console.error(`[Deezer] Incomplete CDN download: got ${encryptedBuffer.length} bytes, expected ${expectedCdnLength}`);
+            throw new Error(`Incomplete download from Deezer CDN`);
+        }
 
         const chunks: Buffer[] = [];
         let offset = 0;
@@ -127,6 +141,16 @@ export async function GET(request: NextRequest) {
 
         const decryptedBuffer = Buffer.concat(chunks);
 
+        // Validar tamaño vs duración esperada — mínimo ~8KB por segundo a 128kbps
+        if (trackDuration > 30) {
+            const minExpectedBytes = trackDuration * 8000; // ~50% de 128kbps
+            if (decryptedBuffer.length < minExpectedBytes) {
+                console.error(`[Deezer] File too small: ${decryptedBuffer.length} bytes for ${trackDuration}s track (min expected: ${minExpectedBytes})`);
+                // No lanzar error, servir lo que tenemos pero loguear la advertencia
+            }
+        }
+
+        console.log(`[Deezer] Decrypted ${decryptedBuffer.length} bytes (${(decryptedBuffer.length / 1024 / 1024).toFixed(1)}MB) for ${trackDuration}s track`);
         const totalSize = decryptedBuffer.length;
         const rangeHeader = request.headers.get("range");
 
@@ -143,33 +167,54 @@ export async function GET(request: NextRequest) {
             "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
         };
 
+        let responseStart = 0;
+        let responseEnd = totalSize - 1;
+        let isPartial = false;
+
         if (rangeHeader) {
             const parts = rangeHeader.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-
-            // Limit response chunk to 3MB to bypass Vercel's 4.5MB Serverless Payload Limit
-            const maxChunk = 3 * 1024 * 1024;
-            if (end - start > maxChunk) {
-                end = start + maxChunk - 1;
+            responseStart = parseInt(parts[0], 10) || 0;
+            if (parts[1]) {
+                responseEnd = parseInt(parts[1], 10);
+                if (isNaN(responseEnd)) {
+                    responseEnd = totalSize - 1;
+                }
             }
-            if (end >= totalSize) end = totalSize - 1;
+            if (responseEnd >= totalSize) responseEnd = totalSize - 1;
+            isPartial = true;
+        }
 
-            const chunksize = (end - start) + 1;
+        const chunksize = (responseEnd - responseStart) + 1;
+        const slicedBuffer = decryptedBuffer.subarray(responseStart, responseEnd + 1);
 
-            const slicedBuffer = decryptedBuffer.subarray(start, end + 1);
+        // Crear ReadableStream usando pull para manejar la contrapresión y evitar cuelgues
+        let streamOffset = 0;
+        const chunkSize = 64 * 1024; // 64KB
+        const stream = new ReadableStream({
+            pull(controller) {
+                if (streamOffset >= slicedBuffer.length) {
+                    controller.close();
+                    return;
+                }
+                const end = Math.min(streamOffset + chunkSize, slicedBuffer.length);
+                const chunk = new Uint8Array(slicedBuffer.subarray(streamOffset, end));
+                controller.enqueue(chunk);
+                streamOffset = end;
+            }
+        });
 
-            return new NextResponse(slicedBuffer, {
+        if (isPartial) {
+            return new NextResponse(stream, {
                 status: 206,
                 headers: {
                     ...baseHeaders,
-                    "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+                    "Content-Range": `bytes ${responseStart}-${responseEnd}/${totalSize}`,
                     "Content-Length": chunksize.toString(),
                 },
             });
         }
 
-        return new NextResponse(decryptedBuffer, {
+        return new NextResponse(stream, {
             status: 200,
             headers: {
                 ...baseHeaders,
