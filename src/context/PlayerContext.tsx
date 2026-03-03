@@ -119,8 +119,52 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onLoadStart = () => setIsLoading(true);
         const onError = () => {
             const errCode = audioRef.current?.error?.code;
-            console.warn(`[AudioPlayer] Audio element error (code: ${errCode}), source may be unavailable`);
+            const track = currentTrackRef.current;
+            console.warn(`[AudioPlayer] Audio error (code: ${errCode})`);
             setIsLoading(false);
+
+            // Error code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED (audio corrupto o inaccesible)
+            // Intentar fallback automático: YouTube → Preview
+            if (errCode === 4 && track && !hasRetriedRef.current) {
+                hasRetriedRef.current = true;
+
+                if (track.title && track.artist) {
+                    console.log("[Player] Audio error → Trying YouTube fallback...");
+                    // Intentar con YouTube como fallback
+                    const ytUrl = `/api/download?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
+                    fetch(ytUrl, { signal: AbortSignal.timeout(30000) })
+                        .then(res => {
+                            if (!res.ok) throw new Error(`Status ${res.status}`);
+                            const ct = res.headers.get('content-type') || '';
+                            if (ct.includes('application/json')) {
+                                return res.json().then(data => {
+                                    if (data.audioUrl && audioRef.current) {
+                                        audioRef.current.src = data.audioUrl;
+                                        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
+                                    }
+                                });
+                            } else {
+                                return res.blob().then(blob => {
+                                    if (audioRef.current && blob.size > 50000) {
+                                        audioRef.current.src = URL.createObjectURL(blob);
+                                        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
+                                    }
+                                });
+                            }
+                        })
+                        .catch(() => {
+                            // YouTube también falló → usar preview de 30s
+                            if (track.previewUrl && audioRef.current) {
+                                console.log("[Player] YouTube failed → Using Deezer preview");
+                                audioRef.current.src = track.previewUrl;
+                                audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
+                            }
+                        });
+                } else if (track.previewUrl && audioRef.current) {
+                    audioRef.current.src = track.previewUrl;
+                    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
+                }
+            }
         };
 
         audio.addEventListener("timeupdate", onTimeUpdate);
