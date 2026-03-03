@@ -140,11 +140,13 @@ export default function AlbumDetailModal({
     const handleDownload = async (track: ItunesTrack) => {
         const strId = track.trackId.toString();
         setDownloadingId(strId);
-        const success = await downloadAndSaveTrack(track, null, strId, (progress) => {
+        const result = await downloadAndSaveTrack(track, null, strId, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [strId]: progress }));
         });
-        if (success) {
+        if (result.success) {
             setSavedTrackIds(prev => new Set(prev).add(strId));
+        } else {
+            console.warn(`[AlbumModal] Download failed: ${result.error}`);
         }
         setDownloadingId(null);
     };
@@ -178,8 +180,8 @@ export default function AlbumDetailModal({
             const track = tracksToDownload[i];
             const strId = track.trackId.toString();
             setDownloadingId(strId);
-            const success = await downloadAndSaveTrack(track, null, strId);
-            if (success) {
+            const result = await downloadAndSaveTrack(track, null, strId);
+            if (result.success) {
                 setSavedTrackIds(prev => new Set(prev).add(strId));
             }
             setDownloadProgress(Math.round(((i + 1) / tracksToDownload.length) * 100));

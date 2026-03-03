@@ -117,12 +117,12 @@ function LibraryContent() {
         if (!track.sourceAudioUrl) return;
 
         setDownloadingCloudIds(prev => new Set(prev).add(track.id));
-        const success = await downloadAndSaveTrack(null, track.sourceAudioUrl, track.id);
+        const result = await downloadAndSaveTrack(null, track.sourceAudioUrl, track.id);
 
-        if (success) {
+        if (result.success) {
             await loadLibrary();
         } else {
-            alert("Error al descargar desde la nube");
+            alert(`Error al descargar: ${result.error || "Error desconocido"}`);
         }
 
         setDownloadingCloudIds(prev => {

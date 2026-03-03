@@ -101,12 +101,12 @@ export default function SearchPage() {
         // Descarga en background — no bloqueamos la UI
         downloadAndSaveTrack(track, url, id, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [id]: progress }));
-        }).then(success => {
-            if (success) {
+        }).then(result => {
+            if (result.success) {
                 setSavedTrackIds((prev) => new Set(prev).add(id));
                 showToast("success", `"${trackName}" descargada ✓`);
             } else {
-                showToast("error", `Error al descargar "${trackName}". Intenta de nuevo.`);
+                showToast("error", `Error: ${result.error || "Desconocido"}`);
             }
             setDownloadingId(prev => prev === id ? null : prev);
         });
@@ -124,17 +124,17 @@ export default function SearchPage() {
             setLinkInput(url);
         }
 
-        const success = await downloadAndSaveTrack(null, url, directId, (progress) => {
+        const result = await downloadAndSaveTrack(null, url, directId, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
         });
 
-        if (success) {
+        if (result.success) {
             setSavedTrackIds((prev) => new Set(prev).add(directId));
             showToast("success", "¡Descarga completada y guardada!");
             setLinkInput("");
             if (query === url) setQuery("");
         } else {
-            showToast("error", "Error al descargar. Verifica el enlace.");
+            showToast("error", `Error: ${result.error || "Verifica el enlace"}`);
         }
         setLinkDownloading(false);
         setActiveLinkId(null);

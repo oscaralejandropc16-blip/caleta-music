@@ -147,10 +147,10 @@ export default function ArtistProfile() {
     const handleDownload = async (track: ItunesTrack) => {
         const strId = track.trackId.toString();
         setDownloadingId(strId);
-        const success = await downloadAndSaveTrack(track, null, strId, (progress) => {
+        const result = await downloadAndSaveTrack(track, null, strId, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [strId]: progress }));
         });
-        if (success) setSavedTrackIds((prev) => new Set(prev).add(strId));
+        if (result.success) setSavedTrackIds((prev) => new Set(prev).add(strId));
         setDownloadingId(null);
     };
 

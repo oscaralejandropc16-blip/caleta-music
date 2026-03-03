@@ -32,7 +32,15 @@ async function fetchWithChunks(
             signal: controller.signal
         });
 
-        if (!res.ok) throw new Error("Fetch failed: " + res.status);
+        if (!res.ok) {
+            // Intentar extraer mensaje de error del API
+            let apiError = `HTTP ${res.status}`;
+            try {
+                const errData = await res.json();
+                if (errData.error) apiError = errData.error;
+            } catch { /* no es JSON */ }
+            throw new Error(`API error: ${apiError}`);
+        }
 
         if (!firstHeaders) firstHeaders = res.headers;
 
@@ -46,8 +54,10 @@ async function fetchWithChunks(
                 url = data.audioUrl;
                 firstHeaders = null;
                 continue;
+            } else if (data.error) {
+                throw new Error(`API: ${data.error}`);
             } else {
-                throw new Error("Invalid JSON response: missing audioUrl");
+                throw new Error("Respuesta JSON inválida del servidor");
             }
         }
 
@@ -111,13 +121,18 @@ async function processResolvedBlob(
     return true;
 }
 
+export interface DownloadResult {
+    success: boolean;
+    error?: string;
+}
+
 export const downloadAndSaveTrack = async (
     track: ItunesTrack | null,
     url: string | null,
     id: string,
     onProgress?: (progress: number) => void,
     onComplete?: () => void
-) => {
+): Promise<DownloadResult> => {
     try {
         let downloadUrl = "";
 
@@ -130,7 +145,7 @@ export const downloadAndSaveTrack = async (
         } else if (url) {
             downloadUrl = `/api/download?url=${encodeURIComponent(url)}`;
         } else {
-            throw new Error("No track data nor url provided.");
+            return { success: false, error: "No se proporcionó canción ni URL" };
         }
 
         const controller = new AbortController();
@@ -148,6 +163,8 @@ export const downloadAndSaveTrack = async (
             }, 600);
         }
 
+        let deezerError = "";
+
         try {
             const { blob, headers } = await fetchWithChunks(downloadUrl, controller, onProgress);
             clearTimeout(timeout);
@@ -155,28 +172,41 @@ export const downloadAndSaveTrack = async (
 
             await processResolvedBlob(blob, headers, track, url, id);
             if (onComplete) onComplete();
-            return true;
+            return { success: true };
         } catch (downloadErr: any) {
             clearTimeout(timeout);
             if (fakeProgressInterval) clearInterval(fakeProgressInterval);
+            deezerError = downloadErr?.message || "Error desconocido";
 
             // Si Deezer falló intentar fallback con YouTube solo si hay track
             if (downloadUrl.includes('/api/deezer') && track) {
-                console.warn("[Download] Deezer API failed, falling back to YouTube...");
+                console.warn(`[Download] Deezer failed (${deezerError}), trying YouTube...`);
                 if (onProgress) onProgress(30);
 
-                const fallbackUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
-                const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
+                try {
+                    const fallbackUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
 
-                await processResolvedBlob(blob, headers, track, url, id);
-                if (onComplete) onComplete();
-                return true;
+                    await processResolvedBlob(blob, headers, track, url, id);
+                    if (onComplete) onComplete();
+                    return { success: true };
+                } catch (ytErr: any) {
+                    const ytError = ytErr?.message || "Error desconocido";
+                    console.error(`[Download] YouTube also failed: ${ytError}`);
+                    return {
+                        success: false,
+                        error: `Deezer: ${deezerError} | YouTube: ${ytError}`
+                    };
+                }
             } else {
-                throw downloadErr;
+                return { success: false, error: deezerError };
             }
         }
-    } catch (error) {
-        console.error("Error downloading and saving track", error);
-        return false;
+    } catch (error: any) {
+        const msg = error?.name === 'AbortError'
+            ? "Timeout: la descarga tardó más de 2 minutos"
+            : error?.message || "Error desconocido";
+        console.error("[Download] Fatal:", msg);
+        return { success: false, error: msg };
     }
 };
