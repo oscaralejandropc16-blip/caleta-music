@@ -228,6 +228,37 @@ export async function GET(request: NextRequest) {
         // Si falla, marcar como no-inicializado para que el próximo request re-autentique
         isDeezerInitialized = false;
 
+        // ===== FALLBACK: Si tenemos title/artist, intentar con YouTube (Piped/Invidious) =====
+        // En vez de devolver error 500, redirigimos internamente al endpoint de download
+        // para que el cliente reciba audio completo en vez del preview de 30s.
+        if (title && artist) {
+            console.log(`[Deezer] Falling back to YouTube via /api/download for: ${artist} - ${title}`);
+            try {
+                const baseUrl = request.nextUrl.origin || 'http://localhost:3000';
+                const downloadUrl = `${baseUrl}/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`;
+                const fallbackRes = await fetch(downloadUrl, { signal: AbortSignal.timeout(50000) });
+
+                if (fallbackRes.ok) {
+                    const contentType = fallbackRes.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        // Vercel: Piped/Invidious devuelve JSON con audioUrl
+                        const data = await fallbackRes.json();
+                        return NextResponse.json(data);
+                    } else {
+                        // Local: devuelve binario de audio directo
+                        const headers: Record<string, string> = {};
+                        ['content-type', 'content-length', 'x-video-title', 'x-video-artist', 'x-video-cover', 'access-control-expose-headers'].forEach(h => {
+                            const v = fallbackRes.headers.get(h);
+                            if (v) headers[h] = v;
+                        });
+                        return new NextResponse(fallbackRes.body, { status: 200, headers });
+                    }
+                }
+            } catch (fallbackErr: any) {
+                console.error("[Deezer] YouTube fallback also failed:", fallbackErr.message);
+            }
+        }
+
         return NextResponse.json(
             { error: error.message || "Failed to process Deezer download" },
             { status: 500 }
