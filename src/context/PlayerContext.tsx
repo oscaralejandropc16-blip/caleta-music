@@ -191,6 +191,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Reproducir cancion desde localforage o streaming directo
     useEffect(() => {
         if (currentTrack && audioRef.current) {
+            // Detener el track anterior inmediatamente al cambiar de canción
+            audioRef.current.pause();
+            setIsPlaying(false);
+
             // Actualizar ref y resetear retry FLAG cuando cambia el track
             currentTrackRef.current = currentTrack;
             hasRetriedRef.current = false;
@@ -198,6 +202,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             let srcUrl = currentTrack.streamUrl || "";
             let blobUrl: string | null = null;
             let cancelled = false;
+            const abortController = new AbortController();
 
             if (currentTrack.blob) {
                 blobUrl = URL.createObjectURL(currentTrack.blob);
@@ -217,8 +222,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 // Para URLs de API locales o blobs, asignar directamente (reproducción instantánea).
                 if ((url.includes('/api/deezer') || url.includes('/api/download')) && !url.startsWith('blob:')) {
                     setIsLoading(true);
+                    const timeoutId = setTimeout(() => !cancelled && abortController.abort(), 90000);
                     try {
-                        const res = await fetch(url, { signal: AbortSignal.timeout(90000) });
+                        const res = await fetch(url, { signal: abortController.signal });
+                        clearTimeout(timeoutId);
                         if (cancelled) return;
                         if (!res.ok) throw new Error(`API returned ${res.status}`);
 
@@ -314,6 +321,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
             return () => {
                 cancelled = true;
+                abortController.abort(); // Cancelar red para no agotar el limite de conexiones
                 if (blobUrl) URL.revokeObjectURL(blobUrl);
             };
         }
@@ -370,8 +378,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const seekTo = (time: number) => {
         if (audioRef.current) {
+            const wasPlaying = !audioRef.current.paused;
             audioRef.current.currentTime = time;
             setProgress(time);
+
+            // Si la canción estaba sonando pero al mover el progreso se pega/pausa,
+            // forzamos la reproducción en la nueva posición.
+            if (wasPlaying) {
+                audioRef.current.play().catch(e => console.warn("Seek play error:", e));
+            }
         }
     };
 

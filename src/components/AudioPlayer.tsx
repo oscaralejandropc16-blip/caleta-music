@@ -211,7 +211,8 @@ export default function AudioPlayer() {
                                 onClick={(e) => {
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     const pos = (e.clientX - rect.left) / rect.width;
-                                    seekTo(pos * duration);
+                                    const newTime = pos * duration;
+                                    seekTo(newTime);
                                 }}
                             >
                                 <div
