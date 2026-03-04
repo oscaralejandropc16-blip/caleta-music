@@ -14,12 +14,101 @@ const PIPED_INSTANCES = [
     "https://pipedapi.kavin.rocks",
     "https://pipedapi.adminforge.de",
     "https://pipedapi.in.projectsegfault.com",
+    "https://pipedapi.leptons.xyz",
+    "https://pipedapi.r4fo.com",
+    "https://pipedapi.phoenixthrush.com",
 ];
+
+// ============== INVIDIOUS API (Fallback YouTube Proxy) ==============
+const INVIDIOUS_INSTANCES = [
+    "https://inv.tux.pizza",
+    "https://invidious.nerdvpn.de",
+    "https://invidious.jing.rocks",
+    "https://iv.datura.network",
+    "https://invidious.privacyredirect.com",
+];
+
+/**
+ * Usa Invidious API como fallback para buscar y resolver audio de YouTube.
+ */
+async function resolveAudioUrlWithInvidious(query: string): Promise<{
+    audioUrl: string;
+    contentType: string;
+    title: string;
+    artist: string;
+    coverUrl: string;
+}> {
+    let lastError = "";
+
+    for (const instance of INVIDIOUS_INSTANCES) {
+        try {
+            console.log(`[Invidious] Trying: ${instance} for "${query}"`);
+
+            // 1. Buscar
+            const searchRes = await fetch(
+                `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance`,
+                { signal: AbortSignal.timeout(10000) }
+            );
+
+            if (!searchRes.ok) continue;
+
+            const items = await searchRes.json();
+            if (!Array.isArray(items) || items.length === 0) continue;
+
+            const video = items[0];
+            const videoId = video.videoId;
+            if (!videoId) continue;
+
+            console.log(`[Invidious] Found: "${video.title}" (${videoId})`);
+
+            // 2. Obtener detalles del video con streams
+            const videoRes = await fetch(
+                `${instance}/api/v1/videos/${videoId}`,
+                { signal: AbortSignal.timeout(10000) }
+            );
+
+            if (!videoRes.ok) continue;
+
+            const videoData = await videoRes.json();
+            const adaptiveFormats = videoData.adaptiveFormats || [];
+
+            // Filtrar solo streams de audio
+            const audioStreams = adaptiveFormats.filter((f: any) =>
+                f.type?.startsWith("audio/") && f.url
+            );
+
+            if (audioStreams.length === 0) continue;
+
+            // Elegir el mejor (mayor bitrate)
+            const best = [...audioStreams]
+                .sort((a: any, b: any) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0))[0];
+
+            if (!best || !best.url) continue;
+
+            console.log(`[Invidious] Audio URL resolved: ${best.type} @ ${best.bitrate}bps`);
+
+            return {
+                audioUrl: best.url,
+                contentType: best.type?.split(";")[0] || "audio/mp4",
+                title: videoData.title || "Enlace Descargado",
+                artist: videoData.author || "Desconocido",
+                coverUrl: videoData.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            };
+        } catch (err: any) {
+            lastError = err.message;
+            console.error(`[Invidious] ${instance} error:`, err.message);
+            continue;
+        }
+    }
+
+    throw new Error(`All Invidious instances failed: ${lastError}`);
+}
 
 /**
  * Usa Piped API para buscar un video y resolver la URL directa de audio.
  * Solo devuelve la URL, no descarga el audio completo.
  * Esto es RÁPIDO (~2-4 seg) y no tiene problemas de timeout en Vercel.
+ * Si Piped falla, usa Invidious como fallback.
  */
 async function resolveAudioUrlWithPiped(query: string): Promise<{
     audioUrl: string;
@@ -105,11 +194,17 @@ async function resolveAudioUrlWithPiped(query: string): Promise<{
         }
     }
 
-    throw new Error(`All Piped instances failed: ${lastError}`);
+    // ===== FALLBACK: Invidious =====
+    console.log("[Piped] All instances failed, trying Invidious fallback...");
+    try {
+        return await resolveAudioUrlWithInvidious(query);
+    } catch (invErr: any) {
+        throw new Error(`All Piped and Invidious instances failed. Piped: ${lastError}. Invidious: ${invErr.message}`);
+    }
 }
 
 /**
- * Resuelve la URL de audio de un video específico usando Piped.
+ * Resuelve la URL de audio de un video específico usando Piped + Invidious fallback.
  */
 async function resolveVideoAudioUrl(videoId: string): Promise<{
     audioUrl: string;
@@ -118,6 +213,7 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
     artist: string;
     coverUrl: string;
 }> {
+    // Intentar Piped primero
     for (const instance of PIPED_INSTANCES) {
         try {
             const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(8000) });
@@ -141,7 +237,34 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
             };
         } catch { continue; }
     }
-    throw new Error("Failed to resolve audio URL");
+
+    // Fallback: Invidious
+    for (const instance of INVIDIOUS_INSTANCES) {
+        try {
+            const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(10000) });
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            const audioStreams = (data.adaptiveFormats || []).filter((f: any) =>
+                f.type?.startsWith("audio/") && f.url
+            );
+            if (audioStreams.length === 0) continue;
+
+            const best = [...audioStreams]
+                .sort((a: any, b: any) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0))[0];
+            if (!best || !best.url) continue;
+
+            return {
+                audioUrl: best.url,
+                contentType: best.type?.split(";")[0] || "audio/mp4",
+                title: data.title || "Enlace Descargado",
+                artist: data.author || "Desconocido",
+                coverUrl: data.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            };
+        } catch { continue; }
+    }
+
+    throw new Error("Failed to resolve audio URL from Piped and Invidious");
 }
 
 // ============== YT-DLP (LOCAL/WINDOWS) ==============
