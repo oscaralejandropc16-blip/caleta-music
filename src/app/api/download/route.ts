@@ -339,7 +339,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // ======= LOCAL: usar yt-dlp.exe =======
-        if (fs.existsSync(YT_DLP_PATH)) {
+        if (fs.existsSync(YT_DLP_PATH) && os.platform() === "win32") {
             if (!directUrl && title && artist) {
                 // Buscar con yt-dlp y descargar con yt-dlp
                 const query = `${artist} - ${title}`;
