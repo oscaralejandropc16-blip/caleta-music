@@ -262,25 +262,38 @@ export default function Home() {
     setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(trackId); else next.delete(trackId); return next; });
   };
 
-  const handlePlay = (e: React.MouseEvent, track: ItunesTrack) => {
+  const handlePlay = (e: React.MouseEvent, track: ItunesTrack, contextTracks?: ItunesTrack[]) => {
     e.stopPropagation();
-    const strId = track.trackId.toString();
 
-    // Si la pista vino de nuestra API de Deezer, usar el ID. Si no, fallback a titulo/artista en deezer
-    const downloadUrl = (track as any)._source === 'deezer'
-      ? `/api/deezer?id=${track.trackId}`
-      : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+    const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
+      ? `/api/deezer?id=${t.trackId}`
+      : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+
+    let queueTracks: any[] | undefined;
+
+    if (contextTracks && contextTracks.length > 0) {
+      queueTracks = contextTracks.map(t => ({
+        id: `stream-${t.trackId}`,
+        title: t.trackName,
+        artist: t.artistName,
+        album: t.collectionName || "",
+        coverUrl: t.artworkUrl100?.replace("100x100", "500x500") || "",
+        streamUrl: downloadUrl(t),
+        previewUrl: t.previewUrl || "",
+        downloadedAt: Date.now()
+      }));
+    }
 
     playTrack({
-      id: `stream-${strId}`,
+      id: `stream-${track.trackId}`,
       title: track.trackName,
       artist: track.artistName,
       album: track.collectionName || "",
       coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
-      streamUrl: downloadUrl,
+      streamUrl: downloadUrl(track),
       previewUrl: track.previewUrl || "",
       downloadedAt: Date.now(),
-    });
+    }, queueTracks);
   };
 
   const handleGenreClick = async (genre: typeof GENRES[0]) => {
@@ -330,13 +343,13 @@ export default function Home() {
         <>
           {/* 🔥 TENDENCIAS */}
           <HorizontalScroller title="Tendencias" icon={<TrendingUp size={22} className="text-orange-400" />}>
-            {trending.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+            {trending.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, trending)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
           </HorizontalScroller>
 
           {/* 🌟 NUEVOS LANZAMIENTOS */}
           {newReleases.length > 0 && (
             <HorizontalScroller title="Nuevos Lanzamientos" icon={<Sparkles size={22} className="text-yellow-400" />}>
-              {newReleases.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+              {newReleases.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, newReleases)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
             </HorizontalScroller>
           )}
 
@@ -365,7 +378,7 @@ export default function Home() {
                   </div>
                 ) : genreTracks.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, genreTracks)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
                   </div>
                 ) : (
                   <p className="text-slate-500 text-center py-8">No se encontraron resultados.</p>
@@ -401,7 +414,7 @@ export default function Home() {
               <Music2 size={22} className="text-brand-400" />Recomendado para ti
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {recommendations.map((track) => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={handlePlay} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+              {recommendations.map((track) => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
             </div>
           </section>
         </>

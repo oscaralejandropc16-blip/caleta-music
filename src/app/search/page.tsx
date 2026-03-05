@@ -62,9 +62,20 @@ export default function SearchPage() {
     const { playTrack } = usePlayer();
 
     const handlePlay = (track: ItunesTrack) => {
-        const downloadUrl = (track as any)._source === 'deezer'
-            ? `/api/deezer?id=${track.trackId}`
-            : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+        const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
+            ? `/api/deezer?id=${t.trackId}`
+            : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+
+        const queueTracks = results.map(t => ({
+            id: `stream-${t.trackId}`,
+            title: t.trackName,
+            artist: t.artistName,
+            album: t.collectionName || "",
+            coverUrl: t.artworkUrl100?.replace("100x100", "500x500") || "",
+            streamUrl: downloadUrl(t),
+            previewUrl: t.previewUrl || "",
+            downloadedAt: Date.now()
+        }));
 
         playTrack({
             id: `stream-${track.trackId}`,
@@ -72,10 +83,10 @@ export default function SearchPage() {
             artist: track.artistName,
             album: track.collectionName || "",
             coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
-            streamUrl: downloadUrl,
+            streamUrl: downloadUrl(track),
             previewUrl: track.previewUrl || "",
             downloadedAt: Date.now(),
-        });
+        }, queueTracks);
     };
 
     const handleDownload = (track: ItunesTrack | null, url: string | null, id: string) => {

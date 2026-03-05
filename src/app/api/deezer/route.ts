@@ -132,7 +132,9 @@ async function resolveYouTubeAudio(query: string): Promise<{
             );
             if (!searchRes.ok) continue;
 
-            const items = await searchRes.json();
+            const text = await searchRes.text();
+            let items;
+            try { items = JSON.parse(text); } catch { continue; }
             if (!Array.isArray(items) || items.length === 0) continue;
 
             const video = items[0];
@@ -145,7 +147,9 @@ async function resolveYouTubeAudio(query: string): Promise<{
             );
             if (!videoRes.ok) continue;
 
-            const videoData = await videoRes.json();
+            const videoText = await videoRes.text();
+            let videoData;
+            try { videoData = JSON.parse(videoText); } catch { continue; }
             const audioStreams = (videoData.adaptiveFormats || []).filter((f: any) =>
                 f.type?.startsWith("audio/") && f.url
             );
