@@ -17,6 +17,8 @@ const PIPED_INSTANCES = [
     "https://pipedapi.leptons.xyz",
     "https://pipedapi.r4fo.com",
     "https://pipedapi.phoenixthrush.com",
+    "https://pipedapi.drgns.space",
+    "https://api.piped.projectsegfault.com"
 ];
 
 // ============== INVIDIOUS API (Fallback YouTube Proxy) ==============
@@ -26,6 +28,9 @@ const INVIDIOUS_INSTANCES = [
     "https://invidious.jing.rocks",
     "https://iv.datura.network",
     "https://invidious.privacyredirect.com",
+    "https://invidious.lunar.icu",
+    "https://inv.nadeko.net",
+    "https://invidious.protokolla.fi"
 ];
 
 /**

@@ -44,6 +44,9 @@ const PIPED_INSTANCES = [
     "https://pipedapi.in.projectsegfault.com",
     "https://pipedapi.leptons.xyz",
     "https://pipedapi.r4fo.com",
+    "https://pipedapi.phoenixthrush.com",
+    "https://pipedapi.drgns.space",
+    "https://api.piped.projectsegfault.com"
 ];
 
 const INVIDIOUS_INSTANCES = [
@@ -52,6 +55,9 @@ const INVIDIOUS_INSTANCES = [
     "https://invidious.jing.rocks",
     "https://iv.datura.network",
     "https://invidious.privacyredirect.com",
+    "https://invidious.lunar.icu",
+    "https://inv.nadeko.net",
+    "https://invidious.protokolla.fi"
 ];
 
 async function resolveYouTubeAudio(query: string): Promise<{
@@ -320,17 +326,37 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "No track ID or title/artist provided" }, { status: 400 });
     }
 
+    let finalTitle = title;
+    let finalArtist = artist;
+
     // ===== 1. Intentar Deezer =====
     try {
-        return await streamFromDeezer(request, trackId, title, artist);
+        return await streamFromDeezer(request, trackId, finalTitle, finalArtist);
     } catch (deezerErr: any) {
         console.error("[Deezer] Failed:", deezerErr.message);
         isDeezerInitialized = false;
+
+        // Si falló Deezer y no tenemos title/artist, lo buscamos en API pública
+        if (trackId && (!finalTitle || !finalArtist)) {
+            try {
+                const dzRes = await fetch(`https://api.deezer.com/track/${trackId}`);
+                if (dzRes.ok) {
+                    const dzData = await dzRes.json();
+                    if (dzData.title && dzData.artist?.name) {
+                        finalTitle = dzData.title;
+                        finalArtist = dzData.artist.name;
+                        console.log(`[Deezer] Public API got fallback info: ${finalArtist} - ${finalTitle}`);
+                    }
+                }
+            } catch (e) {
+                console.error("[Deezer] Public API fetch failed:", e);
+            }
+        }
     }
 
     // ===== 2. Fallback: YouTube (Piped/Invidious) =====
-    if (title && artist) {
-        const query = `${artist} - ${title}`;
+    if (finalTitle && finalArtist) {
+        const query = `${finalArtist} - ${finalTitle}`;
         console.log(`[Deezer→YT] Falling back to YouTube for: ${query}`);
         try {
             const result = await resolveYouTubeAudio(query);
