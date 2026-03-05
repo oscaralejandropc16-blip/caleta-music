@@ -59,7 +59,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreated }: Crea
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -67,9 +67,9 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreated }: Crea
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg mx-4 bg-slate-900 border border-slate-700/50 rounded-3xl shadow-2xl overflow-hidden animate-modal-in">
+            <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/50 rounded-3xl shadow-2xl animate-modal-in flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
+                <div className="flex-shrink-0 flex items-center justify-between px-6 py-5 border-b border-slate-800">
                     <h2 className="text-xl font-bold text-white">Crear Playlist</h2>
                     <button
                         onClick={onClose}
@@ -80,7 +80,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreated }: Crea
                 </div>
 
                 {/* Body */}
-                <div className="px-6 py-6 space-y-6">
+                <div className="px-6 py-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
                     {/* Cover Selection */}
                     <div className="flex flex-col items-center gap-4">
                         <div className="text-sm font-medium text-slate-400 w-full">Portada</div>
@@ -166,7 +166,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreated }: Crea
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-slate-800">
+                <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-5 border-t border-slate-800">
                     <button
                         onClick={onClose}
                         className="px-6 py-2.5 rounded-full text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
