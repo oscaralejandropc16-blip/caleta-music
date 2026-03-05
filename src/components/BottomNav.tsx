@@ -20,7 +20,10 @@ export default function BottomNav() {
     };
 
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0a0f1e]/90 backdrop-blur-xl border-t border-white/[0.08] z-50 flex items-center justify-around px-2 pb-safe light-mode:bg-white/90">
+        <nav
+            className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0a0f1e]/90 backdrop-blur-xl border-t border-white/[0.08] z-50 flex items-center justify-around px-2 light-mode:bg-white/90"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 6px)', height: 'calc(64px + env(safe-area-inset-bottom, 6px))' }}
+        >
             {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);

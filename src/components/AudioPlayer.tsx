@@ -67,7 +67,19 @@ export default function AudioPlayer() {
 
     return (
         <>
-            <div className="fixed bottom-[4.5rem] md:bottom-0 left-2 right-2 md:left-0 md:right-0 h-[60px] md:h-[90px] bg-[#1e1e24] md:bg-[#121216] rounded-xl md:rounded-none border border-white/5 md:border-t md:border-white/[0.05] z-50 flex flex-col md:flex-row shadow-2xl transition-all duration-300 overflow-hidden">
+            <style jsx>{`
+                .mini-player-pos {
+                    bottom: calc(64px + env(safe-area-inset-bottom, 6px) + 8px);
+                }
+                @media (min-width: 768px) {
+                    .mini-player-pos {
+                        bottom: 0 !important;
+                    }
+                }
+            `}</style>
+            <div
+                className="mini-player-pos fixed left-2 right-2 md:left-0 md:right-0 h-[60px] md:h-[90px] bg-[#1e1e24] md:bg-[#121216] rounded-xl md:rounded-none border border-white/5 md:border-t md:border-white/[0.05] z-50 flex flex-col md:flex-row shadow-2xl transition-all duration-300 overflow-hidden"
+            >
 
                 {/* MOBILE PROGRESS BAR (Line at the very bottom) */}
                 <div className="w-full h-[2px] bg-white/10 md:hidden absolute bottom-0 left-0">

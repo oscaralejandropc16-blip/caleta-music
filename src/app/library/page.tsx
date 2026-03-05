@@ -28,7 +28,7 @@ import {
     toggleLike,
 } from "@/lib/db";
 import { downloadAndSaveTrack } from "@/lib/download";
-import { getUserLibrary } from "@/lib/syncLibrary";
+import { getUserLibrary, removeSongFromLibrary } from "@/lib/syncLibrary";
 import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
@@ -138,6 +138,8 @@ function LibraryContent() {
     const confirmDelete = async () => {
         if (deleteConfirmId) {
             await removeTrackFromDB(deleteConfirmId);
+            // Also remove from cloud so it doesn't re-sync back
+            removeSongFromLibrary(deleteConfirmId).catch(() => { });
             loadLibrary();
             setDeleteConfirmId(null);
         }
