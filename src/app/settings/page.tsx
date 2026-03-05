@@ -5,6 +5,7 @@ import { ArrowLeft, Moon, Bell, Shield, Smartphone, HardDrive, AlertCircle } fro
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
+import { clearEntireLibrary } from "@/lib/syncLibrary";
 
 export default function SettingsPage() {
     const { signOut } = useAuth();
@@ -36,7 +37,9 @@ export default function SettingsPage() {
             dbs.forEach(db => {
                 if (db.name) window.indexedDB.deleteDatabase(db.name);
             });
-            toast.success("Descargas locales eliminadas");
+            // También borrar la biblioteca de la nube para que no reaparezcan
+            await clearEntireLibrary();
+            toast.success("Biblioteca limpiada correctamente");
             setTimeout(() => {
                 window.location.reload();
             }, 1500);

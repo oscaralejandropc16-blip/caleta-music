@@ -89,3 +89,17 @@ export async function removeSongFromLibrary(songId: string) {
         // Ignore
     }
 }
+
+export async function clearEntireLibrary() {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+
+        await supabase
+            .from('user_library')
+            .delete()
+            .eq('user_id', session.user.id);
+    } catch {
+        // Ignore
+    }
+}

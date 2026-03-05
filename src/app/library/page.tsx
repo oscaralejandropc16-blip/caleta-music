@@ -47,7 +47,9 @@ function LibraryContent() {
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [query, setQuery] = useState("");
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-    const [activeTab, setActiveTab] = useState<"all" | "likes" | "playlists">("all");
+    const [activeTab, setActiveTab] = useState<"all" | "likes" | "playlists">(
+        tab === "likes" ? "likes" : tab === "playlists" ? "playlists" : "all"
+    );
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [contextMenuTrackId, setContextMenuTrackId] = useState<string | null>(null);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });

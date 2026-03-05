@@ -160,7 +160,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onWaiting = () => setIsLoading(true);
         const onPlaying = () => setIsLoading(false);
         const onCanPlay = () => setIsLoading(false);
-        const onLoadStart = () => setIsLoading(true);
+        const onLoadStart = () => {
+            // Don't show loading for local blobs — they play instantly
+            if (audio.src?.startsWith('blob:')) return;
+            setIsLoading(true);
+        };
         const onError = () => {
             const errCode = audioRef.current?.error?.code;
             const track = currentTrackRef.current;
@@ -422,14 +426,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const playTrack = (track: SavedTrack, newQueue?: SavedTrack[]) => {
-        isReadyToPlayRef.current = true; // Activar reproducción si es accion del usuaro
-        setCurrentTrack(track);
+    const playTrack = async (track: SavedTrack, newQueue?: SavedTrack[]) => {
+        isReadyToPlayRef.current = true; // Activar reproducción si es accion del usuario
+
+        // Si el track no tiene blob, intentar recuperarlo de IndexedDB para reproducción instantánea
+        let resolvedTrack = track;
+        if (!track.blob && track.id) {
+            try {
+                const { getTrackFromDB } = await import("@/lib/db");
+                const localTrack = await getTrackFromDB(track.id);
+                if (localTrack?.blob) {
+                    resolvedTrack = { ...track, blob: localTrack.blob };
+                }
+            } catch {
+                // Si falla, seguimos con el track original (streaming)
+            }
+        }
+
+        setCurrentTrack(resolvedTrack);
         if (newQueue) {
             setQueue(newQueue);
-            const index = newQueue.findIndex(t => t.id === track.id);
+            const index = newQueue.findIndex(t => t.id === resolvedTrack.id);
             setCurrentIndex(index !== -1 ? index : 0);
         }
+    };
+
+    // Helper: resolve a local blob from IndexedDB for instant playback
+    const resolveLocalBlob = async (track: SavedTrack): Promise<SavedTrack> => {
+        if (track.blob) return track;
+        try {
+            const { getTrackFromDB } = await import("@/lib/db");
+            const localTrack = await getTrackFromDB(track.id);
+            if (localTrack?.blob) return { ...track, blob: localTrack.blob };
+        } catch { /* fallback to streaming */ }
+        return track;
     };
 
     const playNext = (autoAdvance = false) => {
@@ -468,18 +498,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 nextIndex = Math.floor(Math.random() * queue.length);
             }
             setCurrentIndex(nextIndex);
-            setCurrentTrack(queue[nextIndex]);
+            resolveLocalBlob(queue[nextIndex]).then(setCurrentTrack);
         } else {
             // Flujo Normal secuencial
             if (currentIndex < queue.length - 1) {
                 const nextIndex = currentIndex + 1;
                 setCurrentIndex(nextIndex);
-                setCurrentTrack(queue[nextIndex]);
+                resolveLocalBlob(queue[nextIndex]).then(setCurrentTrack);
             } else {
                 // Fin de la cola
                 if (repeatMode === 'all' || !autoAdvance) {
                     setCurrentIndex(0);
-                    setCurrentTrack(queue[0]);
+                    resolveLocalBlob(queue[0]).then(setCurrentTrack);
                 } else {
                     setIsPlaying(false);
                 }
@@ -511,17 +541,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 prevIndex = Math.floor(Math.random() * queue.length);
             }
             setCurrentIndex(prevIndex);
-            setCurrentTrack(queue[prevIndex]);
+            resolveLocalBlob(queue[prevIndex]).then(setCurrentTrack);
         } else {
             if (currentIndex > 0) {
                 const prevIndex = currentIndex - 1;
                 setCurrentIndex(prevIndex);
-                setCurrentTrack(queue[prevIndex]);
+                resolveLocalBlob(queue[prevIndex]).then(setCurrentTrack);
             } else {
                 // Ir a la última de la cola
                 const lastIndex = queue.length - 1;
                 setCurrentIndex(lastIndex);
-                setCurrentTrack(queue[lastIndex]);
+                resolveLocalBlob(queue[lastIndex]).then(setCurrentTrack);
             }
         }
     };
