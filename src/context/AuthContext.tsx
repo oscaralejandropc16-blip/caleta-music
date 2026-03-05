@@ -158,12 +158,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signOut = async () => {
-        try {
-            await supabase.auth.signOut();
-        } catch (e) { console.error("Signout API error", e); }
+        // Clear state immediately
+        setUser(null);
+        setProfile(null);
+        setSession(null);
 
         try {
-            // Forcefully clear supabase tokens from localstorage just in case
+            // Forcefully clear supabase tokens from localstorage
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
                     localStorage.removeItem(key);
@@ -171,9 +172,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
         } catch (e) { }
 
-        setUser(null);
-        setProfile(null);
-        setSession(null);
+        try {
+            // Fire and forget — don't wait if it hangs
+            const signOutPromise = supabase.auth.signOut();
+            const timeout = new Promise((_, reject) => setTimeout(() => reject('timeout'), 3000));
+            await Promise.race([signOutPromise, timeout]);
+        } catch (e) {
+            console.warn("Signout API error or timeout:", e);
+        }
     };
 
     const updateProfile = async (updates: Partial<UserProfile>) => {
