@@ -1,53 +1,41 @@
 import { supabase } from '@/lib/supabase';
 import { saveTrackToDB, SavedTrack } from '@/lib/db';
 
-export interface CloudTrack {
-    song_id: string;
-    title: string;
-    artist: string;
-    cover_url: string;
-    source_audio_url: string;
-    added_at: string;
-}
-
 /**
- * Agrega una canción a la nube (Supabase) y opcionalmente descarga el blob al almacenamiento local.
+ * Agrega una canción a la nube (Supabase) y al almacenamiento local.
  */
 export async function addSongToLibrary(
     trackData: Omit<SavedTrack, "blob" | "downloadedAt">,
     sourceUrl: string,
     blob?: Blob
 ) {
-    // 1. Revisar si hay usuario autenticado (skip si Supabase no está configurado)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (supabaseUrl) {
-        // Ejecutar en background para no bloquear la UI si la base de datos de Supabase está en pausa (free tier) o la red está lenta.
-        (async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const userId = session?.user?.id;
+    // 1. Sync to cloud in background
+    (async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const userId = session?.user?.id;
+            if (!userId) return;
 
-                if (userId) {
-                    const { error } = await supabase.from('user_library').upsert({
-                        user_id: userId,
-                        song_id: trackData.id,
-                        title: trackData.title,
-                        artist: trackData.artist,
-                        cover_url: trackData.coverUrl || '',
-                        source_audio_url: sourceUrl || ''
-                    }, { onConflict: 'user_id,song_id' });
+            const { error } = await supabase.from('user_library').upsert({
+                user_id: userId,
+                track_id: trackData.id,
+                title: trackData.title,
+                artist: trackData.artist,
+                album: trackData.album || '',
+                cover_url: trackData.coverUrl || '',
+                stream_url: trackData.streamUrl || sourceUrl || '',
+                preview_url: trackData.previewUrl || '',
+                liked: false,
+                downloaded_at: Date.now(),
+            }, { onConflict: 'user_id,track_id' });
 
-                    if (error) {
-                        console.warn('Error syncing track to cloud (non-critical):', error.message);
-                    }
-                }
-            } catch {
-                // Ignore background errors
-            }
-        })();
-    }
+            if (error) console.warn('[Sync] Cloud save error:', error.message);
+        } catch {
+            // Ignore background errors
+        }
+    })();
 
-    // 3. Guardar el archivo pesado en IndexedDB (localforage)
+    // 2. Save blob to IndexedDB locally
     if (blob) {
         await saveTrackToDB({
             ...trackData,
@@ -57,22 +45,32 @@ export async function addSongToLibrary(
     }
 }
 
-export async function getUserLibrary(): Promise<CloudTrack[]> {
+export async function getUserLibrary(): Promise<SavedTrack[]> {
     try {
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return [];
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return [];
 
         const { data, error } = await supabase
             .from('user_library')
             .select('*')
-            .order('added_at', { ascending: false });
+            .eq('user_id', session.user.id)
+            .order('downloaded_at', { ascending: false });
 
         if (error) {
-            console.warn('Error fetching user library (non-critical):', error.message);
+            console.warn('[Sync] Fetch library error:', error.message);
             return [];
         }
-        return data || [];
+
+        return (data || []).map((row: any) => ({
+            id: row.track_id,
+            title: row.title,
+            artist: row.artist,
+            album: row.album || '',
+            coverUrl: row.cover_url || '',
+            streamUrl: row.stream_url || '',
+            previewUrl: row.preview_url || '',
+            downloadedAt: row.downloaded_at,
+        }));
     } catch {
         return [];
     }
@@ -80,15 +78,14 @@ export async function getUserLibrary(): Promise<CloudTrack[]> {
 
 export async function removeSongFromLibrary(songId: string) {
     try {
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return;
 
         await supabase
             .from('user_library')
             .delete()
-            .match({ user_id: session.user.id, song_id: songId });
+            .match({ user_id: session.user.id, track_id: songId });
     } catch {
-        // Supabase not available
+        // Ignore
     }
 }

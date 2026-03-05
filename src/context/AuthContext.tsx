@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { fullSync } from "@/lib/syncService";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface UserProfile {
@@ -78,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(s?.user ?? null);
                 if (s?.user) {
                     await loadProfile(s.user.id, s.user.user_metadata);
+                    // Sync library from cloud
+                    fullSync(s.user.id).catch(e => console.warn("[Sync] initial sync error:", e));
                 }
             } catch (err) {
                 console.error("Auth init error:", err);
@@ -95,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(s?.user ?? null);
                 if (s?.user) {
                     await loadProfile(s.user.id, s.user.user_metadata);
+                    // Sync library on auth change (login)
+                    fullSync(s.user.id).catch(e => console.warn("[Sync] auth change sync error:", e));
                 } else {
                     setProfile(null);
                 }

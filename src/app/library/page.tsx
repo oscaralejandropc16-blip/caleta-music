@@ -28,7 +28,7 @@ import {
     toggleLike,
 } from "@/lib/db";
 import { downloadAndSaveTrack } from "@/lib/download";
-import { getUserLibrary, CloudTrack } from "@/lib/syncLibrary";
+import { getUserLibrary } from "@/lib/syncLibrary";
 import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
@@ -42,7 +42,7 @@ function LibraryContent() {
     const playlistIdParam = searchParams.get("playlist");
 
     const [tracks, setTracks] = useState<SavedTrack[]>([]);
-    const [cloudTracks, setCloudTracks] = useState<CloudTrack[]>([]);
+    const [cloudTracks, setCloudTracks] = useState<SavedTrack[]>([]);
     const [downloadingCloudIds, setDownloadingCloudIds] = useState<Set<string>>(new Set());
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [query, setQuery] = useState("");
@@ -106,8 +106,6 @@ function LibraryContent() {
     type UnifiedTrack = SavedTrack & { isCloudOnly?: boolean, sourceAudioUrl?: string };
 
     const handlePlay = (track: UnifiedTrack) => {
-        if (track.isCloudOnly) return; // Prevent playing directly if we just want to download first
-
         const list = activeTab === "likes" ? likedTracks : filteredTracks;
         playTrack(track, list as SavedTrack[]);
     };
@@ -191,16 +189,11 @@ function LibraryContent() {
         const localTrackIds = new Set(tracks.map(t => t.id));
 
         cloudTracks.forEach(ct => {
-            if (!localTrackIds.has(ct.song_id)) {
+            if (!localTrackIds.has(ct.id)) {
                 mergedTracks.push({
-                    id: ct.song_id,
-                    title: ct.title,
-                    artist: ct.artist,
-                    album: "", // cloud track doesn't store album explicitly currently
-                    coverUrl: ct.cover_url,
-                    downloadedAt: new Date(ct.added_at).getTime(),
+                    ...ct,
                     isCloudOnly: true,
-                    sourceAudioUrl: ct.source_audio_url
+                    sourceAudioUrl: ct.streamUrl || ct.previewUrl || ''
                 });
             }
         });
