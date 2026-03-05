@@ -28,7 +28,8 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-RUN npm run build
+# Ejecutar next build directamente (sin cross-env/openssl-legacy-provider de Windows)
+RUN npx next build
 
 # ── Runner ──
 FROM base AS runner
