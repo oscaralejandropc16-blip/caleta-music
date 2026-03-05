@@ -2,6 +2,7 @@
 
 import React from "react";
 import { usePlayer } from "@/context/PlayerContext";
+import { useAuth } from "@/context/AuthContext";
 import { X, TabletSmartphone, Laptop, MonitorSpeaker, Wifi, Cast } from "lucide-react";
 
 export default function DevicesPanel() {
@@ -9,6 +10,10 @@ export default function DevicesPanel() {
         isDevicesVisible,
         toggleDevices
     } = usePlayer();
+
+    const { user } = useAuth();
+    const userName = user?.user_metadata?.username || user?.user_metadata?.name || 'Usuario';
+    const phoneName = `Teléfono de ${userName.split(' ')[0]}`;
 
     return (
         <div className={`fixed top-0 right-0 bottom-[60px] md:bottom-[90px] w-full md:w-[400px] bg-[#121216] border-l border-white/5 z-40 flex flex-col shadow-2xl transition-transform duration-300 transform ${isDevicesVisible ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -34,7 +39,7 @@ export default function DevicesPanel() {
                                 <Laptop size={24} />
                             </div>
                             <div className="flex flex-col flex-1 min-w-0">
-                                <span className="text-white font-bold truncate">Navegador Web</span>
+                                <span className="text-white font-bold truncate">Navegador Actual</span>
                                 <span className="text-brand-400 text-sm truncate flex items-center gap-1 mt-0.5">
                                     <Wifi size={14} /> Reproduciendo
                                 </span>
@@ -53,8 +58,8 @@ export default function DevicesPanel() {
                                     <TabletSmartphone size={24} />
                                 </div>
                                 <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="text-white font-bold truncate">iPhone de Oscar</span>
-                                    <span className="text-neutral-500 text-sm truncate">Aplicación de Caleta Music</span>
+                                    <span className="text-white font-bold truncate">{phoneName}</span>
+                                    <span className="text-neutral-500 text-sm truncate">Caleta App</span>
                                 </div>
                             </button>
 

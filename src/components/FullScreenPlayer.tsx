@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { usePlayer } from "@/context/PlayerContext";
-import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Loader, Mic2, ListMusic, MonitorSpeaker } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Mic2, ListMusic, MonitorSpeaker } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import { useRouter } from "next/navigation";
+import EqLoader from "./EqLoader";
 
 interface FullScreenPlayerProps {
     isOpen: boolean;
@@ -258,7 +259,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                             aria-label={isPlaying ? "Pausar" : "Reproducir"}
                             className="w-[72px] h-[72px] md:w-24 md:h-24 bg-brand-500 hover:bg-brand-400 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(99,102,241,0.5)] border flex-shrink-0 border-brand-500/30 disabled:opacity-80 disabled:hover:scale-100 disabled:active:scale-100"
                         >
-                            {isLoading ? <Loader className="w-8 h-8 md:w-10 md:h-10 animate-spin" /> : (isPlaying ? <Pause className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" /> : <Play className="w-8 h-8 md:w-10 md:h-10 ml-2" fill="currentColor" />)}
+                            {isLoading ? <EqLoader size={28} /> : (isPlaying ? <Pause className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" /> : <Play className="w-8 h-8 md:w-10 md:h-10 ml-2" fill="currentColor" />)}
                         </button>
 
                         <button

@@ -7,6 +7,7 @@ import { isTrackLiked, toggleLike } from "@/lib/db";
 import toast from "react-hot-toast";
 import FullScreenPlayer from "./FullScreenPlayer";
 import { useRouter } from "next/navigation";
+import EqLoader from "./EqLoader";
 
 export default function AudioPlayer() {
     const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, audioRef, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices, isLyricsVisible, toggleLyrics } = usePlayer();
@@ -90,8 +91,8 @@ export default function AudioPlayer() {
                 <div className="flex md:hidden w-full h-full items-center justify-between px-3" onClick={() => setIsFullScreen(true)}>
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
                         {/* Play/Pause Button on Left */}
-                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-2 -ml-1 text-white outline-none active:scale-90">
-                            {isLoading ? <Loader size={20} className="animate-spin" /> : (isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />)}
+                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-2 -ml-1 text-white outline-none active:scale-90 flex items-center justify-center">
+                            {isLoading ? <EqLoader size={18} /> : (isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />)}
                         </button>
 
                         <div className="flex flex-col min-w-0 flex-1 justify-center ml-1">
@@ -195,7 +196,7 @@ export default function AudioPlayer() {
                                 aria-label={isPlaying ? "Pausar" : "Reproducir"}
                                 className="h-10 w-10 bg-brand-500 hover:bg-brand-400 text-white rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 outline-none disabled:opacity-80 disabled:hover:bg-brand-500"
                             >
-                                {isLoading ? <Loader size={20} className="animate-spin" /> : (isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />)}
+                                {isLoading ? <EqLoader size={16} /> : (isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />)}
                             </button>
 
                             <button
