@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import fs from "fs";
+import os from "os";
+import { execFile } from "child_process";
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const md5 = (data: string) => crypto.createHash('md5').update(data).digest('hex');
+
+// Detectar yt-dlp nativo (Railway Linux o Windows local)
+const YT_DLP_PATH = os.platform() === "win32"
+    ? require("path").join(process.cwd(), "yt-dlp.exe")
+    : "/usr/local/bin/yt-dlp";
+const HAS_YT_DLP = fs.existsSync(YT_DLP_PATH);
 
 const getBlowfishKey = (trackId: string) => {
     const SECRET = 'g4el58wc' + '0zvf9na1';
@@ -358,10 +367,42 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // ===== 2. Fallback: YouTube (Piped/Invidious) =====
+    // ===== 2. Fallback: YouTube =====
     if (finalTitle && finalArtist) {
         const query = `${finalArtist} - ${finalTitle}`;
         console.log(`[Deezer→YT] Falling back to YouTube for: ${query}`);
+
+        // 2a. yt-dlp nativo (Railway) — rapidísimo ~2-3s
+        if (HAS_YT_DLP) {
+            try {
+                console.log(`[yt-dlp] Resolving audio URL natively...`);
+                const ytDlpResult = await new Promise<{ audioUrl: string; title: string; artist: string; videoId: string }>((resolve, reject) => {
+                    execFile(YT_DLP_PATH, [
+                        "--encoding", "utf8", "--no-playlist", "-f", "ba",
+                        "--no-warnings", "--no-download",
+                        "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
+                        `ytsearch1:${query}`
+                    ], { timeout: 15000 }, (err, stdout) => {
+                        if (err) { reject(err); return; }
+                        const lines = stdout.trim().split("\n").map(l => l.trim());
+                        if (lines.length < 4 || !lines[0].startsWith("http")) { reject(new Error("no valid output")); return; }
+                        resolve({ audioUrl: lines[0], title: lines[1], artist: lines[2], videoId: lines[3] });
+                    });
+                });
+
+                console.log(`[yt-dlp] Resolved: "${ytDlpResult.title}" in ~2s`);
+                return NextResponse.json({
+                    audioUrl: ytDlpResult.audioUrl,
+                    title: ytDlpResult.title || query,
+                    artist: ytDlpResult.artist || finalArtist,
+                    coverUrl: `https://i.ytimg.com/vi/${ytDlpResult.videoId}/hqdefault.jpg`,
+                });
+            } catch (ytDlpErr: any) {
+                console.warn(`[yt-dlp] Failed:`, ytDlpErr.message);
+            }
+        }
+
+        // 2b. Piped/Invidious (Vercel o si yt-dlp falló)
         try {
             const result = await resolveYouTubeAudio(query);
             if (result) {
