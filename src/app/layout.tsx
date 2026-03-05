@@ -16,6 +16,15 @@ export const metadata: Metadata = {
   title: "Caleta Music",
   description: "Caleta Music – La caleta que suena en todos lados",
   manifest: "/manifest.json",
+  appleWebApp: {
+    title: "Caleta Music",
+    statusBarStyle: "black-translucent",
+    capable: true,
+  },
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 export const viewport: Viewport = {
