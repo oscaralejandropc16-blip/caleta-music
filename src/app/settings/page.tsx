@@ -36,10 +36,10 @@ export default function SettingsPage() {
             dbs.forEach(db => {
                 if (db.name) window.indexedDB.deleteDatabase(db.name);
             });
-            localStorage.clear();
-            sessionStorage.clear();
-            await signOut();
-            window.location.href = "/";
+            toast.success("Descargas locales eliminadas");
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } catch (err) {
             console.error(err);
             toast.error("Error al borrar datos locales");
@@ -151,12 +151,12 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer text-red-400" onClick={() => setShowClearConfirm(true)}>
+                        <div className="flex items-center justify-between p-3 hover:bg-brand-500/10 rounded-xl transition-colors cursor-pointer text-brand-400" onClick={() => setShowClearConfirm(true)}>
                             <div className="flex items-center gap-4">
-                                <div className="p-2 bg-red-500/20 rounded-lg"><AlertCircle size={18} /></div>
+                                <div className="p-2 bg-brand-500/20 rounded-lg"><AlertCircle size={18} /></div>
                                 <div>
-                                    <p className="font-semibold">{clearing ? "Borrando..." : "Borrar todos los datos locales"}</p>
-                                    <p className="text-xs opacity-70">Elimina canciones descargadas y cierra sesión</p>
+                                    <p className="font-semibold">{clearing ? "Liberando espacio..." : "Liberar espacio de almacenamiento"}</p>
+                                    <p className="text-xs opacity-70">Elimina las descargas locales (mantendrás tus canciones en la nube)</p>
                                 </div>
                             </div>
                         </div>
@@ -173,9 +173,9 @@ export default function SettingsPage() {
                             <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-red-500/20">
                                 <AlertCircle size={32} />
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2">¿Borrar todos los datos?</h3>
+                            <h3 className="text-xl font-bold text-white mb-2">¿Liberar espacio?</h3>
                             <p className="text-sm text-slate-400 mb-8">
-                                Estás a punto de eliminar toda la música descargada y cerrar tu sesión. Esta acción no se puede deshacer.
+                                Las canciones volverán a la nube. Podrás volver a descargarlas o reproducirlas por streaming desde Tu Biblioteca en cualquier momento.
                             </p>
                             <div className="flex flex-col gap-3">
                                 <button
