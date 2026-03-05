@@ -348,124 +348,123 @@ export default function AlbumDetailModal({
                             </div>
                         )}
                     </div>
-                </div>
 
-                {/* Track list */}
-                <div className="px-2 py-2">
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center py-16 gap-3">
-                            <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-slate-400 text-sm">Buscando canciones del álbum...</p>
-                        </div>
-                    ) : itunesTracks.length === 0 ? (
-                        <div className="text-center py-16">
-                            <Disc3 size={48} className="mx-auto text-slate-600 mb-4" />
-                            <p className="text-slate-400 font-medium">No se encontraron canciones de este álbum</p>
-                            <p className="text-slate-500 text-sm mt-1">Intenta buscar el álbum manualmente</p>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-1.5 pb-6">
-                            {itunesTracks.map((track, idx) => {
-                                const strId = track.trackId.toString();
-                                const isDownloaded = savedTrackIds.has(strId);
-                                const isDownloading = downloadingId === strId || (downloadingAll && !savedTrackIds.has(strId));
-                                const isLiked = likedMap[strId] || false;
-                                const isCurrent = currentTrack?.id === `stream-${strId}` || currentTrack?.id === strId;
-                                const progress = downloadProgresses[strId] || 0;
+                    {/* Track list */}
+                    <div className="px-2 py-2">
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-16 gap-3">
+                                <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-slate-400 text-sm">Buscando canciones del álbum...</p>
+                            </div>
+                        ) : itunesTracks.length === 0 ? (
+                            <div className="text-center py-16">
+                                <Disc3 size={48} className="mx-auto text-slate-600 mb-4" />
+                                <p className="text-slate-400 font-medium">No se encontraron canciones de este álbum</p>
+                                <p className="text-slate-500 text-sm mt-1">Intenta buscar el álbum manualmente</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-1.5 pb-6">
+                                {itunesTracks.map((track, idx) => {
+                                    const strId = track.trackId.toString();
+                                    const isDownloaded = savedTrackIds.has(strId);
+                                    const isDownloading = downloadingId === strId || (downloadingAll && !savedTrackIds.has(strId));
+                                    const isLiked = likedMap[strId] || false;
+                                    const isCurrent = currentTrack?.id === `stream-${strId}` || currentTrack?.id === strId;
+                                    const progress = downloadProgresses[strId] || 0;
 
-                                return (
-                                    <div
-                                        key={track.trackId}
-                                        onClick={() => handlePlayTrack(track)}
-                                        className={`group flex items-center gap-4 px-4 py-3 mx-2 rounded-2xl cursor-pointer transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${isCurrent
-                                            ? "bg-brand-500/10 shadow-[0_4px_20px_-5px_rgba(99,102,241,0.2)]"
-                                            : "hover:bg-white/[0.06] hover:shadow-md"
-                                            }`}
-                                    >
-                                        <div className="w-8 text-center flex-shrink-0 relative">
-                                            {isCurrent && isLoading ? (
-                                                <div className="w-full flex justify-center">
-                                                    <Loader size={16} className="text-brand-400 animate-spin" strokeWidth={2.5} />
-                                                </div>
-                                            ) : isCurrent && isPlaying ? (
-                                                <div className="w-full flex justify-center">
-                                                    <Music size={16} className="text-brand-500 animate-[bounce_1s_infinite]" strokeWidth={2.5} />
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <span className={`text-[13px] font-bold group-hover:opacity-0 transition-opacity ${isCurrent ? "text-brand-400" : "text-slate-500"}`}>
-                                                        {track.trackNumber || idx + 1}
-                                                    </span>
-                                                    <Play size={14} fill="currentColor" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                </>
-                                            )}
-                                        </div>
-
-                                        <div className="relative w-11 h-11 flex-shrink-0">
-                                            <img
-                                                src={track.artworkUrl100}
-                                                alt=""
-                                                className={`w-full h-full rounded-[10px] object-cover shadow-[0_4px_10px_rgba(0,0,0,0.3)] transition-all duration-300 ${isCurrent ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-[#060913]" : "group-hover:scale-105"}`}
-                                            />
-                                        </div>
-
-                                        <div className="flex-1 min-w-0 pr-4">
-                                            <p className={`text-[15px] font-bold truncate transition-colors drop-shadow-sm ${isCurrent ? "text-brand-400" : "text-white group-hover:text-brand-200"}`}>
-                                                {track.trackName}
-                                            </p>
-                                            <p className="text-[13px] font-medium text-slate-400 truncate mt-0.5">{track.artistName}</p>
-                                        </div>
-
-                                        <span className="text-xs font-medium text-slate-500 flex-shrink-0 hidden sm:block mr-2">
-                                            {track.trackTimeMillis ? formatDuration(track.trackTimeMillis) : ""}
-                                        </span>
-
-                                        {isDownloaded && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleToggleLike(e, strId); }}
-                                                className={`p-2.5 rounded-full transition-all duration-300 flex-shrink-0 active:scale-90 focus-visible:ring-4 focus-visible:ring-pink-500/40 outline-none ${isLiked
-                                                    ? "text-pink-500 bg-pink-500/10 hover:bg-pink-500/20"
-                                                    : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                                                    }`}
-                                                aria-label={isLiked ? "Quitar me gusta" : "Me gusta"}
-                                            >
-                                                <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
-                                            </button>
-                                        )}
-
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); if (!isDownloaded && !isDownloading) handleDownload(track); }}
-                                            disabled={isDownloading || isDownloaded}
-                                            className={`p-2.5 rounded-full transition-all duration-300 active:scale-90 flex-shrink-0 ml-1 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 relative ${isDownloaded
-                                                ? "text-green-500 opacity-60 cursor-default"
-                                                : isDownloading
-                                                    ? "text-brand-400"
-                                                    : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 cursor-pointer"
+                                    return (
+                                        <div
+                                            key={track.trackId}
+                                            onClick={() => handlePlayTrack(track)}
+                                            className={`group flex items-center gap-4 px-4 py-3 mx-2 rounded-2xl cursor-pointer transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${isCurrent
+                                                ? "bg-brand-500/10 shadow-[0_4px_20px_-5px_rgba(99,102,241,0.2)]"
+                                                : "hover:bg-white/[0.06] hover:shadow-md"
                                                 }`}
-                                            title={isDownloaded ? "Ya descargado" : "Descargar"}
                                         >
-                                            {isDownloading ? (
-                                                <div className="relative w-5 h-5 flex items-center justify-center">
-                                                    <svg className="w-[30px] h-[30px] -rotate-90 transform absolute" viewBox="0 0 36 36" style={{ top: -5, left: -5 }}>
-                                                        <path className="text-white/20 stroke-current" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                                        <path className="text-white stroke-current transition-all duration-300" strokeWidth="3" strokeDasharray={`${progress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                                    </svg>
-                                                    <span className="text-[7px] font-bold text-white leading-none">{progress > 0 ? `${progress}` : <div className="w-3 h-3 border-[1.5px] border-white/40 border-t-white rounded-full animate-spin" />}</span>
-                                                </div>
-                                            ) : isDownloaded ? (
-                                                <Check size={18} strokeWidth={2.5} />
-                                            ) : (
-                                                <Download size={18} />
+                                            <div className="w-8 text-center flex-shrink-0 relative">
+                                                {isCurrent && isLoading ? (
+                                                    <div className="w-full flex justify-center">
+                                                        <Loader size={16} className="text-brand-400 animate-spin" strokeWidth={2.5} />
+                                                    </div>
+                                                ) : isCurrent && isPlaying ? (
+                                                    <div className="w-full flex justify-center">
+                                                        <Music size={16} className="text-brand-500 animate-[bounce_1s_infinite]" strokeWidth={2.5} />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <span className={`text-[13px] font-bold group-hover:opacity-0 transition-opacity ${isCurrent ? "text-brand-400" : "text-slate-500"}`}>
+                                                            {track.trackNumber || idx + 1}
+                                                        </span>
+                                                        <Play size={14} fill="currentColor" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </>
+                                                )}
+                                            </div>
+
+                                            <div className="relative w-11 h-11 flex-shrink-0">
+                                                <img
+                                                    src={track.artworkUrl100}
+                                                    alt=""
+                                                    className={`w-full h-full rounded-[10px] object-cover shadow-[0_4px_10px_rgba(0,0,0,0.3)] transition-all duration-300 ${isCurrent ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-[#060913]" : "group-hover:scale-105"}`}
+                                                />
+                                            </div>
+
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <p className={`text-[15px] font-bold truncate transition-colors drop-shadow-sm ${isCurrent ? "text-brand-400" : "text-white group-hover:text-brand-200"}`}>
+                                                    {track.trackName}
+                                                </p>
+                                                <p className="text-[13px] font-medium text-slate-400 truncate mt-0.5">{track.artistName}</p>
+                                            </div>
+
+                                            <span className="text-xs font-medium text-slate-500 flex-shrink-0 hidden sm:block mr-2">
+                                                {track.trackTimeMillis ? formatDuration(track.trackTimeMillis) : ""}
+                                            </span>
+
+                                            {isDownloaded && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleToggleLike(e, strId); }}
+                                                    className={`p-2.5 rounded-full transition-all duration-300 flex-shrink-0 active:scale-90 focus-visible:ring-4 focus-visible:ring-pink-500/40 outline-none ${isLiked
+                                                        ? "text-pink-500 bg-pink-500/10 hover:bg-pink-500/20"
+                                                        : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                                                        }`}
+                                                    aria-label={isLiked ? "Quitar me gusta" : "Me gusta"}
+                                                >
+                                                    <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
+                                                </button>
                                             )}
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div> {/* end scrollable content */}
-        </div>
+
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); if (!isDownloaded && !isDownloading) handleDownload(track); }}
+                                                disabled={isDownloading || isDownloaded}
+                                                className={`p-2.5 rounded-full transition-all duration-300 active:scale-90 flex-shrink-0 ml-1 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 relative ${isDownloaded
+                                                    ? "text-green-500 opacity-60 cursor-default"
+                                                    : isDownloading
+                                                        ? "text-brand-400"
+                                                        : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 cursor-pointer"
+                                                    }`}
+                                                title={isDownloaded ? "Ya descargado" : "Descargar"}
+                                            >
+                                                {isDownloading ? (
+                                                    <div className="relative w-5 h-5 flex items-center justify-center">
+                                                        <svg className="w-[30px] h-[30px] -rotate-90 transform absolute" viewBox="0 0 36 36" style={{ top: -5, left: -5 }}>
+                                                            <path className="text-white/20 stroke-current" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                            <path className="text-white stroke-current transition-all duration-300" strokeWidth="3" strokeDasharray={`${progress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                                        </svg>
+                                                        <span className="text-[7px] font-bold text-white leading-none">{progress > 0 ? `${progress}` : <div className="w-3 h-3 border-[1.5px] border-white/40 border-t-white rounded-full animate-spin" />}</span>
+                                                    </div>
+                                                ) : isDownloaded ? (
+                                                    <Check size={18} strokeWidth={2.5} />
+                                                ) : (
+                                                    <Download size={18} />
+                                                )}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div> {/* end scrollable content */}
+            </div>
         </div>
     );
 }
