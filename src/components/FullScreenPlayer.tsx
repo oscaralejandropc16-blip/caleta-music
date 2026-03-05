@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePlayer } from "@/context/PlayerContext";
-import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Loader } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Loader, Mic2, ListMusic, MonitorSpeaker } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import { useRouter } from "next/navigation";
 
@@ -12,7 +12,7 @@ interface FullScreenPlayerProps {
 }
 
 export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerProps) {
-    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex } = usePlayer();
+    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isLyricsVisible, toggleLyrics, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices } = usePlayer();
     const router = useRouter();
     const [liked, setLiked] = useState(false);
     const [isClient, setIsClient] = useState(false);
@@ -181,8 +181,8 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                     </div>
 
                     {/* Primary Controls */}
-                    <div className="w-full flex items-center justify-between mb-4 md:mb-8 max-w-[360px]">
-                        <button className="text-white/40 hover:text-white transition-colors p-2 md:p-3 active:scale-90" aria-label="Aleatorio">
+                    <div className="w-full flex items-center justify-between mb-6 md:mb-8 max-w-[360px]">
+                        <button onClick={toggleShuffle} className={`transition-colors p-2 md:p-3 active:scale-90 ${isShuffle ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Aleatorio">
                             <Shuffle size={24} />
                         </button>
 
@@ -206,23 +206,30 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
 
                         <button
                             onClick={playNext}
-                            disabled={!hasNext}
+                            disabled={!hasNext && repeatMode === 'none' && !isShuffle}
                             aria-label="Siguiente"
-                            className={`text-white transition-all p-2 md:p-3 hover:scale-110 active:scale-90 ${!hasNext && 'opacity-30 cursor-not-allowed'}`}
+                            className={`text-white transition-all p-2 md:p-3 hover:scale-110 active:scale-90 ${(!hasNext && repeatMode === 'none' && !isShuffle) && 'opacity-30 cursor-not-allowed'}`}
                         >
                             <SkipForward className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" />
                         </button>
 
-                        <button className="text-white/40 hover:text-white transition-colors p-2 md:p-3 active:scale-90" aria-label="Repetir">
+                        <button onClick={toggleRepeat} className={`relative transition-colors p-2 md:p-3 active:scale-90 ${repeatMode !== 'none' ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Repetir">
                             <Repeat size={24} />
+                            {repeatMode === 'one' && <span className="absolute text-[10px] font-bold -top-0 -right-0 bg-black rounded-full w-[16px] h-[16px] flex items-center justify-center text-white">1</span>}
                         </button>
                     </div>
 
                     {/* Secondary Actions / Footer */}
-                    <div className="w-full mt-6 flex justify-center pb-2 md:pb-0 hidden sm:flex">
-                        <p className="text-[10px] md:text-[12px] font-bold text-white/30 tracking-widest uppercase">
-                            Caleta Music Audio
-                        </p>
+                    <div className="w-full flex justify-between items-center max-w-[360px] pb-4 md:pb-0 px-2 mt-2">
+                        <button onClick={() => { onClose(); toggleLyrics(); }} className={`transition-colors p-2 active:scale-90 ${isLyricsVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Letras">
+                            <Mic2 size={22} />
+                        </button>
+                        <button onClick={() => { onClose(); toggleDevices(); }} className={`transition-colors p-2 active:scale-90 ${isDevicesVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Dispositivos">
+                            <MonitorSpeaker size={22} />
+                        </button>
+                        <button onClick={() => { onClose(); toggleQueue(); }} className={`transition-colors p-2 active:scale-90 ${isQueueVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Cola de reproducción">
+                            <ListMusic size={22} />
+                        </button>
                     </div>
 
                 </div> {/* End Bottom Controls Bundle */}
