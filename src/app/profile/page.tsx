@@ -175,24 +175,25 @@ export default function ProfilePage() {
                             </button>
                         </div>
                     </div>
-
-                    {/* Danger Zone */}
-                    <div className="mt-12 pt-8 border-t border-red-500/10 mb-4">
-                        <h3 className="text-lg font-bold text-red-500 mb-2 flex items-center gap-2">
-                            Zona de Peligro
-                        </h3>
-                        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
-                            Una vez que elimines tu cuenta, no hay vuelta atrás. Esto borrará permanentemente toda tu información, canciones guardadas, preferencias y listas de reproducción de nuestros servidores.
-                        </p>
-                        <button
-                            onClick={() => setShowDeleteConfirm(true)}
-                            className="px-6 py-3 rounded-xl font-bold text-sm bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 active:scale-95 transition-all w-full sm:w-auto"
-                        >
-                            Eliminar mi cuenta permanentemente
-                        </button>
-                    </div>
-
                 </div>
+            </div>
+
+            {/* Danger Zone Card */}
+            <div className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border border-red-500/20 bg-red-500/5 mt-8">
+                <div className="flex-1">
+                    <h3 className="text-xl font-bold text-red-500 mb-2 flex items-center gap-2">
+                        Zona de Peligro
+                    </h3>
+                    <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
+                        Una vez que elimines tu cuenta, no hay vuelta atrás. Esto borrará permanentemente toda tu información y preferencias de nuestros servidores.
+                    </p>
+                </div>
+                <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-6 py-3.5 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white shadow-[0_4px_15px_rgba(239,68,68,0.3)] active:scale-95 transition-all w-full sm:w-auto outline-none focus-visible:ring-4 focus-visible:ring-red-500/50 whitespace-nowrap"
+                >
+                    Eliminar cuenta
+                </button>
             </div>
 
             {/* Modal de confirmacion de eliminacion */}
