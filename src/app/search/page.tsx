@@ -46,7 +46,6 @@ export default function SearchPage() {
     const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
     const [searchError, setSearchError] = useState(false);
     const [viewMode, setViewMode] = useState<"songs" | "albums">("songs");
-    const [showLinkInput, setShowLinkInput] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     const [albumModal, setAlbumModal] = useState<{
@@ -117,11 +116,8 @@ export default function SearchPage() {
         setLinkDownloading(true);
         setActiveLinkId(directId);
 
-        // Si usan el main input, asegurarnos que la input de link este visible y con el testo para feedback
-        if (!showLinkInput) {
-            setShowLinkInput(true);
-            setLinkInput(url);
-        }
+        // Limpiar la barra de busqueda principal para que no se quede con el link largo
+        setQuery("");
 
         const result = await downloadAndSaveTrack(null, url, directId, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
@@ -130,19 +126,11 @@ export default function SearchPage() {
         if (result.success) {
             setSavedTrackIds((prev) => new Set(prev).add(directId));
             toast.success("¡Descarga completada y guardada!");
-            setLinkInput("");
-            if (query === url) setQuery("");
         } else {
             toast.error(`Error: ${result.error || "Verifica el enlace"}`);
         }
         setLinkDownloading(false);
         setActiveLinkId(null);
-    };
-
-    const handleLinkDownload = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!linkInput.trim()) return;
-        executeLinkDownload(linkInput.trim());
     };
 
     const doSearch = useCallback(async (term: string) => {
@@ -268,52 +256,7 @@ export default function SearchPage() {
                     </div>
                 </form>
 
-                {/* Link download toggle + input */}
-                <div className="flex items-center gap-3 mb-4">
-                    <button
-                        onClick={() => {
-                            setShowLinkInput(!showLinkInput);
-                            if (!showLinkInput) {
-                                setTimeout(() => document.getElementById('youtube-link-input')?.focus(), 100);
-                            }
-                        }}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${showLinkInput
-                            ? "bg-brand-500/10 border border-brand-500/20 text-brand-400"
-                            : "bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.08]"
-                            }`}
-                    >
-                        <Link2 size={16} />
-                        Pegar enlace de YouTube
-                    </button>
-                </div>
 
-                {showLinkInput && (
-                    <form onSubmit={handleLinkDownload} className="relative flex items-center animate-fade-in-up mb-4">
-                        <div className="absolute left-5 text-slate-500 z-10">
-                            <Link2 size={18} />
-                        </div>
-                        <input
-                            id="youtube-link-input"
-                            type="text"
-                            value={linkInput}
-                            onChange={(e) => setLinkInput(e.target.value)}
-                            disabled={linkDownloading}
-                            placeholder="https://youtube.com/watch?v=..."
-                            className="w-full bg-[#0c1225]/60 backdrop-blur-md border border-white/[0.06] rounded-xl py-4 pl-14 pr-44 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/30 focus:border-slate-500/30 transition-all text-sm disabled:opacity-50 font-medium light-mode:bg-white/60 light-mode:text-slate-900"
-                        />
-                        <button
-                            type="submit"
-                            disabled={linkDownloading || !linkInput.trim()}
-                            className="absolute right-2 bg-slate-700/80 hover:bg-slate-600 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:active:scale-100 outline-none focus-visible:ring-4 focus-visible:ring-slate-400/50 text-white"
-                        >
-                            {linkDownloading ? (
-                                <><Loader size={16} className="animate-spin" /> Descargando...</>
-                            ) : (
-                                <><Download size={16} /> Descargar</>
-                            )}
-                        </button>
-                    </form>
-                )}
 
                 {linkDownloading && activeLinkId && (
                     <div className="mb-4 animate-fade-in-up">
@@ -375,19 +318,8 @@ export default function SearchPage() {
                         No encontramos nada para <span className="text-brand-400 font-bold">&quot;{searchTerm}&quot;</span>
                     </p>
                     <p className="text-slate-500 text-sm text-center max-w-md mb-6">
-                        Intenta con otro nombre de canción, artista o álbum. Si la música es muy nueva o poco común, ¡usa el enlace directo de YouTube!
+                        Intenta con otro nombre de canción, artista o álbum. Si la música es muy nueva o poco común, ¡pega el enlace directo de YouTube en la barra de búsqueda de arriba!
                     </p>
-                    <button
-                        onClick={() => {
-                            setShowLinkInput(true);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                            setTimeout(() => document.getElementById('youtube-link-input')?.focus(), 500);
-                        }}
-                        className="mb-8 flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold transition-all duration-300 active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:shadow-[0_6px_25px_rgba(99,102,241,0.5)] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
-                    >
-                        <Link2 size={18} />
-                        Descargar desde YouTube
-                    </button>
                     <div className="text-center">
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3">Prueba buscando</p>
                         <div className="flex flex-wrap justify-center gap-2">

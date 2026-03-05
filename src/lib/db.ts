@@ -197,3 +197,13 @@ export async function removeTrackFromPlaylist(playlistId: string, trackId: strin
         await updatePlaylist(playlist);
     }
 }
+
+export async function clearAllLocalData(): Promise<void> {
+    try {
+        await tracksStore.clear();
+        await likesStore.clear();
+        await playlistsStore.clear();
+    } catch (e) {
+        console.error("Failed to clear local DBs:", e);
+    }
+}

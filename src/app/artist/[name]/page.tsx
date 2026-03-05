@@ -50,19 +50,23 @@ export default function ArtistProfile() {
                 dbTracks.forEach(t => localMap.set(t.id, t));
                 setLocalTracksMap(localMap);
 
+                const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['"“”‘’]/g, "").trim();
+                const normArtistName = normalize(artistName);
+
                 // Fetch top songs from iTunes
                 let results: ItunesTrack[] = [];
                 try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&limit=50`);
+                    // search using normalized name without quotes to avoid iTunes exact-match failures
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(normArtistName)}&entity=song&limit=50`);
                     const data = await res.json();
                     results = data.results || [];
                 } catch (e) { console.error("iTunes fetch failed"); }
 
                 // Filter only tracks where artist matches roughly
-                const iTunesArtistTracks = results.filter(t => t.artistName.toLowerCase().includes(artistName.toLowerCase()));
+                const iTunesArtistTracks = results.filter(t => normalize(t.artistName).includes(normArtistName) || normArtistName.includes(normalize(t.artistName)));
 
                 const localArtistTracks = dbTracks.filter((t) =>
-                    t.artist.toLowerCase().includes(artistName.toLowerCase())
+                    normalize(t.artist).includes(normArtistName) || normArtistName.includes(normalize(t.artist))
                 ).map(t => ({
                     trackId: t.id as unknown as number,
                     artistName: t.artist,

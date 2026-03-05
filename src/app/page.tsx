@@ -65,7 +65,7 @@ function TrackCard({
   const isDownloaded = savedTrackIds.has(strId);
   const isDownloading = downloadingId === strId;
   const isLiked = likedIds.has(strId);
-  const w = size === "large" ? "min-w-[140px] md:min-w-[200px] w-[140px] md:w-[200px]" : "";
+  const w = size === "large" ? "min-w-[160px] md:min-w-[220px] w-[160px] md:w-[220px]" : "";
 
   return (
     <div className={`${w} flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group card-glow flex flex-col`}>
@@ -142,8 +142,8 @@ function HorizontalScroller({ children, title, icon }: { children: React.ReactNo
   };
 
   return (
-    <section className="mb-12 animate-fade-in-up">
-      <div className="flex items-center justify-between mb-6">
+    <section className="mb-14 animate-fade-in-up">
+      <div className="flex items-center justify-between mb-5 px-1 md:px-0">
         <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2 md:gap-3">
           {icon}{title}
         </h2>
@@ -223,8 +223,18 @@ export default function Home() {
       try {
         if (!favoriteArtists) return; // Wait until favorite artists are loaded from onboarding
 
+        // Get unique artists from user's liked or downloaded tracks for better dynamic recommendations
+        const dbTracks = await getAllTracksFromDB();
+        const userArtists = Array.from(new Set(dbTracks.map(t => t.artist))).filter(a => a);
+
+        let recTerm = favoriteArtists[0] || 'top hits 2025';
+        if (userArtists.length > 0) {
+          // Pick a random artist from user's library
+          recTerm = userArtists[Math.floor(Math.random() * userArtists.length)];
+        }
+
         const [recRes, trendRes, newRes] = await Promise.all([
-          fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[0] || 'top hits 2025')}`),
+          fetch(`/api/search?term=${encodeURIComponent(recTerm)}`),
           fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[1] || TRENDING_TERMS[Math.floor(Math.random() * TRENDING_TERMS.length)])}`),
           fetch(`/api/search?term=${encodeURIComponent(favoriteArtists[2] || 'new music releases')}`)
         ]);
@@ -233,8 +243,8 @@ export default function Home() {
           recRes.json(), trendRes.json(), newRes.json()
         ]);
 
-        setRecommendations(recData.results?.slice(0, 12) || []);
-        setTrending(trendData.results?.slice(0, 12) || []);
+        setRecommendations(recData.results?.slice(0, 15) || []);
+        setTrending(trendData.results?.slice(0, 15) || []);
         setNewReleases(newData.results?.slice(0, 15) || []);
       } catch (error) { console.error("Error fetching data", error); }
       finally { setLoading(false); }
@@ -341,6 +351,12 @@ export default function Home() {
         </div>
       ) : (
         <>
+          {recommendations.length > 0 && (
+            <HorizontalScroller title="Recomendado para ti" icon={<Sparkles size={22} className="text-purple-400" />}>
+              {recommendations.map((track) => <TrackCard key={`rec-${track.trackId}`} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+            </HorizontalScroller>
+          )}
+
           {/* 🔥 TENDENCIAS */}
           <HorizontalScroller title="Tendencias" icon={<TrendingUp size={22} className="text-orange-400" />}>
             {trending.map((track) => <TrackCard key={track.trackId} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, trending)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}

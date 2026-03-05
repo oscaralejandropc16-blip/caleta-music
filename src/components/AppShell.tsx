@@ -8,23 +8,14 @@ import QueuePanel from "@/components/QueuePanel";
 import DevicesPanel from "@/components/DevicesPanel";
 import LyricsPanel from "@/components/LyricsPanel";
 import AuthPage from "@/app/auth/page";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
 
     // Loading screen
     if (loading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-[#0a0f1e]">
-                <div className="flex flex-col items-center gap-4 animate-fade-in-up">
-                    <div className="w-16 h-16 relative">
-                        <div className="absolute inset-0 border-4 border-brand-500/30 rounded-full"></div>
-                        <div className="absolute inset-0 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                    <p className="text-slate-400 font-medium">Cargando Caleta Music...</p>
-                </div>
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     // Not logged in — show auth
