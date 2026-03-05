@@ -65,7 +65,7 @@ function TrackCard({
   const isDownloaded = savedTrackIds.has(strId);
   const isDownloading = downloadingId === strId;
   const isLiked = likedIds.has(strId);
-  const w = size === "large" ? "min-w-[140px] md:min-w-[200px] w-[140px] md:w-[200px]" : "min-w-[130px] md:min-w-[170px] w-[130px] md:w-[170px]";
+  const w = size === "large" ? "min-w-[140px] md:min-w-[200px] w-[140px] md:w-[200px]" : "";
 
   return (
     <div className={`${w} flex-shrink-0 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group card-glow flex flex-col`}>
@@ -377,7 +377,7 @@ export default function Home() {
                     <div className="w-8 h-8 border-3 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : genreTracks.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
                     {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, genreTracks)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
                   </div>
                 ) : (
@@ -413,7 +413,7 @@ export default function Home() {
             <h2 className="text-xl md:text-2xl font-bold mb-6 text-white tracking-tight flex items-center gap-2 md:gap-3">
               <Music2 size={22} className="text-brand-400" />Recomendado para ti
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
               {recommendations.map((track) => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => setAlbumModal({ open: true, album, artist, cover })} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
             </div>
           </section>
