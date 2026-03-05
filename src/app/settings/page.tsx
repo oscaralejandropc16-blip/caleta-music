@@ -29,7 +29,7 @@ export default function SettingsPage() {
     }, []);
 
     const handleClearStorage = async () => {
-        setShowClearConfirm(false);
+        if (clearing) return; // Prevent double click
 
         setClearing(true);
         try {
@@ -40,6 +40,7 @@ export default function SettingsPage() {
             // También borrar la biblioteca de la nube para que no reaparezcan
             await clearEntireLibrary();
             toast.success("Biblioteca limpiada correctamente");
+            setShowClearConfirm(false);
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
@@ -154,7 +155,7 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 hover:bg-brand-500/10 rounded-xl transition-colors cursor-pointer text-brand-400" onClick={() => setShowClearConfirm(true)}>
+                        <div className={`flex items-center justify-between p-3 rounded-xl transition-colors ${clearing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-500/10 cursor-pointer'} text-brand-400`} onClick={() => !clearing && setShowClearConfirm(true)}>
                             <div className="flex items-center gap-4">
                                 <div className="p-2 bg-brand-500/20 rounded-lg"><AlertCircle size={18} /></div>
                                 <div>

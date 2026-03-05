@@ -215,137 +215,143 @@ export default function AlbumDetailModal({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4">
             <div className="absolute inset-0 bg-[#060913]/80 backdrop-blur-3xl transition-opacity animate-fade-in" onClick={onClose} />
 
-            <div className="relative z-10 w-full h-full md:h-auto max-w-3xl md:max-h-[85vh] bg-[#060913]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.5)] md:rounded-[2rem] flex flex-col overflow-hidden animate-slideIn">
-                {/* Header */}
-                <div className="relative">
-                    <div
-                        className="absolute inset-0 opacity-50 blur-[50px] scale-125 transform-gpu saturate-150"
-                        style={{
-                            backgroundImage: `url(${largeCover})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                        }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#060913]/40 via-[#060913]/80 to-[#060913]" />
+            <div className="relative z-10 w-full h-full md:h-auto max-w-3xl md:max-h-[90vh] bg-[#060913]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.5)] md:rounded-[2rem] flex flex-col overflow-hidden animate-slideIn">
+                {/* Close button - fixed position */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onClose(); }}
+                    aria-label="Cerrar modal"
+                    className="absolute top-5 right-5 z-30 p-2.5 rounded-full bg-white/5 hover:bg-white/15 backdrop-blur-md border border-white/10 text-white/70 hover:text-white transition-all duration-300 shadow-lg hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                >
+                    <X size={20} strokeWidth={2.5} />
+                </button>
 
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onClose(); }}
-                        aria-label="Cerrar modal"
-                        className="absolute top-5 right-5 z-20 p-2.5 rounded-full bg-white/5 hover:bg-white/15 backdrop-blur-md border border-white/10 text-white/70 hover:text-white transition-all duration-300 shadow-lg hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-                    >
-                        <X size={20} strokeWidth={2.5} />
-                    </button>
+                {/* Scrollable content: header + tracks */}
+                <div className="flex-1 overflow-y-auto">
+                    {/* Header */}
+                    <div className="relative">
+                        <div
+                            className="absolute inset-0 opacity-50 blur-[50px] scale-125 transform-gpu saturate-150"
+                            style={{
+                                backgroundImage: `url(${largeCover})`,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-[#060913]/40 via-[#060913]/80 to-[#060913]" />
 
-                    <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-6 px-8 pt-10 pb-6">
-                        <div className="w-40 h-40 md:w-48 md:h-48 rounded-[2rem] overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.5)] flex-shrink-0 bg-slate-800 border border-white/[0.08] group relative">
-                            {largeCover ? (
-                                <img src={largeCover} alt={albumName} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
-                            ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center transform transition-transform duration-700 ease-out group-hover:scale-105">
-                                    <Disc3 size={60} className="text-slate-600 drop-shadow-lg" strokeWidth={1} />
-                                </div>
-                            )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                        </div>
-                        <div className="flex-1 min-w-0 pb-2 text-center md:text-left flex flex-col items-center md:items-start">
-                            {/* Type badge */}
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs text-brand-400 font-black uppercase tracking-[0.25em] drop-shadow-sm">
-                                    {isSingle ? "Single" : "Álbum"}
-                                </span>
-                                {albumMeta?.contentAdvisoryRating === "Explicit" && (
-                                    <span className="text-[9px] font-black bg-white/15 backdrop-blur-md text-white px-1.5 py-0.5 rounded-sm border border-white/10 shadow-sm" title="Explicit">E</span>
+
+
+                        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-6 px-8 pt-10 pb-6">
+                            <div className="w-40 h-40 md:w-48 md:h-48 rounded-[2rem] overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.5)] flex-shrink-0 bg-slate-800 border border-white/[0.08] group relative">
+                                {largeCover ? (
+                                    <img src={largeCover} alt={albumName} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center transform transition-transform duration-700 ease-out group-hover:scale-105">
+                                        <Disc3 size={60} className="text-slate-600 drop-shadow-lg" strokeWidth={1} />
+                                    </div>
                                 )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                             </div>
-                            <h2 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 leading-tight mb-2 line-clamp-2 drop-shadow-md pb-1 w-full" title={albumName}>
-                                {albumName || "Álbum desconocido"}
-                            </h2>
-                            <p className="text-slate-300 md:text-xl font-medium drop-shadow-sm hover:text-white transition-colors cursor-default">{artistName}</p>
-
-                            {/* Metadata row */}
-                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-4 text-[12px] font-semibold text-slate-400">
-                                {releaseFullDate && (
-                                    <span className="flex items-center gap-1.5 bg-white/[0.06] px-3 py-1.5 rounded-lg text-white/80 backdrop-blur-sm border border-white/[0.06]">
-                                        <Calendar size={13} className="text-brand-400" />
-                                        {releaseFullDate}
+                            <div className="flex-1 min-w-0 pb-2 text-center md:text-left flex flex-col items-center md:items-start">
+                                {/* Type badge */}
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs text-brand-400 font-black uppercase tracking-[0.25em] drop-shadow-sm">
+                                        {isSingle ? "Single" : "Álbum"}
                                     </span>
-                                )}
-                                {albumMeta?.primaryGenreName && (
-                                    <span className="flex items-center gap-1.5 bg-brand-500/10 text-brand-300 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-brand-500/15">
-                                        <Tag size={13} />
-                                        {albumMeta.primaryGenreName}
-                                    </span>
-                                )}
-                                {!loading && (
-                                    <span className="flex items-center gap-1.5 bg-white/[0.04] px-3 py-1.5 rounded-lg border border-white/[0.04]">
-                                        <Music size={13} className="text-slate-500" />
-                                        {itunesTracks.length} canci{itunesTracks.length !== 1 ? "ones" : "ón"}
-                                    </span>
-                                )}
-                                {totalMins > 0 && (
-                                    <span className="flex items-center gap-1.5 bg-white/[0.04] px-3 py-1.5 rounded-lg border border-white/[0.04]">
-                                        <Clock size={13} className="text-slate-500" />
-                                        {totalMins} min
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    {!loading && itunesTracks.length > 0 && (
-                        <div className="relative z-10 px-8 pb-6 flex items-center justify-center md:justify-start gap-4">
-                            {notDownloadedCount > 0 ? (
-                                <button
-                                    onClick={handleDownloadAll}
-                                    disabled={downloadingAll}
-                                    className="bg-brand-500 hover:bg-brand-400 text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_8px_25px_rgba(99,102,241,0.4)] hover:shadow-[0_12px_30px_rgba(99,102,241,0.6)] disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none min-w-[200px] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
-                                >
-                                    {downloadingAll ? (
-                                        <>
-                                            <Loader size={20} className="animate-spin" />
-                                            {downloadProgress}%
-                                        </>
-                                    ) : (
-                                        <>
-                                            <DownloadCloud size={20} strokeWidth={2.5} />
-                                            Descargar Disco
-                                        </>
+                                    {albumMeta?.contentAdvisoryRating === "Explicit" && (
+                                        <span className="text-[9px] font-black bg-white/15 backdrop-blur-md text-white px-1.5 py-0.5 rounded-sm border border-white/10 shadow-sm" title="Explicit">E</span>
                                     )}
-                                </button>
-                            ) : (
-                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 px-6 py-3 rounded-full font-bold flex items-center gap-2 backdrop-blur-md">
-                                    <Check size={20} strokeWidth={2.5} />
-                                    Descargado en tu celular
                                 </div>
-                            )}
-                        </div>
-                    )}
+                                <h2 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 leading-tight mb-2 line-clamp-2 drop-shadow-md pb-1 w-full" title={albumName}>
+                                    {albumName || "Álbum desconocido"}
+                                </h2>
+                                <p className="text-slate-300 md:text-xl font-medium drop-shadow-sm hover:text-white transition-colors cursor-default">{artistName}</p>
 
-                    {/* Download progress bar */}
-                    {downloadingAll && (
-                        <div className="relative z-10 px-6 pb-3">
-                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300"
-                                    style={{ width: `${downloadProgress}%` }}
-                                />
+                                {/* Metadata row */}
+                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-4 text-[12px] font-semibold text-slate-400">
+                                    {releaseFullDate && (
+                                        <span className="flex items-center gap-1.5 bg-white/[0.06] px-3 py-1.5 rounded-lg text-white/80 backdrop-blur-sm border border-white/[0.06]">
+                                            <Calendar size={13} className="text-brand-400" />
+                                            {releaseFullDate}
+                                        </span>
+                                    )}
+                                    {albumMeta?.primaryGenreName && (
+                                        <span className="flex items-center gap-1.5 bg-brand-500/10 text-brand-300 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-brand-500/15">
+                                            <Tag size={13} />
+                                            {albumMeta.primaryGenreName}
+                                        </span>
+                                    )}
+                                    {!loading && (
+                                        <span className="flex items-center gap-1.5 bg-white/[0.04] px-3 py-1.5 rounded-lg border border-white/[0.04]">
+                                            <Music size={13} className="text-slate-500" />
+                                            {itunesTracks.length} canci{itunesTracks.length !== 1 ? "ones" : "ón"}
+                                        </span>
+                                    )}
+                                    {totalMins > 0 && (
+                                        <span className="flex items-center gap-1.5 bg-white/[0.04] px-3 py-1.5 rounded-lg border border-white/[0.04]">
+                                            <Clock size={13} className="text-slate-500" />
+                                            {totalMins} min
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    )}
 
-                    {/* Copyright */}
-                    {albumMeta?.copyright && (
-                        <div className="relative z-10 px-8 pb-4">
-                            <p className="text-[11px] text-slate-500/70 font-medium truncate">
-                                © {albumMeta.copyright}
-                            </p>
-                        </div>
-                    )}
+                        {/* Action buttons */}
+                        {!loading && itunesTracks.length > 0 && (
+                            <div className="relative z-10 px-8 pb-6 flex items-center justify-center md:justify-start gap-4">
+                                {notDownloadedCount > 0 ? (
+                                    <button
+                                        onClick={handleDownloadAll}
+                                        disabled={downloadingAll}
+                                        className="bg-brand-500 hover:bg-brand-400 text-white px-8 py-3.5 rounded-full font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_8px_25px_rgba(99,102,241,0.4)] hover:shadow-[0_12px_30px_rgba(99,102,241,0.6)] disabled:opacity-40 disabled:hover:scale-100 disabled:hover:shadow-none min-w-[200px] outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
+                                    >
+                                        {downloadingAll ? (
+                                            <>
+                                                <Loader size={20} className="animate-spin" />
+                                                {downloadProgress}%
+                                            </>
+                                        ) : (
+                                            <>
+                                                <DownloadCloud size={20} strokeWidth={2.5} />
+                                                Descargar Disco
+                                            </>
+                                        )}
+                                    </button>
+                                ) : (
+                                    <div className="bg-green-500/10 border border-green-500/20 text-green-400 px-6 py-3 rounded-full font-bold flex items-center gap-2 backdrop-blur-md">
+                                        <Check size={20} strokeWidth={2.5} />
+                                        Descargado en tu celular
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Download progress bar */}
+                        {downloadingAll && (
+                            <div className="relative z-10 px-6 pb-3">
+                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300"
+                                        style={{ width: `${downloadProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Copyright */}
+                        {albumMeta?.copyright && (
+                            <div className="relative z-10 px-8 pb-4">
+                                <p className="text-[11px] text-slate-500/70 font-medium truncate">
+                                    © {albumMeta.copyright}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Track list */}
-                <div className="flex-1 overflow-y-auto px-2 py-2">
+                <div className="px-2 py-2">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-16 gap-3">
                             <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
@@ -458,7 +464,8 @@ export default function AlbumDetailModal({
                         </div>
                     )}
                 </div>
-            </div>
+            </div> {/* end scrollable content */}
+        </div>
         </div>
     );
 }
