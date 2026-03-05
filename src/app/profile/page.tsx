@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { User, Mail, Camera, Save, Loader, ArrowLeft, Shield, Calendar, LogOut } from "lucide-react";
+import { User, Mail, Camera, Save, Loader, ArrowLeft, Shield, Calendar, LogOut, Settings, ChevronRight } from "lucide-react";
 import { usePlayer } from "@/context/PlayerContext";
 import Link from "next/link";
 
@@ -178,8 +178,25 @@ export default function ProfilePage() {
                 </div>
             </div>
 
+            {/* Settings Link Card */}
+            <Link
+                href="/settings"
+                className="glass-panel rounded-3xl p-5 md:p-6 flex items-center justify-between gap-4 mb-6 group hover:border-brand-500/30 transition-all duration-300 cursor-pointer"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-brand-500/20 text-brand-400 rounded-2xl group-hover:bg-brand-500/30 transition-colors">
+                        <Settings size={22} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white group-hover:text-brand-300 transition-colors">Configuración</h3>
+                        <p className="text-sm text-slate-400">Tema, notificaciones, almacenamiento</p>
+                    </div>
+                </div>
+                <ChevronRight size={20} className="text-slate-500 group-hover:text-brand-400 group-hover:translate-x-1 transition-all" />
+            </Link>
+
             {/* Danger Zone Card */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border border-red-500/20 bg-red-500/5 mt-8">
+            <div className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border border-red-500/20 bg-red-500/5">
                 <div className="flex-1">
                     <h3 className="text-xl font-bold text-red-500 mb-2 flex items-center gap-2">
                         Zona de Peligro

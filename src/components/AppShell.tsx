@@ -27,7 +27,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-screen overflow-hidden">
             <Sidebar />
-            <div className="flex-1 overflow-y-auto pb-40 md:pb-28">
+            <div className="flex-1 overflow-y-auto pb-40 md:pb-28 pt-safe">
                 {children}
             </div>
             <QueuePanel />

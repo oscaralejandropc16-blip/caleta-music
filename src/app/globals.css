@@ -241,7 +241,20 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
-/* Safe area insets for iOS */
+/* Safe area insets for iOS/PWA */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Standalone PWA: ensure minimum top padding when safe-area-inset is 0 */
+@media (display-mode: standalone) {
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  }
+}
+
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
