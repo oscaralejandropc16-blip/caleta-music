@@ -192,12 +192,28 @@ export default function Home() {
     if (!user) {
       setFavoriteArtists([]);
     } else {
-      const saved = localStorage.getItem(`caleta_artists_${user.id}`);
-      if (saved) {
-        try {
-          setFavoriteArtists(JSON.parse(saved));
-        } catch (e) {
-          setFavoriteArtists([]);
+      const metadataArtists = user.user_metadata?.favorite_artists;
+      if (metadataArtists && Array.isArray(metadataArtists) && metadataArtists.length > 0) {
+        setFavoriteArtists(metadataArtists);
+        localStorage.setItem(`caleta_artists_${user.id}`, JSON.stringify(metadataArtists));
+      } else {
+        const saved = localStorage.getItem(`caleta_artists_${user.id}`);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setFavoriteArtists(parsed);
+
+            // Si estaba en el local storage pero no en la nube, guárdalo 
+            if (parsed.length > 0) {
+              import('@/lib/supabase').then(({ supabase }) => {
+                supabase.auth.updateUser({ data: { favorite_artists: parsed } });
+              });
+            }
+          } catch (e) {
+            setFavoriteArtists([]);
+          }
+        } else {
+          setFavoriteArtists(null); // Null will trigger the Onboarding modal!
         }
       }
     }
@@ -441,10 +457,17 @@ export default function Home() {
         onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
         albumName={albumModal.album} artistName={albumModal.artist} coverUrl={albumModal.cover}
       />
-      {user && (
+      {user && favoriteArtists === null && (
         <OnboardingModal
           userId={user.id}
-          onComplete={(artists) => setFavoriteArtists(artists)}
+          onComplete={async (artists) => {
+            setFavoriteArtists(artists);
+            if (artists.length > 0) {
+              import('@/lib/supabase').then(({ supabase }) => {
+                supabase.auth.updateUser({ data: { favorite_artists: artists } });
+              });
+            }
+          }}
         />
       )}
     </main>

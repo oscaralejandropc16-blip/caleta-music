@@ -29,15 +29,6 @@ export default function OnboardingModal({
     onComplete: (selectedArtists: string[]) => void
 }) {
     const [selected, setSelected] = useState<string[]>([]);
-    const [show, setShow] = useState(false);
-
-    useEffect(() => {
-        // Revisar si el usuario ya escogió
-        const saved = localStorage.getItem(`caleta_artists_${userId}`);
-        if (!saved) {
-            setShow(true);
-        }
-    }, [userId]);
 
     const toggleArtist = (name: string) => {
         setSelected(prev =>
@@ -50,11 +41,8 @@ export default function OnboardingModal({
     const handleSave = () => {
         if (selected.length < 3) return;
         localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify(selected));
-        setShow(false);
         onComplete(selected);
     };
-
-    if (!show) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in">
@@ -121,7 +109,6 @@ export default function OnboardingModal({
                         <button
                             onClick={() => {
                                 localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify([]));
-                                setShow(false);
                                 onComplete([]);
                             }}
                             className="px-6 py-3.5 text-slate-400 hover:text-white font-bold rounded-xl transition-all active:scale-95 hover:bg-white/5"
