@@ -37,6 +37,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Railway usa un PORT dinámico; HOSTNAME 0.0.0.0 para que sea accesible externamente
+ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
 # Crear usuario no-root
