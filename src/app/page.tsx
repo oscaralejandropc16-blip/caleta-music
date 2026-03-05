@@ -72,16 +72,16 @@ function TrackCard({
       <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-xl mb-3 bg-slate-800/50">
         <img src={track.artworkUrl100.replace("100x100", "300x300")} alt={track.trackName}
           className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-3 rounded-xl pointer-events-none">
-          <div className="flex gap-2 relative z-10 w-full justify-between items-center pointer-events-auto">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 md:via-black/20 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-2 md:p-3 pb-2 md:pb-3 rounded-xl pointer-events-none">
+          <div className="flex gap-1.5 md:gap-2 relative z-10 w-full justify-between items-center pointer-events-auto">
             <button onClick={(e) => onPlay(e, track)} title="Reproducir audio" aria-label={`Reproducir ${track.trackName}`}
-              className="bg-green-500 text-white p-3 rounded-full hover:bg-green-400 transition-colors shadow-lg active:scale-95 focus-visible:ring-4 focus-visible:ring-green-400/50 outline-none">
+              className="bg-green-500 text-white p-2.5 md:p-3 rounded-full hover:bg-green-400 transition-colors shadow-lg active:scale-95 focus-visible:ring-4 focus-visible:ring-green-400/50 outline-none">
               <Play size={18} className="ml-0.5 fill-current" />
             </button>
             <div className="flex gap-2">
               {!isDownloaded ? (
                 <button onClick={() => onDownload(track)} disabled={isDownloading} title="Descargar audio offline" aria-label={`Descargar ${track.trackName}`}
-                  className="bg-brand-500 text-white p-3 rounded-full hover:bg-brand-400 transition-colors shadow-lg shadow-brand-500/30 disabled:opacity-50 active:scale-95 focus-visible:ring-4 focus-visible:ring-brand-400/50 outline-none">
+                  className="bg-brand-500 text-white p-2.5 md:p-3 rounded-full hover:bg-brand-400 transition-colors shadow-lg shadow-brand-500/30 disabled:opacity-50 active:scale-95 focus-visible:ring-4 focus-visible:ring-brand-400/50 outline-none">
                   {isDownloading ? (
                     <div className="relative w-5 h-5 flex items-center justify-center">
                       <svg className="w-[30px] h-[30px] -rotate-90 transform absolute" viewBox="0 0 36 36" style={{ top: -5, left: -5 }}>
@@ -93,12 +93,12 @@ function TrackCard({
                   ) : <Download size={18} />}
                 </button>
               ) : (
-                <div className="bg-accent text-white p-3 rounded-full shadow-lg"><Check size={18} /></div>
+                <div className="bg-accent text-white p-2.5 md:p-3 rounded-full shadow-lg"><Check size={18} /></div>
               )}
 
               {isDownloaded && (
                 <button onClick={(e) => onToggleLike(e, strId)} aria-label={isLiked ? `Quitar me gusta a ${track.trackName}` : `Dar me gusta a ${track.trackName}`}
-                  className={`p-3 rounded-full transition-colors focus-visible:ring-4 focus-visible:ring-pink-500/50 outline-none active:scale-95 ${isLiked ? "text-pink-500 bg-pink-500/20" : "text-white/80 hover:text-pink-400 bg-white/20 hover:bg-white/30 backdrop-blur-md"}`}>
+                  className={`p-2.5 md:p-3 rounded-full transition-colors focus-visible:ring-4 focus-visible:ring-pink-500/50 outline-none active:scale-95 ${isLiked ? "text-pink-500 bg-pink-500/20" : "text-white/80 hover:text-pink-400 bg-black/40 md:bg-white/20 hover:bg-white/30 backdrop-blur-md"}`}>
                   <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
                 </button>
               )}

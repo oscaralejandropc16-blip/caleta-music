@@ -11,11 +11,7 @@ import { usePlayer } from "@/context/PlayerContext";
 import AlbumDetailModal from "@/components/AlbumDetailModal";
 import { useRouter } from "next/navigation";
 
-interface Toast {
-    id: number;
-    type: "success" | "error" | "loading";
-    message: string;
-}
+import toast from 'react-hot-toast';
 
 interface AlbumGroup {
     name: string;
@@ -48,7 +44,6 @@ export default function SearchPage() {
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
     const [linkDownloading, setLinkDownloading] = useState(false);
     const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
-    const [toasts, setToasts] = useState<Toast[]>([]);
     const [searchError, setSearchError] = useState(false);
     const [viewMode, setViewMode] = useState<"songs" | "albums">("songs");
     const [showLinkInput, setShowLinkInput] = useState(false);
@@ -62,14 +57,6 @@ export default function SearchPage() {
         getAllTracksFromDB().then((tracks) => {
             setSavedTrackIds(new Set(tracks.map((t) => t.id)));
         });
-    }, []);
-
-    const showToast = useCallback((type: "success" | "error" | "loading", message: string) => {
-        const id = Date.now();
-        setToasts((prev) => [...prev, { id, type, message }]);
-        setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== id));
-        }, type === "loading" ? 30000 : 4000);
     }, []);
 
     const { playTrack } = usePlayer();
@@ -96,17 +83,18 @@ export default function SearchPage() {
         setDownloadingId(id);
 
         const trackName = track?.trackName || "enlace";
-        showToast("loading", `Descargando "${trackName}"...`);
+        const loadingToastId = toast.loading(`Descargando "${trackName}"...`);
 
         // Descarga en background — no bloqueamos la UI
         downloadAndSaveTrack(track, url, id, (progress) => {
             setDownloadProgresses(prev => ({ ...prev, [id]: progress }));
         }).then(result => {
+            toast.dismiss(loadingToastId);
             if (result.success) {
                 setSavedTrackIds((prev) => new Set(prev).add(id));
-                showToast("success", `"${trackName}" descargada ✓`);
+                toast.success(`"${trackName}" descargada ✓`);
             } else {
-                showToast("error", `Error: ${result.error || "Desconocido"}`);
+                toast.error(`Error: ${result.error || "Desconocido"}`);
             }
             setDownloadingId(prev => prev === id ? null : prev);
         });
@@ -130,11 +118,11 @@ export default function SearchPage() {
 
         if (result.success) {
             setSavedTrackIds((prev) => new Set(prev).add(directId));
-            showToast("success", "¡Descarga completada y guardada!");
+            toast.success("¡Descarga completada y guardada!");
             setLinkInput("");
             if (query === url) setQuery("");
         } else {
-            showToast("error", `Error: ${result.error || "Verifica el enlace"}`);
+            toast.error(`Error: ${result.error || "Verifica el enlace"}`);
         }
         setLinkDownloading(false);
         setActiveLinkId(null);
@@ -586,24 +574,6 @@ export default function SearchPage() {
                 artistName={albumModal.artist}
                 coverUrl={albumModal.cover}
             />
-
-            {/* ═══ Toast Notifications ═══ */}
-            <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3 pointer-events-none">
-                {toasts.map((toast) => (
-                    <div
-                        key={toast.id}
-                        className={`pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-xl border text-sm font-semibold transition-all animate-slideIn ${toast.type === "success"
-                            ? "bg-green-500/15 border-green-500/20 text-green-300"
-                            : toast.type === "loading"
-                                ? "bg-brand-500/15 border-brand-500/20 text-brand-300"
-                                : "bg-red-500/15 border-red-500/20 text-red-300"
-                            }`}
-                    >
-                        {toast.type === "success" ? <CheckCircle size={20} /> : toast.type === "loading" ? <Loader size={20} className="animate-spin" /> : <XCircle size={20} />}
-                        {toast.message}
-                    </div>
-                ))}
-            </div>
         </main>
     );
 }

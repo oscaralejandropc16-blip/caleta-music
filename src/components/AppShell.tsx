@@ -4,6 +4,9 @@ import { useAuth } from "@/context/AuthContext";
 import Sidebar from "@/components/Sidebar";
 import AudioPlayer from "@/components/AudioPlayer";
 import BottomNav from "@/components/BottomNav";
+import QueuePanel from "@/components/QueuePanel";
+import DevicesPanel from "@/components/DevicesPanel";
+import LyricsPanel from "@/components/LyricsPanel";
 import AuthPage from "@/app/auth/page";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -36,6 +39,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex-1 overflow-y-auto pb-40 md:pb-28">
                 {children}
             </div>
+            <QueuePanel />
+            <DevicesPanel />
+            <LyricsPanel />
             <AudioPlayer />
             <BottomNav />
         </div>

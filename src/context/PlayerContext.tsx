@@ -17,6 +17,18 @@ interface PlayerContextType {
     progress: number;
     duration: number;
     seekTo: (time: number) => void;
+    isShuffle: boolean;
+    repeatMode: 'none' | 'all' | 'one';
+    toggleShuffle: () => void;
+    toggleRepeat: () => void;
+    isQueueVisible: boolean;
+    toggleQueue: () => void;
+    playQueueIndex: (index: number) => void;
+    removeFromQueue: (index: number) => void;
+    isDevicesVisible: boolean;
+    toggleDevices: () => void;
+    isLyricsVisible: boolean;
+    toggleLyrics: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -32,13 +44,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const currentTrackRef = useRef<SavedTrack | null>(null);
     const hasRetriedRef = useRef(false);
+    const isReadyToPlayRef = useRef(false); // Prevents auto-play on initial load
+
+    // New states for shuffle, repeat and queue
+    const [isShuffle, setIsShuffle] = useState(false);
+    const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+    const [isQueueVisible, setIsQueueVisible] = useState(false);
+    const [isDevicesVisible, setIsDevicesVisible] = useState(false);
+    const [isLyricsVisible, setIsLyricsVisible] = useState(false);
+    // Reference to shuffled indices to play tracks randomly without repeating until all are played
+    const shuffledIndicesRef = useRef<number[]>([]);
+    const originalQueueRef = useRef<SavedTrack[]>([]);
 
     // Restore state from localStorage on mount
     useEffect(() => {
         try {
             const savedState = localStorage.getItem("caleta-player-state");
             if (savedState) {
-                const { queue: savedQueue, currentIndex: savedIdx } = JSON.parse(savedState);
+                const { queue: savedQueue, currentIndex: savedIdx, isShuffle: savedIsShuffle, repeatMode: savedRepeatMode } = JSON.parse(savedState);
                 if (savedQueue && savedQueue.length > 0) {
                     // Rehydrate optional blobs for offline tracks
                     import("@/lib/db").then(({ getTrackFromDB }) => {
@@ -49,8 +72,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             }
                             return t;
                         })).then(restoredQueue => {
+                            // Primero establecemos la bandera a false antes de setear track
+                            isReadyToPlayRef.current = false;
+
                             setQueue(restoredQueue);
                             setCurrentIndex(savedIdx);
+                            setIsShuffle(savedIsShuffle || false);
+                            setRepeatMode(savedRepeatMode || 'none');
                             setCurrentTrack(restoredQueue[savedIdx] || null);
                             // Avoid automatically playing on reload to respect browser policies
                         });
@@ -69,14 +97,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 // Strip blob because it can't be serialized to JSON
                 const stateToSave = {
                     queue: queue.map(t => ({ ...t, blob: undefined })),
-                    currentIndex
+                    currentIndex,
+                    isShuffle,
+                    repeatMode
                 };
                 localStorage.setItem("caleta-player-state", JSON.stringify(stateToSave));
             } catch (e) {
                 console.warn("Failed to save player state", e);
             }
         }
-    }, [queue, currentIndex]);
+    }, [queue, currentIndex, isShuffle, repeatMode]);
+
+    // Keep references updated for functions that don't depend on them in dependency arrays
+    useEffect(() => {
+        originalQueueRef.current = queue;
+        // Generate new shuffled indices when queue changes if shuffle is on
+        if (isShuffle && queue.length > 0) {
+            const indices = Array.from({ length: queue.length }, (_, i) => i);
+            for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+            }
+            shuffledIndicesRef.current = indices;
+        }
+    }, [queue, isShuffle]);
 
     useEffect(() => {
         if (!audioRef.current) {
@@ -110,7 +154,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            playNext();
+            playNext(true); // Pasar true para indicar que fue de forma automática
         };
 
         const onWaiting = () => setIsLoading(true);
@@ -186,11 +230,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             audio.removeEventListener("loadstart", onLoadStart);
             audio.removeEventListener("error", onError);
         };
-    }, [currentIndex, queue]);
+    }, [currentIndex, queue, isShuffle, repeatMode]);
 
     // Reproducir cancion desde localforage o streaming directo
     useEffect(() => {
         if (currentTrack && audioRef.current) {
+            // Si es la carga inicial desde localStorage (isReadyToPlay inicial), no reproducir automáticamente
+            if (!isReadyToPlayRef.current) {
+                isReadyToPlayRef.current = true;
+
+                // Solo asignar la fuente pero no reproducir
+                let initialUrl = currentTrack.streamUrl || "";
+                if (currentTrack.blob) {
+                    initialUrl = URL.createObjectURL(currentTrack.blob);
+                } else if (!initialUrl && currentTrack.previewUrl) {
+                    initialUrl = currentTrack.previewUrl;
+                }
+
+                if (initialUrl && !initialUrl.includes('/api/deezer') && !initialUrl.includes('/api/download')) {
+                    audioRef.current.src = initialUrl;
+                }
+
+                return;
+            }
+
             // Detener el track anterior inmediatamente al cambiar de canción
             audioRef.current.pause();
             setIsPlaying(false);
@@ -352,6 +415,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
 
     const playTrack = (track: SavedTrack, newQueue?: SavedTrack[]) => {
+        isReadyToPlayRef.current = true; // Activar reproducción si es accion del usuaro
         setCurrentTrack(track);
         if (newQueue) {
             setQueue(newQueue);
@@ -360,33 +424,170 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const playNext = () => {
-        if (queue.length > 0 && currentIndex < queue.length - 1) {
-            const nextIndex = currentIndex + 1;
+    const playNext = (autoAdvance = false) => {
+        isReadyToPlayRef.current = true; // El usuario quiere pasar la pista (o auto avance)
+        if (queue.length === 0) return;
+
+        // Si es avance automático y está en 'one', repetir la canción
+        if (autoAdvance && repeatMode === 'one' && audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(console.error);
+            return;
+        }
+
+        if (isShuffle) {
+            // Lógica de Shuffle
+            let nextIndex = -1;
+            if (shuffledIndicesRef.current.length > 0) {
+                // Encontrar dónde estamos en los índices mezclados
+                const currentShuffledPos = shuffledIndicesRef.current.indexOf(currentIndex);
+                if (currentShuffledPos === -1 || currentShuffledPos === shuffledIndicesRef.current.length - 1) {
+                    // Si no está o llegamos al final, dependiendo de repeatMode
+                    if (repeatMode === 'all') {
+                        nextIndex = shuffledIndicesRef.current[0];
+                    } else if (!autoAdvance) { // Si el usuario presionó siguiente, dar la vuelta igual
+                        nextIndex = shuffledIndicesRef.current[0];
+                    } else {
+                        // Si es automático y no repeatAll, se acaba.
+                        setIsPlaying(false);
+                        return;
+                    }
+                } else {
+                    nextIndex = shuffledIndicesRef.current[currentShuffledPos + 1];
+                }
+            } else {
+                // Fallback por si acaso
+                nextIndex = Math.floor(Math.random() * queue.length);
+            }
             setCurrentIndex(nextIndex);
             setCurrentTrack(queue[nextIndex]);
+        } else {
+            // Flujo Normal secuencial
+            if (currentIndex < queue.length - 1) {
+                const nextIndex = currentIndex + 1;
+                setCurrentIndex(nextIndex);
+                setCurrentTrack(queue[nextIndex]);
+            } else {
+                // Fin de la cola
+                if (repeatMode === 'all' || !autoAdvance) {
+                    setCurrentIndex(0);
+                    setCurrentTrack(queue[0]);
+                } else {
+                    setIsPlaying(false);
+                }
+            }
         }
     };
 
     const playPrev = () => {
-        if (queue.length > 0 && currentIndex > 0) {
-            const prevIndex = currentIndex - 1;
+        isReadyToPlayRef.current = true;
+        if (queue.length === 0) return;
+
+        // Si la canción ha avanzado más de 3 segundos, reiniciar la actual
+        if (audioRef.current && audioRef.current.currentTime > 3) {
+            seekTo(0);
+            return;
+        }
+
+        if (isShuffle) {
+            let prevIndex = -1;
+            if (shuffledIndicesRef.current.length > 0) {
+                const currentShuffledPos = shuffledIndicesRef.current.indexOf(currentIndex);
+                if (currentShuffledPos > 0) {
+                    prevIndex = shuffledIndicesRef.current[currentShuffledPos - 1];
+                } else {
+                    // Volver al final
+                    prevIndex = shuffledIndicesRef.current[shuffledIndicesRef.current.length - 1];
+                }
+            } else {
+                prevIndex = Math.floor(Math.random() * queue.length);
+            }
             setCurrentIndex(prevIndex);
             setCurrentTrack(queue[prevIndex]);
+        } else {
+            if (currentIndex > 0) {
+                const prevIndex = currentIndex - 1;
+                setCurrentIndex(prevIndex);
+                setCurrentTrack(queue[prevIndex]);
+            } else {
+                // Ir a la última de la cola
+                const lastIndex = queue.length - 1;
+                setCurrentIndex(lastIndex);
+                setCurrentTrack(queue[lastIndex]);
+            }
         }
+    };
+
+    const toggleShuffle = () => setIsShuffle(prev => !prev);
+
+    const toggleRepeat = () => {
+        setRepeatMode(prev => {
+            if (prev === 'none') return 'all';
+            if (prev === 'all') return 'one';
+            return 'none';
+        });
+    };
+
+    const toggleQueue = () => {
+        setIsQueueVisible(!isQueueVisible);
+        setIsDevicesVisible(false);
+        setIsLyricsVisible(false);
+    };
+
+    const toggleDevices = () => {
+        setIsDevicesVisible(!isDevicesVisible);
+        setIsQueueVisible(false);
+        setIsLyricsVisible(false);
+    };
+
+    const toggleLyrics = () => {
+        setIsLyricsVisible(!isLyricsVisible);
+        setIsQueueVisible(false);
+        setIsDevicesVisible(false);
+    };
+
+    const playQueueIndex = (index: number) => {
+        if (queue[index]) {
+            isReadyToPlayRef.current = true;
+            setCurrentIndex(index);
+            setCurrentTrack(queue[index]);
+        }
+    };
+
+    const removeFromQueue = (index: number) => {
+        if (index < 0 || index >= queue.length) return;
+
+        const newQueue = [...queue];
+        newQueue.splice(index, 1);
+
+        // Update current index if needed
+        let newIndex = currentIndex;
+        if (index < currentIndex) {
+            newIndex = currentIndex - 1;
+        } else if (index === currentIndex) {
+            // Si removemos el actual, detener o reproducir el proximo si hay
+            if (newQueue.length === 0) {
+                audioRef.current?.pause();
+                setIsPlaying(false);
+                setCurrentTrack(null);
+                setCurrentIndex(-1);
+                setQueue([]);
+                return;
+            } else {
+                newIndex = Math.min(currentIndex, newQueue.length - 1);
+                setCurrentTrack(newQueue[newIndex]);
+                isReadyToPlayRef.current = true;
+            }
+        }
+
+        setQueue(newQueue);
+        setCurrentIndex(newIndex);
     };
 
     const seekTo = (time: number) => {
         if (audioRef.current) {
-            const wasPlaying = !audioRef.current.paused;
             audioRef.current.currentTime = time;
             setProgress(time);
-
-            // Si la canción estaba sonando pero al mover el progreso se pega/pausa,
-            // forzamos la reproducción en la nueva posición.
-            if (wasPlaying) {
-                audioRef.current.play().catch(e => console.warn("Seek play error:", e));
-            }
         }
     };
 
@@ -406,6 +607,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 progress,
                 duration,
                 seekTo,
+                isShuffle,
+                repeatMode,
+                toggleShuffle,
+                toggleRepeat,
+                isQueueVisible,
+                toggleQueue,
+                playQueueIndex,
+                removeFromQueue,
+                isDevicesVisible,
+                toggleDevices,
+                isLyricsVisible,
+                toggleLyrics
             }}
         >
             {children}
