@@ -7,7 +7,10 @@ import os from "os";
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const YT_DLP_PATH = path.join(process.cwd(), "yt-dlp.exe");
+// Detectar yt-dlp: Windows local (.exe) o Linux/Railway (/usr/local/bin/yt-dlp)
+const YT_DLP_PATH = os.platform() === "win32"
+    ? path.join(process.cwd(), "yt-dlp.exe")
+    : "/usr/local/bin/yt-dlp";
 
 // ============== PIPED API (Public YouTube Proxy) ==============
 const PIPED_INSTANCES = [
@@ -343,8 +346,10 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        // ======= LOCAL: usar yt-dlp.exe =======
-        if (fs.existsSync(YT_DLP_PATH) && os.platform() === "win32") {
+        // ======= NATIVE: usar yt-dlp (Windows local o Railway Linux) =======
+        const hasYtDlp = fs.existsSync(YT_DLP_PATH);
+        console.log(`[Download] yt-dlp available: ${hasYtDlp} (${YT_DLP_PATH})`);
+        if (hasYtDlp) {
             if (!directUrl && title && artist) {
                 // Buscar con yt-dlp y descargar con yt-dlp
                 const query = `${artist} - ${title}`;
@@ -410,7 +415,7 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // ======= VERCEL: usar Piped API → devolver URL directa =======
+        // ======= FALLBACK (Vercel/sin yt-dlp): usar Piped API → devolver URL directa =======
         // En vez de descargar el audio completo (timeout!), solo resolvemos
         // la URL y la devolvemos al cliente como JSON o redirect
 
