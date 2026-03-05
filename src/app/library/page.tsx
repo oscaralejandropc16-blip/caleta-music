@@ -430,13 +430,13 @@ function LibraryContent() {
                                             <div
                                                 key={track.id}
                                                 onClick={() => handlePlay(track)}
-                                                className={`group grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-3 rounded-xl transition-all cursor-pointer ${isCurrent
+                                                className={`group grid grid-cols-[32px_minmax(0,1fr)_auto_auto] md:grid-cols-[32px_minmax(0,1.5fr)_minmax(0,1fr)_auto_auto] items-center gap-3 md:gap-4 px-4 py-3 rounded-xl transition-all cursor-pointer ${isCurrent
                                                     ? "bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
                                                     : "hover:bg-slate-800/80"
                                                     }`}
                                             >
                                                 {/* Track number */}
-                                                <div className="w-8 flex items-center justify-center font-medium text-slate-400 group-hover:text-white">
+                                                <div className="w-8 flex-shrink-0 flex items-center justify-center font-medium text-slate-400 group-hover:text-white">
                                                     {isCurrent && isPlaying ? (
                                                         <Music
                                                             size={16}
@@ -497,11 +497,11 @@ function LibraryContent() {
                                                 </div>
 
                                                 {/* Album (clickable) */}
-                                                <div className="hidden md:block w-48">
+                                                <div className="hidden md:flex min-w-0 w-full items-center">
                                                     {track.album ? (
                                                         <button
                                                             onClick={e => openAlbumDetail(e, track)}
-                                                            className="text-sm text-slate-400 hover:text-brand-400 hover:underline truncate block text-left transition-colors"
+                                                            className="text-sm text-slate-400 hover:text-brand-400 hover:underline truncate w-full text-left transition-colors"
                                                             title={`Ver álbum: ${track.album}`}
                                                         >
                                                             {track.album}
@@ -514,7 +514,7 @@ function LibraryContent() {
                                                 </div>
 
                                                 {/* Like button */}
-                                                <div className="w-10 flex justify-center">
+                                                <div className="w-10 flex-shrink-0 flex justify-center">
                                                     <button
                                                         onClick={e => handleToggleLike(e, track.id)}
                                                         className={`p-2 rounded-full transition-all ${isLiked
@@ -531,7 +531,7 @@ function LibraryContent() {
                                                 </div>
 
                                                 {/* Actions */}
-                                                <div className="w-10 flex justify-end">
+                                                <div className="w-10 flex-shrink-0 flex justify-end">
                                                     {track.isCloudOnly ? (
                                                         <button
                                                             onClick={e => handleDownloadCloud(e, track)}

@@ -353,7 +353,7 @@ export async function GET(request: NextRequest) {
             if (!directUrl && title && artist) {
                 // Buscar con yt-dlp y descargar con yt-dlp
                 const query = `${artist} - ${title}`;
-                return new Promise<NextResponse>(async (resolve) => {
+                const ytDlpRes = await new Promise<NextResponse | null>(async (resolve) => {
                     try {
                         const searchResult = await new Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }>((res, rej) => {
                             execFile(YT_DLP_PATH, [
@@ -386,32 +386,38 @@ export async function GET(request: NextRequest) {
                             },
                         }));
                     } catch (err: any) {
-                        resolve(NextResponse.json({ error: err.message }, { status: 500 }));
+                        console.warn("[Download] yt-dlp natively failed:", err.message);
+                        resolve(null);
                     }
                 });
+                if (ytDlpRes) return ytDlpRes;
             }
 
             if (directUrl && isYouTubeUrl(directUrl)) {
-                const videoId = extractYouTubeVideoId(directUrl);
-                const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
-                const [{ filePath, contentType }, metadata] = await Promise.all([
-                    downloadWithYtDlp(directUrl),
-                    getVideoMetadata(directUrl)
-                ]);
-                const fileBuffer = fs.readFileSync(filePath);
-                try { fs.unlinkSync(filePath); } catch { }
+                try {
+                    const videoId = extractYouTubeVideoId(directUrl);
+                    const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
+                    const [{ filePath, contentType }, metadata] = await Promise.all([
+                        downloadWithYtDlp(directUrl),
+                        getVideoMetadata(directUrl)
+                    ]);
+                    const fileBuffer = fs.readFileSync(filePath);
+                    try { fs.unlinkSync(filePath); } catch { }
 
-                return new NextResponse(fileBuffer, {
-                    status: 200,
-                    headers: {
-                        "Content-Type": contentType,
-                        "Content-Length": fileBuffer.length.toString(),
-                        "X-Video-Title": encodeURIComponent(metadata.title),
-                        "X-Video-Artist": encodeURIComponent(metadata.uploader),
-                        "X-Video-Cover": coverUrl,
-                        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
-                    },
-                });
+                    return new NextResponse(fileBuffer, {
+                        status: 200,
+                        headers: {
+                            "Content-Type": contentType,
+                            "Content-Length": fileBuffer.length.toString(),
+                            "X-Video-Title": encodeURIComponent(metadata.title),
+                            "X-Video-Artist": encodeURIComponent(metadata.uploader),
+                            "X-Video-Cover": coverUrl,
+                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
+                        },
+                    });
+                } catch (err: any) {
+                    console.warn("[Download] direct yt-dlp failed:", err.message);
+                }
             }
         }
 
