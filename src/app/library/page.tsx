@@ -517,7 +517,7 @@ function LibraryContent() {
                                                         onClick={e => handleToggleLike(e, track.id)}
                                                         className={`p-2 rounded-full transition-all ${isLiked
                                                             ? "text-pink-500 hover:text-pink-400"
-                                                            : "text-slate-500 hover:text-pink-500 opacity-0 group-hover:opacity-100"
+                                                            : "text-slate-500 hover:text-pink-500 md:opacity-0 md:group-hover:opacity-100"
                                                             }`}
                                                         title={isLiked ? "Quitar me gusta" : "Me gusta"}
                                                     >
@@ -546,7 +546,7 @@ function LibraryContent() {
                                                     ) : (
                                                         <button
                                                             onClick={e => openContextMenu(e, track.id)}
-                                                            className="text-slate-500 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100"
+                                                            className="text-slate-500 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors md:opacity-0 md:group-hover:opacity-100"
                                                             title="Más opciones"
                                                         >
                                                             <MoreHorizontal size={18} />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { usePlayer } from "@/context/PlayerContext";
 import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Loader, Mic2, ListMusic, MonitorSpeaker } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
@@ -16,6 +16,45 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     const router = useRouter();
     const [liked, setLiked] = useState(false);
     const [isClient, setIsClient] = useState(false);
+
+    // Swipe-down-to-close gesture
+    const touchStartY = useRef(0);
+    const touchCurrentY = useRef(0);
+    const isDragging = useRef(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dragOffset, setDragOffset] = useState(0);
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+        touchCurrentY.current = e.touches[0].clientY;
+        isDragging.current = true;
+    }, []);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!isDragging.current) return;
+        touchCurrentY.current = e.touches[0].clientY;
+        const diff = touchCurrentY.current - touchStartY.current;
+        // Only allow dragging down (positive diff)
+        if (diff > 0) {
+            setDragOffset(diff);
+        }
+    }, []);
+
+    const handleTouchEnd = useCallback(() => {
+        isDragging.current = false;
+        const diff = touchCurrentY.current - touchStartY.current;
+        if (diff > 100) {
+            // Swipe was long enough → close
+            setDragOffset(window.innerHeight); // animate out
+            setTimeout(() => {
+                onClose();
+                setDragOffset(0);
+            }, 200);
+        } else {
+            // Snap back
+            setDragOffset(0);
+        }
+    }, [onClose]);
 
     useEffect(() => {
         setIsClient(true);
@@ -60,7 +99,19 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     const highResArtwork = currentTrack.coverUrl?.replace("100x100", "600x600")?.replace("200x200", "600x600") || "/placeholder.png";
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn">
+        <div
+            ref={containerRef}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn"
+            style={{
+                transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+                transition: isDragging.current ? 'none' : 'transform 0.3s ease-out',
+                opacity: dragOffset > 0 ? Math.max(1 - dragOffset / 500, 0.3) : 1,
+                borderRadius: dragOffset > 20 ? '24px' : '0',
+            }}
+        >
             {/* Dynamic Background */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div
