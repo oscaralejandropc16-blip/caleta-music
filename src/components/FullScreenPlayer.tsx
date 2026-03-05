@@ -101,9 +101,6 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     return (
         <div
             ref={containerRef}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
             className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn"
             style={{
                 transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
@@ -125,24 +122,33 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#060913]/80 to-[#060913]" />
             </div>
 
-            {/* Header */}
-            <div className="relative z-10 flex items-center justify-between p-6">
-                <button
-                    onClick={onClose}
-                    className="p-3 bg-white/5 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-all duration-300 backdrop-blur-md active:scale-90"
-                    aria-label="Minimizar reproductor"
-                >
-                    <ChevronDown size={28} />
-                </button>
-                <div className="flex flex-col items-center">
-                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-400 drop-shadow-sm">
-                        REPRODUCIENDO DESDE
-                    </span>
-                    <span className="text-sm font-bold text-white/90 drop-shadow-sm truncate max-w-[200px] md:max-w-xs">
-                        {currentTrack.album || "Mi Biblioteca"}
-                    </span>
+            {/* Header — swipeable zone */}
+            <div
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                className="relative z-10 flex flex-col items-center"
+            >
+                {/* Drag handle indicator */}
+                <div className="w-10 h-1 bg-white/20 rounded-full mt-3 mb-1" />
+                <div className="flex items-center justify-between w-full p-6 pt-2">
+                    <button
+                        onClick={onClose}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-all duration-300 backdrop-blur-md active:scale-90"
+                        aria-label="Minimizar reproductor"
+                    >
+                        <ChevronDown size={28} />
+                    </button>
+                    <div className="flex flex-col items-center">
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-400 drop-shadow-sm">
+                            REPRODUCIENDO DESDE
+                        </span>
+                        <span className="text-sm font-bold text-white/90 drop-shadow-sm truncate max-w-[200px] md:max-w-xs">
+                            {currentTrack.album || "Mi Biblioteca"}
+                        </span>
+                    </div>
+                    <div className="w-12" /> {/* Spacer for centering */}
                 </div>
-                <div className="w-12" /> {/* Spacer for centering */}
             </div>
 
             {/* Main Content Area */}
