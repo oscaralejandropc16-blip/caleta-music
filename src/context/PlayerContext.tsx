@@ -273,8 +273,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!srcUrl) {
-                console.warn("Ninguna fuente de audio disponible (sin blob ni streamUrl)");
-                return;
+                if ((currentTrack as any).sourceAudioUrl) {
+                    srcUrl = (currentTrack as any).sourceAudioUrl;
+                } else if (currentTrack.title && currentTrack.artist) {
+                    srcUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                } else if (currentTrack.previewUrl) {
+                    srcUrl = currentTrack.previewUrl;
+                } else {
+                    console.warn("Ninguna fuente de audio disponible (sin blob ni streamUrl)\nTrack:", currentTrack);
+                    return;
+                }
             }
 
             const attemptPlay = async (url: string, fallbackLevel = 0) => {

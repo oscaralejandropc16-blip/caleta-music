@@ -9,6 +9,7 @@ import { toast } from "react-hot-toast";
 export default function SettingsPage() {
     const { signOut } = useAuth();
     const [clearing, setClearing] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [darkMode, setDarkMode] = useState(true);
     const [notificationsOn, setNotificationsOn] = useState(false);
 
@@ -27,7 +28,7 @@ export default function SettingsPage() {
     }, []);
 
     const handleClearStorage = async () => {
-        if (!confirm("¿Estás seguro de que quieres borrar todos los datos locales? Tendrás que volver a iniciar sesión.")) return;
+        setShowClearConfirm(false);
 
         setClearing(true);
         try {
@@ -150,7 +151,7 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer text-red-400" onClick={handleClearStorage}>
+                        <div className="flex items-center justify-between p-3 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer text-red-400" onClick={() => setShowClearConfirm(true)}>
                             <div className="flex items-center gap-4">
                                 <div className="p-2 bg-red-500/20 rounded-lg"><AlertCircle size={18} /></div>
                                 <div>
@@ -162,6 +163,40 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Custom Confirm Modal */}
+            {showClearConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-up">
+                    <div className="bg-slate-900 border border-slate-700/50 rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+                        <div className="relative z-10 text-center">
+                            <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-red-500/20">
+                                <AlertCircle size={32} />
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">¿Borrar todos los datos?</h3>
+                            <p className="text-sm text-slate-400 mb-8">
+                                Estás a punto de eliminar toda la música descargada y cerrar tu sesión. Esta acción no se puede deshacer.
+                            </p>
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={handleClearStorage}
+                                    disabled={clearing}
+                                    className="w-full py-3.5 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-bold transition-all shadow-[0_0_20px_rgba(239,68,68,0.3)] disabled:opacity-50"
+                                >
+                                    {clearing ? "Borrando..." : "Sí, borrar todo"}
+                                </button>
+                                <button
+                                    onClick={() => setShowClearConfirm(false)}
+                                    disabled={clearing}
+                                    className="w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-bold transition-all disabled:opacity-50"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
