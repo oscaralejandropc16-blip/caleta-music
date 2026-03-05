@@ -150,9 +150,12 @@ body {
 }
 
 @keyframes eq {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scaleY(0.3);
   }
+
   50% {
     transform: scaleY(1);
   }
@@ -260,6 +263,14 @@ body {
   color: #0f172a !important;
 }
 
+.light-mode .text-slate-200 {
+  color: #1e293b !important;
+}
+
+.light-mode .text-slate-300 {
+  color: #334155 !important;
+}
+
 .light-mode .text-slate-400 {
   color: #475569 !important;
 }
@@ -270,6 +281,16 @@ body {
 
 .light-mode .text-slate-600 {
   color: #94a3b8 !important;
+}
+
+/* Gradients that start with white (like the Logo text) */
+.light-mode .from-white {
+  --tw-gradient-from: #0f172a var(--tw-gradient-from-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(15, 23, 42, 0)) !important;
+}
+
+.light-mode .to-slate-300 {
+  --tw-gradient-to: #334155 var(--tw-gradient-to-position) !important;
 }
 
 .light-mode .bg-\[\#0a0f1e\] {
