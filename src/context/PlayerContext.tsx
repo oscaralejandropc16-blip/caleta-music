@@ -192,10 +192,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 hasRetriedRef.current = true;
 
                 if (track.title && track.artist) {
-                    console.log("[Player] Audio error → Trying YouTube fallback directly...");
-                    const ytUrl = `/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
+                    console.log("[Player] Audio error → Searching alternative flow via Deezer API...");
+                    const retryUrl = `/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
                     if (audioRef.current) {
-                        audioRef.current.src = ytUrl;
+                        audioRef.current.src = retryUrl;
                         audioRef.current.play().catch(() => { });
                     }
                 } else if (track.previewUrl && audioRef.current) {
@@ -294,7 +294,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 if ((url.includes('/api/deezer') || url.includes('/api/download')) && !url.startsWith('blob:')) {
                     // Para reproducción inmediata (streaming real) asignamos la URL directamente.
                     // Se envía play=true para que las rutas API devuelvan un redirect 302 hacia 
-                    // los servidores externos (YouTube, etc) en vez de un JSON.
+                    // los servidores externos (Deezer CDN, etc) en vez de un JSON.
                     // Esto permite que el navegador haga el buffering nativo de la canción mucho más rápido.
                     setIsLoading(true);
                     const separator = url.includes('?') ? '&' : '?';
@@ -321,8 +321,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             if (!hasRetriedRef.current) {
                                 hasRetriedRef.current = true;
                                 if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                                    const ytUrl = `/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
-                                    attemptPlay(ytUrl, 1);
+                                    const deezerUrl = `/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    attemptPlay(deezerUrl, 1);
                                 } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
                                     attemptPlay(currentTrack.previewUrl, 2);
                                 }

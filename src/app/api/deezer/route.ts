@@ -116,38 +116,24 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     }
 
     const trackDuration = parseInt(track.DURATION || '0', 10);
-    console.log(`[Deezer] Streaming encrypted file from Deezer CDN... (duration: ${trackDuration}s)`);
-    const headRes = await fetch(trackUrlRes.trackUrl, { method: "HEAD" });
-    const totalSize = parseInt(headRes.headers.get("content-length") || "0", 10);
+    console.log(`[Deezer] Streaming encrypted file from: ${trackUrlRes.trackUrl.substring(0, 50)}...`);
 
     const rangeHeader = request.headers.get("range");
-    let responseStart = 0;
-    let responseEnd = totalSize > 0 ? totalSize - 1 : 0;
-    let isPartial = false;
-
-    if (rangeHeader && totalSize > 0) {
-        const parts = rangeHeader.replace(/bytes=/, "").split("-");
-        responseStart = parseInt(parts[0], 10) || 0;
-        if (parts[1]) {
-            responseEnd = parseInt(parts[1], 10);
-        }
-        if (responseEnd >= totalSize) responseEnd = totalSize - 1;
-        isPartial = true;
-    }
-
-    const CHUNK_SIZE = 2048;
-    const alignedStart = Math.floor(responseStart / CHUNK_SIZE) * CHUNK_SIZE;
-    const alignedEnd = responseEnd === totalSize - 1 ? '' : (Math.ceil((responseEnd + 1) / CHUNK_SIZE) * CHUNK_SIZE - 1);
-
-    const fetchHeaders: Record<string, string> = {};
-    if (isPartial) {
-        fetchHeaders["Range"] = `bytes=${alignedStart}-${alignedEnd !== '' ? alignedEnd : ''}`;
+    const fetchHeaders: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    };
+    if (rangeHeader) {
+        fetchHeaders["Range"] = rangeHeader;
     }
 
     const response = await fetch(trackUrlRes.trackUrl, { headers: fetchHeaders });
     if (!response.ok || !response.body) {
         throw new Error(`Failed to fetch from Deezer CDN: ${response.status}`);
     }
+
+    const totalSize = parseInt(response.headers.get("content-length") || "0", 10);
+    const contentRange = response.headers.get("content-range");
+
 
     const coverUrl = `https://e-cdns-images.dzcdn.net/images/cover/${track.ALB_PICTURE}/500x500-000000-80-0-0.jpg`;
     const artistName = track.ART_NAME || "Desconocido";
@@ -159,33 +145,35 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
         "X-Video-Title": encodeURIComponent(trackTitle),
         "X-Video-Artist": encodeURIComponent(artistName),
         "X-Video-Cover": coverUrl,
-        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
+        "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length, Content-Range",
     };
 
-    if (totalSize > 0) {
-        if (isPartial) {
-            baseHeaders["Content-Range"] = `bytes ${responseStart}-${responseEnd}/${totalSize}`;
-            baseHeaders["Content-Length"] = (responseEnd - responseStart + 1).toString();
-        } else {
-            baseHeaders["Content-Length"] = totalSize.toString();
-        }
-    }
+    if (totalSize > 0) baseHeaders["Content-Length"] = totalSize.toString();
+    if (contentRange) baseHeaders["Content-Range"] = contentRange;
 
+
+    const CHUNK_SIZE = 2048;
     const blowFishKey = getBlowfishKey(track.SNG_ID);
     const reader = response.body.getReader();
-
-    let currentByteIndex = alignedStart;
-    let bytesSentToClient = 0;
-    const totalBytesToSend = responseEnd - responseStart + 1;
 
     const stream = new ReadableStream({
         async start(controller) {
             let buffer = Buffer.alloc(0);
+            let currentByteIndex = 0;
+
+            if (contentRange) {
+                const match = contentRange.match(/bytes (\d+)-/);
+                if (match) currentByteIndex = parseInt(match[1], 10);
+            }
+
             try {
                 // eslint-disable-next-line no-constant-condition
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        if (buffer.length > 0) controller.enqueue(new Uint8Array(buffer));
+                        break;
+                    }
 
                     buffer = Buffer.concat([buffer, Buffer.from(value)]);
 
@@ -198,41 +186,9 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
                             processedChunk = decryptChunk(chunkToProcess, blowFishKey);
                         }
 
-                        let sliceStart = 0;
-                        if (currentByteIndex < responseStart) {
-                            sliceStart = responseStart - currentByteIndex;
-                        }
-
-                        const actualSlice = processedChunk.subarray(sliceStart, CHUNK_SIZE);
-
-                        const bytesRemaining = totalBytesToSend - bytesSentToClient;
-                        if (actualSlice.length > bytesRemaining) {
-                            controller.enqueue(new Uint8Array(actualSlice.subarray(0, bytesRemaining)));
-                            bytesSentToClient += bytesRemaining;
-                            break;
-                        } else if (actualSlice.length > 0) {
-                            controller.enqueue(new Uint8Array(actualSlice));
-                            bytesSentToClient += actualSlice.length;
-                        }
-
+                        controller.enqueue(new Uint8Array(processedChunk));
                         buffer = buffer.subarray(CHUNK_SIZE);
                         currentByteIndex += CHUNK_SIZE;
-                        if (bytesSentToClient >= totalBytesToSend) break;
-                    }
-                    if (bytesSentToClient >= totalBytesToSend) break;
-                }
-
-                if (buffer.length > 0 && bytesSentToClient < totalBytesToSend) {
-                    let sliceStart = 0;
-                    if (currentByteIndex < responseStart) {
-                        sliceStart = responseStart - currentByteIndex;
-                    }
-                    const actualSlice = buffer.subarray(sliceStart);
-                    const bytesRemaining = totalBytesToSend - bytesSentToClient;
-                    if (actualSlice.length > bytesRemaining) {
-                        controller.enqueue(new Uint8Array(actualSlice.subarray(0, bytesRemaining)));
-                    } else if (actualSlice.length > 0) {
-                        controller.enqueue(new Uint8Array(actualSlice));
                     }
                 }
             } catch (e) {
@@ -249,7 +205,7 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     });
 
     return new NextResponse(stream, {
-        status: isPartial ? 206 : 200,
+        status: response.status,
         headers: baseHeaders,
     });
 }
