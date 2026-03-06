@@ -9,12 +9,6 @@ export const maxDuration = 60;
 
 const md5 = (data: string) => crypto.createHash('md5').update(data).digest('hex');
 
-// Detectar yt-dlp nativo (Railway Linux o Windows local)
-const YT_DLP_PATH = os.platform() === "win32"
-    ? require("path").join(process.cwd(), "yt-dlp.exe")
-    : "/usr/local/bin/yt-dlp";
-const HAS_YT_DLP = fs.existsSync(YT_DLP_PATH);
-
 const getBlowfishKey = (trackId: string) => {
     const SECRET = 'g4el58wc' + '0zvf9na1';
     const idMd5 = md5(trackId);
@@ -25,8 +19,6 @@ const getBlowfishKey = (trackId: string) => {
     return bfKey;
 };
 
-// Blowfish en JavaScript puro - funciona en CUALQUIER versión de Node.js
-// (OpenSSL 3.0 en Node 17+ no soporta bf-cbc)
 // @ts-ignore
 import { Blowfish } from 'egoroof-blowfish';
 
@@ -40,149 +32,11 @@ const decryptChunk = (chunk: Buffer, blowFishKey: string) => {
 let isDeezerInitialized = false;
 let lastInitTime = 0;
 
-// The ARL passed by the user
 const DEEZER_ARL = process.env.DEEZER_ARL || "3852504531ee9ab73064ee5dde805831b030f72338fe8f15a63288851f44a8863e17023e7b60ecd2df93dfa5e5879af85b50874d4cfde64ce586b5088653c8878a27848219fb1dbcac2e3a1b55307764288d9427eb7c5bde148718fa8834ec08";
-
-// Re-init every 15 minutes in case ARL session expired in-memory
 const REINIT_INTERVAL_MS = 15 * 60 * 1000;
 
-// ============== YOUTUBE FALLBACK (Piped + Invidious) ==============
-const PIPED_INSTANCES = [
-    "https://pipedapi.kavin.rocks",
-    "https://pipedapi.adminforge.de",
-    "https://pipedapi.in.projectsegfault.com",
-    "https://pipedapi.leptons.xyz",
-    "https://pipedapi.r4fo.com",
-    "https://pipedapi.phoenixthrush.com",
-    "https://pipedapi.drgns.space",
-    "https://api.piped.projectsegfault.com"
-];
 
-const INVIDIOUS_INSTANCES = [
-    "https://inv.tux.pizza",
-    "https://invidious.nerdvpn.de",
-    "https://invidious.jing.rocks",
-    "https://iv.datura.network",
-    "https://invidious.privacyredirect.com",
-    "https://invidious.lunar.icu",
-    "https://inv.nadeko.net",
-    "https://invidious.protokolla.fi"
-];
 
-async function resolveYouTubeAudio(query: string): Promise<{
-    audioUrl: string;
-    title: string;
-    artist: string;
-    coverUrl: string;
-} | null> {
-    // 1. Try Piped
-    for (const instance of PIPED_INSTANCES) {
-        try {
-            console.log(`[YT Fallback] Piped: ${instance}`);
-            const searchRes = await fetch(
-                `${instance}/search?q=${encodeURIComponent(query)}&filter=music_songs`,
-                { signal: AbortSignal.timeout(8000) }
-            );
-            if (!searchRes.ok) continue;
-            const data = await searchRes.json();
-            let items = data.items || [];
-
-            if (items.length === 0) {
-                const searchRes2 = await fetch(
-                    `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`,
-                    { signal: AbortSignal.timeout(8000) }
-                );
-                if (searchRes2.ok) {
-                    const data2 = await searchRes2.json();
-                    items = data2.items || [];
-                }
-            }
-            if (items.length === 0) continue;
-
-            const video = items[0];
-            const videoId = video.url?.replace("/watch?v=", "") || "";
-            if (!videoId) continue;
-
-            const streamsRes = await fetch(
-                `${instance}/streams/${videoId}`,
-                { signal: AbortSignal.timeout(8000) }
-            );
-            if (!streamsRes.ok) continue;
-
-            const streamsData = await streamsRes.json();
-            const audioStreams = streamsData.audioStreams || [];
-            if (audioStreams.length === 0) continue;
-
-            const best = [...audioStreams]
-                .filter((s: any) => s.url && s.mimeType)
-                .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-            if (!best) continue;
-
-            console.log(`[YT Fallback] Piped resolved: ${best.mimeType} @ ${best.bitrate}bps`);
-            return {
-                audioUrl: best.url,
-                title: streamsData.title || video.title || query,
-                artist: streamsData.uploader || video.uploaderName || "Desconocido",
-                coverUrl: streamsData.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            };
-        } catch (err: any) {
-            console.warn(`[YT Fallback] Piped ${instance} error:`, err.message);
-            continue;
-        }
-    }
-
-    // 2. Try Invidious
-    for (const instance of INVIDIOUS_INSTANCES) {
-        try {
-            console.log(`[YT Fallback] Invidious: ${instance}`);
-            const searchRes = await fetch(
-                `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance`,
-                { signal: AbortSignal.timeout(10000) }
-            );
-            if (!searchRes.ok) continue;
-
-            const text = await searchRes.text();
-            let items;
-            try { items = JSON.parse(text); } catch { continue; }
-            if (!Array.isArray(items) || items.length === 0) continue;
-
-            const video = items[0];
-            const videoId = video.videoId;
-            if (!videoId) continue;
-
-            const videoRes = await fetch(
-                `${instance}/api/v1/videos/${videoId}`,
-                { signal: AbortSignal.timeout(10000) }
-            );
-            if (!videoRes.ok) continue;
-
-            const videoText = await videoRes.text();
-            let videoData;
-            try { videoData = JSON.parse(videoText); } catch { continue; }
-            const audioStreams = (videoData.adaptiveFormats || []).filter((f: any) =>
-                f.type?.startsWith("audio/") && f.url
-            );
-            if (audioStreams.length === 0) continue;
-
-            const best = [...audioStreams]
-                .sort((a: any, b: any) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0))[0];
-            if (!best || !best.url) continue;
-
-            console.log(`[YT Fallback] Invidious resolved: ${best.type} @ ${best.bitrate}bps`);
-            return {
-                audioUrl: best.url,
-                title: videoData.title || query,
-                artist: videoData.author || "Desconocido",
-                coverUrl: videoData.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            };
-        } catch (err: any) {
-            console.warn(`[YT Fallback] Invidious ${instance} error:`, err.message);
-            continue;
-        }
-    }
-
-    return null;
-}
 
 // ============== DEEZER CORE ==============
 
