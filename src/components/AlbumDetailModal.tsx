@@ -60,13 +60,28 @@ export default function AlbumDetailModal({
                 const searchData = await searchRes.json();
 
                 const albums = searchData.results || [];
-                // Try exact match first, then partial
-                const matchedAlbum = albums.find(
-                    (a: any) => a.collectionName?.toLowerCase() === albumName.toLowerCase()
-                ) || albums.find(
-                    (a: any) => a.collectionName?.toLowerCase().includes(albumName.toLowerCase()) ||
-                        albumName.toLowerCase().includes(a.collectionName?.toLowerCase() || "")
-                ) || albums[0];
+                const targetAlbumStr = albumName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+                const targetArtistStr = artistName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+
+                let matchedAlbum = albums.find(
+                    (a: any) =>
+                        a.collectionName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim() === targetAlbumStr &&
+                        a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                );
+
+                if (!matchedAlbum) {
+                    matchedAlbum = albums.find(
+                        (a: any) =>
+                            (a.collectionName?.toLowerCase().includes(targetAlbumStr) || targetAlbumStr.includes(a.collectionName?.toLowerCase() || "")) &&
+                            a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                    );
+                }
+
+                if (!matchedAlbum) {
+                    matchedAlbum = albums.find(
+                        (a: any) => a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                    ) || albums[0];
+                }
 
                 if (matchedAlbum && matchedAlbum.collectionId) {
                     // Step 2: Use lookup API to get ALL tracks + album metadata
