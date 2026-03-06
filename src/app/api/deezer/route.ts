@@ -232,45 +232,37 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
 
     const trackDuration = parseInt(track.DURATION || '0', 10);
     console.log(`[Deezer] Streaming encrypted file from Deezer CDN... (duration: ${trackDuration}s)`);
-    const response = await fetch(trackUrlRes.trackUrl);
+    const headRes = await fetch(trackUrlRes.trackUrl, { method: "HEAD" });
+    const totalSize = parseInt(headRes.headers.get("content-length") || "0", 10);
+
+    const rangeHeader = request.headers.get("range");
+    let responseStart = 0;
+    let responseEnd = totalSize > 0 ? totalSize - 1 : 0;
+    let isPartial = false;
+
+    if (rangeHeader && totalSize > 0) {
+        const parts = rangeHeader.replace(/bytes=/, "").split("-");
+        responseStart = parseInt(parts[0], 10) || 0;
+        if (parts[1]) {
+            responseEnd = parseInt(parts[1], 10);
+        }
+        if (responseEnd >= totalSize) responseEnd = totalSize - 1;
+        isPartial = true;
+    }
+
+    const CHUNK_SIZE = 2048;
+    const alignedStart = Math.floor(responseStart / CHUNK_SIZE) * CHUNK_SIZE;
+    const alignedEnd = responseEnd === totalSize - 1 ? '' : (Math.ceil((responseEnd + 1) / CHUNK_SIZE) * CHUNK_SIZE - 1);
+
+    const fetchHeaders: Record<string, string> = {};
+    if (isPartial) {
+        fetchHeaders["Range"] = `bytes=${alignedStart}-${alignedEnd !== '' ? alignedEnd : ''}`;
+    }
+
+    const response = await fetch(trackUrlRes.trackUrl, { headers: fetchHeaders });
     if (!response.ok || !response.body) {
         throw new Error(`Failed to fetch from Deezer CDN: ${response.status}`);
     }
-
-    const expectedCdnLength = parseInt(response.headers.get('content-length') || '0', 10);
-    const blowFishKey = getBlowfishKey(track.SNG_ID);
-    const arrayBuffer = await response.arrayBuffer();
-    const encryptedBuffer = Buffer.from(arrayBuffer);
-
-    if (expectedCdnLength > 0 && encryptedBuffer.length < expectedCdnLength * 0.9) {
-        throw new Error(`Incomplete download from Deezer CDN`);
-    }
-
-    const chunks: Buffer[] = [];
-    let offset = 0;
-    let i = 0;
-
-    while (offset + 2048 <= encryptedBuffer.length) {
-        const chunkToProcess = encryptedBuffer.subarray(offset, offset + 2048);
-        if (i % 3 === 0) {
-            chunks.push(decryptChunk(chunkToProcess, blowFishKey));
-        } else {
-            chunks.push(chunkToProcess);
-        }
-        offset += 2048;
-        i++;
-    }
-
-    const remainder = encryptedBuffer.subarray(offset);
-    if (remainder.length > 0) {
-        chunks.push(remainder);
-    }
-
-    const decryptedBuffer = Buffer.concat(chunks);
-
-    console.log(`[Deezer] Decrypted ${decryptedBuffer.length} bytes (${(decryptedBuffer.length / 1024 / 1024).toFixed(1)}MB) for ${trackDuration}s track`);
-    const totalSize = decryptedBuffer.length;
-    const rangeHeader = request.headers.get("range");
 
     const coverUrl = `https://e-cdns-images.dzcdn.net/images/cover/${track.ALB_PICTURE}/500x500-000000-80-0-0.jpg`;
     const artistName = track.ART_NAME || "Desconocido";
@@ -285,45 +277,95 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
         "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length",
     };
 
-    let responseStart = 0;
-    let responseEnd = totalSize - 1;
-    let isPartial = false;
-
-    if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, "").split("-");
-        responseStart = parseInt(parts[0], 10) || 0;
-        if (parts[1]) {
-            responseEnd = parseInt(parts[1], 10);
-            if (isNaN(responseEnd)) responseEnd = totalSize - 1;
+    if (totalSize > 0) {
+        if (isPartial) {
+            baseHeaders["Content-Range"] = `bytes ${responseStart}-${responseEnd}/${totalSize}`;
+            baseHeaders["Content-Length"] = (responseEnd - responseStart + 1).toString();
+        } else {
+            baseHeaders["Content-Length"] = totalSize.toString();
         }
-        if (responseEnd >= totalSize) responseEnd = totalSize - 1;
-        isPartial = true;
     }
 
-    const chunksize = (responseEnd - responseStart) + 1;
-    const slicedBuffer = decryptedBuffer.subarray(responseStart, responseEnd + 1);
+    const blowFishKey = getBlowfishKey(track.SNG_ID);
+    const reader = response.body.getReader();
 
-    let streamOffset = 0;
-    const chunkSize = 64 * 1024;
+    let currentByteIndex = alignedStart;
+    let bytesSentToClient = 0;
+    const totalBytesToSend = responseEnd - responseStart + 1;
+
     const stream = new ReadableStream({
-        pull(controller) {
-            if (streamOffset >= slicedBuffer.length) { controller.close(); return; }
-            const end = Math.min(streamOffset + chunkSize, slicedBuffer.length);
-            controller.enqueue(new Uint8Array(slicedBuffer.subarray(streamOffset, end)));
-            streamOffset = end;
+        async start(controller) {
+            let buffer = Buffer.alloc(0);
+            try {
+                // eslint-disable-next-line no-constant-condition
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer = Buffer.concat([buffer, Buffer.from(value)]);
+
+                    while (buffer.length >= CHUNK_SIZE) {
+                        const chunkToProcess = buffer.subarray(0, CHUNK_SIZE);
+                        const chunkIndex = Math.floor(currentByteIndex / CHUNK_SIZE);
+
+                        let processedChunk = chunkToProcess;
+                        if (chunkIndex % 3 === 0) {
+                            processedChunk = decryptChunk(chunkToProcess, blowFishKey);
+                        }
+
+                        let sliceStart = 0;
+                        if (currentByteIndex < responseStart) {
+                            sliceStart = responseStart - currentByteIndex;
+                        }
+
+                        const actualSlice = processedChunk.subarray(sliceStart, CHUNK_SIZE);
+
+                        const bytesRemaining = totalBytesToSend - bytesSentToClient;
+                        if (actualSlice.length > bytesRemaining) {
+                            controller.enqueue(new Uint8Array(actualSlice.subarray(0, bytesRemaining)));
+                            bytesSentToClient += bytesRemaining;
+                            break;
+                        } else if (actualSlice.length > 0) {
+                            controller.enqueue(new Uint8Array(actualSlice));
+                            bytesSentToClient += actualSlice.length;
+                        }
+
+                        buffer = buffer.subarray(CHUNK_SIZE);
+                        currentByteIndex += CHUNK_SIZE;
+                        if (bytesSentToClient >= totalBytesToSend) break;
+                    }
+                    if (bytesSentToClient >= totalBytesToSend) break;
+                }
+
+                if (buffer.length > 0 && bytesSentToClient < totalBytesToSend) {
+                    let sliceStart = 0;
+                    if (currentByteIndex < responseStart) {
+                        sliceStart = responseStart - currentByteIndex;
+                    }
+                    const actualSlice = buffer.subarray(sliceStart);
+                    const bytesRemaining = totalBytesToSend - bytesSentToClient;
+                    if (actualSlice.length > bytesRemaining) {
+                        controller.enqueue(new Uint8Array(actualSlice.subarray(0, bytesRemaining)));
+                    } else if (actualSlice.length > 0) {
+                        controller.enqueue(new Uint8Array(actualSlice));
+                    }
+                }
+            } catch (e) {
+                console.error("ReadableStream error:", e);
+                controller.error(e);
+            } finally {
+                controller.close();
+                reader.cancel().catch(() => { });
+            }
+        },
+        cancel() {
+            reader.cancel().catch(() => { });
         }
     });
 
-    if (isPartial) {
-        return new NextResponse(stream, {
-            status: 206,
-            headers: { ...baseHeaders, "Content-Range": `bytes ${responseStart}-${responseEnd}/${totalSize}`, "Content-Length": chunksize.toString() },
-        });
-    }
-
     return new NextResponse(stream, {
-        status: 200,
-        headers: { ...baseHeaders, "Content-Length": totalSize.toString() },
+        status: isPartial ? 206 : 200,
+        headers: baseHeaders,
     });
 }
 
