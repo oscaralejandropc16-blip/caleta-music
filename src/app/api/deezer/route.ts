@@ -7,11 +7,11 @@ import { execFile } from "child_process";
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const md5 = (data: string) => crypto.createHash('md5').update(data).digest('hex');
+const md5 = (data: string | number) => crypto.createHash('md5').update(data.toString()).digest('hex');
 
-const getBlowfishKey = (trackId: string) => {
+const getBlowfishKey = (trackId: string | number) => {
     const SECRET = 'g4el58wc' + '0zvf9na1';
-    const idMd5 = md5(trackId);
+    const idMd5 = md5(trackId.toString());
     let bfKey = '';
     for (let i = 0; i < 16; i++) {
         bfKey += String.fromCharCode(idMd5.charCodeAt(i) ^ idMd5.charCodeAt(i + 16) ^ SECRET.charCodeAt(i));
