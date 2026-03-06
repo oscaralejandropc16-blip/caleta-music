@@ -323,7 +323,8 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
 
                         <button
                             onClick={togglePlay}
-                            className="relative flex items-center justify-center w-[84px] h-[84px] rounded-full bg-white text-black shadow-[0_10px_40px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all duration-300 mx-2"
+                            disabled={isLoading}
+                            className="relative flex items-center justify-center w-[84px] h-[84px] rounded-full bg-white text-black shadow-[0_10px_40px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all duration-300 mx-2 disabled:opacity-80 disabled:hover:scale-100 disabled:active:scale-100 disabled:cursor-wait"
                             aria-label={isPlaying ? "Pausar" : "Reproducir"}
                         >
                             {isLoading ? (

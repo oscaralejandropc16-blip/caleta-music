@@ -91,7 +91,7 @@ export default function AudioPlayer() {
                 <div className="flex md:hidden w-full h-full items-center justify-between px-3" onClick={() => setIsFullScreen(true)}>
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
                         {/* Play/Pause Button on Left */}
-                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-2 -ml-1 text-white outline-none active:scale-90 flex items-center justify-center">
+                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} disabled={isLoading} className="p-2 -ml-1 text-white outline-none active:scale-90 flex items-center justify-center disabled:opacity-80">
                             {isLoading ? <EqLoader size={18} /> : (isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />)}
                         </button>
 

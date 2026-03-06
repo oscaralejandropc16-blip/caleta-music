@@ -169,7 +169,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         };
 
         const onWaiting = () => setIsLoading(true);
-        const onPlaying = () => setIsLoading(false);
+        const onPause = () => setIsPlaying(false);
+        const onPlay = () => setIsPlaying(true);
+        const onPlaying = () => {
+            setIsPlaying(true);
+            setIsLoading(false);
+        };
         const onCanPlay = () => setIsLoading(false);
         const onLoadStart = () => {
             // Don't show loading for local blobs — they play instantly
@@ -181,47 +186,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             const track = currentTrackRef.current;
             console.warn(`[AudioPlayer] Audio error (code: ${errCode})`);
             setIsLoading(false);
+            setIsPlaying(false);
 
-            // Error code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED (audio corrupto o inaccesible)
-            // Intentar fallback automático: YouTube → Preview
             if (errCode === 4 && track && !hasRetriedRef.current) {
                 hasRetriedRef.current = true;
 
                 if (track.title && track.artist) {
-                    console.log("[Player] Audio error → Trying YouTube fallback...");
-                    // Intentar con YouTube como fallback
-                    const ytUrl = `/api/download?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
-                    fetch(ytUrl, { signal: AbortSignal.timeout(30000) })
-                        .then(res => {
-                            if (!res.ok) throw new Error(`Status ${res.status}`);
-                            const ct = res.headers.get('content-type') || '';
-                            if (ct.includes('application/json')) {
-                                return res.json().then(data => {
-                                    if (data.audioUrl && audioRef.current) {
-                                        audioRef.current.src = data.audioUrl;
-                                        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
-                                    }
-                                });
-                            } else {
-                                return res.blob().then(blob => {
-                                    if (audioRef.current && blob.size > 50000) {
-                                        audioRef.current.src = URL.createObjectURL(blob);
-                                        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
-                                    }
-                                });
-                            }
-                        })
-                        .catch(() => {
-                            // YouTube también falló → usar preview de 30s
-                            if (track.previewUrl && audioRef.current) {
-                                console.log("[Player] YouTube failed → Using Deezer preview");
-                                audioRef.current.src = track.previewUrl;
-                                audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
-                            }
-                        });
+                    console.log("[Player] Audio error → Trying YouTube fallback directly...");
+                    const ytUrl = `/api/download?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
+                    if (audioRef.current) {
+                        audioRef.current.src = ytUrl;
+                        audioRef.current.play().catch(() => { });
+                    }
                 } else if (track.previewUrl && audioRef.current) {
                     audioRef.current.src = track.previewUrl;
-                    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
+                    audioRef.current.play().catch(() => { });
                 }
             }
         };
@@ -231,6 +210,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         audio.addEventListener("ended", onEnded);
         audio.addEventListener("waiting", onWaiting);
         audio.addEventListener("playing", onPlaying);
+        audio.addEventListener("play", onPlay);
+        audio.addEventListener("pause", onPause);
         audio.addEventListener("canplay", onCanPlay);
         audio.addEventListener("loadstart", onLoadStart);
         audio.addEventListener("error", onError);
@@ -241,6 +222,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             audio.removeEventListener("ended", onEnded);
             audio.removeEventListener("waiting", onWaiting);
             audio.removeEventListener("playing", onPlaying);
+            audio.removeEventListener("play", onPlay);
+            audio.removeEventListener("pause", onPause);
             audio.removeEventListener("canplay", onCanPlay);
             audio.removeEventListener("loadstart", onLoadStart);
             audio.removeEventListener("error", onError);
@@ -327,31 +310,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     const playPromise = audio.play();
 
                     if (playPromise !== undefined) {
-                        playPromise.then(() => {
-                            if (!cancelled) {
-                                setIsPlaying(true);
-                            }
-                        }).catch((err: any) => {
+                        playPromise.catch((err: any) => {
                             if (cancelled) return;
-                            if (err.name === 'NotAllowedError') { setIsPlaying(false); return; }
+                            if (err.name === 'NotAllowedError') return;
                             if (err.name === 'AbortError') return;
 
                             console.warn("[Player] Play promise error:", err?.message);
-                            if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                                const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
-                                attemptPlay(ytUrl, 1);
-                            } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
-                                attemptPlay(currentTrack.previewUrl, 2);
+                            if (!hasRetriedRef.current) {
+                                hasRetriedRef.current = true;
+                                if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
+                                    const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                                    attemptPlay(ytUrl, 1);
+                                } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
+                                    attemptPlay(currentTrack.previewUrl, 2);
+                                }
                             }
-                            setIsPlaying(false);
-                        }).finally(() => {
-                            if (!cancelled) setIsLoading(false);
                         });
                     }
                 } catch (err: any) {
                     if (cancelled) return;
-                    setIsPlaying(false);
-                    setIsLoading(false);
                     console.warn("[Player] Play attempt error:", err?.message);
                 }
             };
@@ -397,21 +374,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (audioRef.current.paused) {
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        setIsPlaying(true);
-                    }).catch(err => {
-                        if (err.name === 'AbortError') {
-                            console.log("Playback aborted by pause");
-                        } else {
-                            console.warn("Error playing audio", err);
+                    playPromise.catch(err => {
+                        if (err.name !== 'AbortError') {
+                            console.warn("Error playing audio after toggle", err);
                         }
                     });
-                } else {
-                    setIsPlaying(true);
                 }
             } else {
                 audioRef.current.pause();
-                setIsPlaying(false);
             }
         }
     };
