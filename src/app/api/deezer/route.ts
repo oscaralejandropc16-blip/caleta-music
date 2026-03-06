@@ -50,7 +50,7 @@ async function initializeDeezer(forceReinit = false) {
     const dfi = await import("d-fi-core");
     const now = Date.now();
     if (!isDeezerInitialized || forceReinit || (now - lastInitTime > REINIT_INTERVAL_MS)) {
-        const arlToUse = process.env.DEEZER_ARL || DEEZER_ARL;
+        const arlToUse = (process.env.DEEZER_ARL || DEEZER_ARL).trim();
         console.log("[Deezer] Initializing with ARL prefix:", arlToUse.substring(0, 15) + "...");
         try {
             await dfi.initDeezerApi(arlToUse);
