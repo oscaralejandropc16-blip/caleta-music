@@ -44,11 +44,17 @@ async function initializeDeezer(forceReinit = false) {
     const dfi = await import("d-fi-core");
     const now = Date.now();
     if (!isDeezerInitialized || forceReinit || (now - lastInitTime > REINIT_INTERVAL_MS)) {
-        console.log("[Deezer] Initializing d-fi-core with ARL... (force:", forceReinit, ")");
-        await dfi.initDeezerApi(DEEZER_ARL);
-        isDeezerInitialized = true;
-        lastInitTime = now;
-        console.log("[Deezer] Initialization successful");
+        const arlToUse = process.env.DEEZER_ARL || DEEZER_ARL;
+        console.log("[Deezer] Initializing with ARL prefix:", arlToUse.substring(0, 15) + "...");
+        try {
+            await dfi.initDeezerApi(arlToUse);
+            isDeezerInitialized = true;
+            lastInitTime = now;
+            console.log("[Deezer] Initialization successful");
+        } catch (e: any) {
+            console.error("[Deezer] Failed to initialize API:", e.message);
+            throw e;
+        }
     }
     return dfi;
 }
@@ -75,13 +81,28 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
         throw new Error("Track not found");
     }
 
-    // 9 = 320kbps, 3 = 128kbps
-    let trackUrlRes = await dfi.getTrackDownloadUrl(track, 9);
-    if (!trackUrlRes || !trackUrlRes.trackUrl) {
-        trackUrlRes = await dfi.getTrackDownloadUrl(track, 3);
-        if (!trackUrlRes || !trackUrlRes.trackUrl) {
-            throw new Error("Could not get stream URL");
+    // Intentar diferentes calidades: 1 (128kbps), 3 (320kbps), 9 (FLAC/320)
+    // Priorizamos 1 porque es el más compatible con ARLs gratuitos/estándar
+    let trackUrlRes = null;
+    const qualities = [1, 3, 9];
+    let lastError = "No stream found";
+
+    for (const q of qualities) {
+        try {
+            console.log(`[Deezer] Trying quality format: ${q} for track ${trackId}`);
+            trackUrlRes = await dfi.getTrackDownloadUrl(track, q);
+            if (trackUrlRes && trackUrlRes.trackUrl) {
+                console.log(`[Deezer] Success with quality: ${q}`);
+                break;
+            }
+        } catch (e: any) {
+            lastError = e.message;
+            console.warn(`[Deezer] Quality ${q} failed:`, e.message);
         }
+    }
+
+    if (!trackUrlRes || !trackUrlRes.trackUrl) {
+        throw new Error(`Could not get stream URL: ${lastError}`);
     }
 
     const trackDuration = parseInt(track.DURATION || '0', 10);
@@ -240,32 +261,24 @@ export async function GET(request: NextRequest) {
 
     // ===== 1. Intentar Deezer =====
     try {
+        console.log(`[Deezer] Requesting: ${trackId || title}`);
         return await streamFromDeezer(request, trackId, finalTitle, finalArtist);
     } catch (deezerErr: any) {
-        console.error("[Deezer] Failed:", deezerErr.message);
-        isDeezerInitialized = false;
+        console.error("[Deezer API Error]:", deezerErr.message);
 
-        // Si falló Deezer y no tenemos title/artist, lo buscamos en API pública
-        if (trackId && (!finalTitle || !finalArtist)) {
+        // Si es un error de licencia o ARL, intentamos re-inicializar una vez
+        if (deezerErr.message.includes("License") || deezerErr.message.includes("ARL")) {
             try {
-                const dzRes = await fetch(`https://api.deezer.com/track/${trackId}`);
-                if (dzRes.ok) {
-                    const dzData = await dzRes.json();
-                    if (dzData.title && dzData.artist?.name) {
-                        finalTitle = dzData.title;
-                        finalArtist = dzData.artist.name;
-                        console.log(`[Deezer] Public API got fallback info: ${finalArtist} - ${finalTitle}`);
-                    }
-                }
-            } catch (e) {
-                console.error("[Deezer] Public API fetch failed:", e);
+                console.log("[Deezer] Attempting forced re-initialization...");
+                await streamFromDeezer(request, trackId, finalTitle, finalArtist);
+            } catch (retryErr: any) {
+                console.error("[Deezer API Retry Error]:", retryErr.message);
             }
         }
-    }
 
-    // ===== 2. Si Deezer falla, retornamos error sin intentar YouTube =====
-    return NextResponse.json(
-        { error: "Audio track could not be loaded from Deezer CDN." },
-        { status: 500 }
-    );
+        return NextResponse.json(
+            { error: `Deezer streaming failed: ${deezerErr.message}` },
+            { status: 500 }
+        );
+    }
 }
