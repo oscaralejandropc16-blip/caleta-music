@@ -158,15 +158,21 @@ function LibraryContent() {
 
     const confirmDelete = async () => {
         if (deleteConfirmId) {
-            await removeTrackFromDB(deleteConfirmId);
+            const trackIdToDelete = deleteConfirmId;
+            setDeleteConfirmId(null);
+
+            // Remove visually immediately for snappiness
+            setTracks(prev => prev.filter(t => t.id !== trackIdToDelete));
+
+            await removeTrackFromDB(trackIdToDelete);
+
             // Also remove from cloud so it doesn't re-sync back
             try {
-                await removeSongFromLibrary(deleteConfirmId);
+                await removeSongFromLibrary(trackIdToDelete);
             } catch (err) {
                 console.error("Failed to delete from cloud:", err);
             }
             await loadLibrary();
-            setDeleteConfirmId(null);
         }
     };
 
