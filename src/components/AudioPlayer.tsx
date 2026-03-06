@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import FullScreenPlayer from "./FullScreenPlayer";
 import { useRouter } from "next/navigation";
 import EqLoader from "./EqLoader";
+import Link from "next/link";
 
 export default function AudioPlayer() {
     const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, audioRef, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices, isLyricsVisible, toggleLyrics } = usePlayer();
@@ -143,17 +144,17 @@ export default function AudioPlayer() {
                             >
                                 {currentTrack.artist.split(/(, | & | y | ft\. | feat\. )/i).map((part, i) =>
                                     i % 2 === 0 ? (
-                                        <button
+                                        <Link
                                             key={i}
+                                            href={`/artist/${encodeURIComponent(part.trim())}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setIsFullScreen(false);
-                                                router.push(`/artist/${encodeURIComponent(part.trim())}`);
                                             }}
                                             className="cursor-pointer hover:text-white hover:underline transition-colors outline-none"
                                         >
                                             {part}
-                                        </button>
+                                        </Link>
                                     ) : (
                                         <span key={i} className="whitespace-pre">{part}</span>
                                     )

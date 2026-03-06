@@ -6,6 +6,7 @@ import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronD
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import { useRouter } from "next/navigation";
 import EqLoader from "./EqLoader";
+import Link from "next/link";
 
 interface FullScreenPlayerProps {
     isOpen: boolean;
@@ -249,17 +250,17 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                             >
                                 {currentTrack.artist.split(/(, | & | y | ft\. | feat\. )/i).map((part, i) =>
                                     i % 2 === 0 ? (
-                                        <button
+                                        <Link
                                             key={i}
+                                            href={`/artist/${encodeURIComponent(part.trim())}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onClose();
-                                                router.push(`/artist/${encodeURIComponent(part.trim())}`);
                                             }}
                                             className="hover:text-brand-400 hover:underline transition-all outline-none"
                                         >
                                             {part}
-                                        </button>
+                                        </Link>
                                     ) : (
                                         <span key={i} className="whitespace-pre">{part}</span>
                                     )
