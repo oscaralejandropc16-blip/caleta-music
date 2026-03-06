@@ -44,6 +44,7 @@ function LibraryContent() {
     const [tracks, setTracks] = useState<SavedTrack[]>([]);
     const [cloudTracks, setCloudTracks] = useState<SavedTrack[]>([]);
     const [downloadingCloudIds, setDownloadingCloudIds] = useState<Set<string>>(new Set());
+    const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [query, setQuery] = useState("");
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -126,8 +127,11 @@ function LibraryContent() {
         } as any;
 
         setDownloadingCloudIds(prev => new Set(prev).add(track.id));
+        setDownloadProgress(prev => ({ ...prev, [track.id]: 0 }));
 
-        const result = await downloadAndSaveTrack(mockTrack, track.sourceAudioUrl || null, track.id);
+        const result = await downloadAndSaveTrack(mockTrack, track.sourceAudioUrl || null, track.id, (progress) => {
+            setDownloadProgress(prev => ({ ...prev, [track.id]: progress }));
+        });
 
         if (result.success) {
             await loadLibrary();
@@ -138,6 +142,11 @@ function LibraryContent() {
         setDownloadingCloudIds(prev => {
             const next = new Set(prev);
             next.delete(track.id);
+            return next;
+        });
+        setDownloadProgress(prev => {
+            const next = { ...prev };
+            delete next[track.id];
             return next;
         });
     };
@@ -151,8 +160,12 @@ function LibraryContent() {
         if (deleteConfirmId) {
             await removeTrackFromDB(deleteConfirmId);
             // Also remove from cloud so it doesn't re-sync back
-            removeSongFromLibrary(deleteConfirmId).catch(() => { });
-            loadLibrary();
+            try {
+                await removeSongFromLibrary(deleteConfirmId);
+            } catch (err) {
+                console.error("Failed to delete from cloud:", err);
+            }
+            await loadLibrary();
             setDeleteConfirmId(null);
         }
     };
@@ -483,12 +496,6 @@ function LibraryContent() {
                                                             className="text-brand-500 hidden group-hover:block"
                                                         />
                                                     )}
-                                                    {track.isCloudOnly && (
-                                                        <Cloud
-                                                            size={16}
-                                                            className="text-slate-500"
-                                                        />
-                                                    )}
                                                 </div>
 
                                                 {/* Track info */}
@@ -552,21 +559,24 @@ function LibraryContent() {
                                                     </button>
                                                 </div>
 
-                                                {/* Actions */}
-                                                <div className="w-10 flex-shrink-0 flex justify-end">
+                                                <div className="w-10 flex-shrink-0 flex justify-end items-center">
                                                     {track.isCloudOnly ? (
-                                                        <button
-                                                            onClick={e => handleDownloadCloud(e, track)}
-                                                            className="text-brand-500 hover:text-brand-400 p-2 rounded-full hover:bg-brand-500/10 transition-colors"
-                                                            title="Descargar desde la nube"
-                                                            disabled={downloadingCloudIds.has(track.id)}
-                                                        >
-                                                            {downloadingCloudIds.has(track.id) ? (
-                                                                <Loader size={18} className="animate-spin" />
-                                                            ) : (
+                                                        downloadingCloudIds.has(track.id) ? (
+                                                            <div className="relative flex items-center justify-center w-8 h-8" title={`${downloadProgress[track.id] || 0}%`}>
+                                                                <Loader size={18} className="animate-spin text-brand-500" />
+                                                                <span className="absolute text-[8px] font-bold text-white">
+                                                                    {downloadProgress[track.id] || 0}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={e => handleDownloadCloud(e, track)}
+                                                                className="text-slate-400 hover:text-brand-400 p-2 rounded-full hover:bg-brand-500/10 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                                                                title="Descargar desde la nube para escuchar offline"
+                                                            >
                                                                 <CloudDownload size={18} />
-                                                            )}
-                                                        </button>
+                                                            </button>
+                                                        )
                                                     ) : (
                                                         <button
                                                             onClick={e => openContextMenu(e, track.id)}

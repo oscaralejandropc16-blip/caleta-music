@@ -70,8 +70,15 @@ export async function pullLibraryFromCloud(userId: string): Promise<SavedTrack[]
                 downloadedAt: row.downloaded_at,
             };
 
-            // Save to local DB if it doesn't exist locally
-            await saveTrackToDB(track);
+            // Save to local DB if it doesn't exist locally, or preserve blob if it does
+            const { getTrackFromDB } = await import("./db");
+            const existing = await getTrackFromDB(track.id);
+            if (!existing) {
+                await saveTrackToDB(track);
+            } else if (!existing.blob && !existing.streamUrl) {
+                // If it exists locally but is broken or lacks content, update it
+                await saveTrackToDB({ ...existing, ...track });
+            }
 
             // Sync likes
             if (row.liked) {

@@ -370,6 +370,13 @@ export async function GET(request: NextRequest) {
 
                         const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
                         const coverUrl = `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`;
+
+                        const isPlay = searchParams.get("play") === "true";
+                        if (isPlay) {
+                            resolve(NextResponse.redirect(searchResult.streamUrl));
+                            return;
+                        }
+
                         const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
                         const fileBuffer = fs.readFileSync(filePath);
                         try { fs.unlinkSync(filePath); } catch { }
@@ -397,6 +404,23 @@ export async function GET(request: NextRequest) {
                 try {
                     const videoId = extractYouTubeVideoId(directUrl);
                     const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
+
+                    const isPlay = searchParams.get("play") === "true";
+                    if (isPlay) {
+                        const streamUrlRes = await new Promise<string>((res, rej) => {
+                            execFile(YT_DLP_PATH, [
+                                "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
+                                "--print", "url", directUrl
+                            ], { timeout: 15000 }, (err, stdout) => {
+                                if (err) { rej(err); return; }
+                                const url = stdout.trim().split("\n")[0];
+                                if (url && url.startsWith("http")) res(url);
+                                else rej(new Error("no stream url"));
+                            });
+                        });
+                        return NextResponse.redirect(streamUrlRes);
+                    }
+
                     const [{ filePath, contentType }, metadata] = await Promise.all([
                         downloadWithYtDlp(directUrl),
                         getVideoMetadata(directUrl)
