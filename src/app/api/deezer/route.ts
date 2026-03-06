@@ -409,65 +409,9 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // ===== 2. Fallback: YouTube =====
-    if (finalTitle && finalArtist) {
-        const query = `${finalArtist} - ${finalTitle}`;
-        console.log(`[Deezer→YT] Falling back to YouTube for: ${query}`);
-
-        // 2a. yt-dlp nativo (Railway) — rapidísimo ~2-3s
-        if (HAS_YT_DLP) {
-            try {
-                console.log(`[yt-dlp] Resolving audio URL natively...`);
-                const ytDlpResult = await new Promise<{ audioUrl: string; title: string; artist: string; videoId: string }>((resolve, reject) => {
-                    execFile(YT_DLP_PATH, [
-                        "--encoding", "utf8", "--no-playlist", "-f", "ba",
-                        "--no-warnings", "--no-download",
-                        "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
-                        `ytsearch1:${query}`
-                    ], { timeout: 15000 }, (err, stdout) => {
-                        if (err) { reject(err); return; }
-                        const lines = stdout.trim().split("\n").map(l => l.trim());
-                        if (lines.length < 4 || !lines[0].startsWith("http")) { reject(new Error("no valid output")); return; }
-                        resolve({ audioUrl: lines[0], title: lines[1], artist: lines[2], videoId: lines[3] });
-                    });
-                });
-
-                console.log(`[yt-dlp] Resolved: "${ytDlpResult.title}" in ~2s`);
-                const isPlay = searchParams.get("play") === "true";
-                if (isPlay) return NextResponse.redirect(ytDlpResult.audioUrl);
-                return NextResponse.json({
-                    audioUrl: ytDlpResult.audioUrl,
-                    title: ytDlpResult.title || query,
-                    artist: ytDlpResult.artist || finalArtist,
-                    coverUrl: `https://i.ytimg.com/vi/${ytDlpResult.videoId}/hqdefault.jpg`,
-                });
-            } catch (ytDlpErr: any) {
-                console.warn(`[yt-dlp] Failed:`, ytDlpErr.message);
-            }
-        }
-
-        // 2b. Piped/Invidious (Vercel o si yt-dlp falló)
-        try {
-            const result = await resolveYouTubeAudio(query);
-            if (result) {
-                console.log(`[Deezer→YT] YouTube resolved successfully: ${result.title}`);
-                const isPlay = searchParams.get("play") === "true";
-                if (isPlay) return NextResponse.redirect(result.audioUrl);
-                return NextResponse.json({
-                    audioUrl: result.audioUrl,
-                    title: result.title,
-                    artist: result.artist,
-                    coverUrl: result.coverUrl,
-                });
-            }
-        } catch (ytErr: any) {
-            console.error("[Deezer→YT] YouTube fallback also failed:", ytErr.message);
-        }
-    }
-
-    // ===== 3. Todo falló =====
+    // ===== 2. Si Deezer falla, retornamos error sin intentar YouTube =====
     return NextResponse.json(
-        { error: "All audio sources failed (Deezer + YouTube)" },
+        { error: "Audio track could not be loaded from Deezer CDN." },
         { status: 500 }
     );
 }
