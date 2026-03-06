@@ -26,7 +26,13 @@ const decryptChunk = (chunk: Buffer, blowFishKey: string) => {
     const bf = new Blowfish(blowFishKey, Blowfish.MODE.CBC, Blowfish.PADDING.NULL);
     bf.setIv(Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
     const decrypted = bf.decode(chunk, Blowfish.TYPE.UINT8_ARRAY);
-    return Buffer.from(decrypted);
+
+    // egoroof-blowfish PADDING.NULL strips trailing 0x00 bytes upon decoding.
+    // Audio stream frames may contain legitimate trailing zeroes.
+    // This restores the chunk length natively without corrupting Content-Length offsets!
+    const restored = Buffer.alloc(chunk.length, 0);
+    Buffer.from(decrypted).copy(restored);
+    return restored;
 };
 
 let isDeezerInitialized = false;
