@@ -31,6 +31,8 @@ export default function ArtistProfile() {
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
 
     const [albumModal, setAlbumModal] = useState({ open: false, album: "", artist: "", cover: "" });
+    const [activeMenu, setActiveMenu] = useState<string | null>(null);
+    const [showArtistMenu, setShowArtistMenu] = useState(false);
 
     const { playTrack } = usePlayer();
 
@@ -207,15 +209,33 @@ export default function ArtistProfile() {
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-4 mt-2">
-                                <button className="w-16 h-16 bg-brand-500 hover:bg-brand-400 text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(99,102,241,0.5)] transition-transform active:scale-95 border-2 border-brand-400/50">
+                                <button
+                                    onClick={() => handlePlay(tracks[0])}
+                                    className="w-16 h-16 bg-brand-500 hover:bg-brand-400 text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(99,102,241,0.5)] transition-transform active:scale-95 border-2 border-brand-400/50"
+                                >
                                     <Play size={32} fill="currentColor" className="ml-1.5" />
                                 </button>
                                 <button className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-full flex items-center justify-center transition-colors">
                                     <Shuffle size={20} />
                                 </button>
-                                <button className="w-10 h-10 text-white/70 hover:text-white rounded-full flex items-center justify-center transition-colors">
-                                    <MoreHorizontal size={24} />
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowArtistMenu(!showArtistMenu)}
+                                        className="w-10 h-10 text-white/70 hover:text-white rounded-full flex items-center justify-center transition-colors relative"
+                                    >
+                                        <MoreHorizontal size={24} />
+                                    </button>
+                                    {showArtistMenu && (
+                                        <div className="absolute left-0 mt-2 w-48 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-2 z-50">
+                                            <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors flex items-center gap-2" onClick={() => { setShowArtistMenu(false); alert("Compartiendo artista..."); }}>
+                                                Compartir
+                                            </button>
+                                            <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors flex items-center gap-2" onClick={() => { setShowArtistMenu(false); }}>
+                                                Radio del artista
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -270,9 +290,30 @@ export default function ArtistProfile() {
                                                         ) : <Download size={20} />}
                                                     </button>
                                                 )}
-                                                <button className="p-2 text-white/40 hover:text-white transition-colors" onClick={(e) => e.stopPropagation()}>
-                                                    <MoreHorizontal size={20} />
-                                                </button>
+                                                <div className="relative">
+                                                    <button
+                                                        className={`p-2 transition-colors ${activeMenu === strId ? "text-white" : "text-white/40 hover:text-white"}`}
+                                                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === strId ? null : strId); }}
+                                                    >
+                                                        <MoreHorizontal size={20} />
+                                                    </button>
+                                                    {activeMenu === strId && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
+                                                            <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50">
+                                                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 }); }}>
+                                                                    Ver álbum
+                                                                </button>
+                                                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDownload(track); }}>
+                                                                    Descargar canción
+                                                                </button>
+                                                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors border-t border-white/5 mt-1" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }}>
+                                                                    Agregar a Playlist
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     );

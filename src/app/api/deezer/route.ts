@@ -78,8 +78,11 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     const track = await dfi.getTrackInfo(trackId as string);
 
     if (!track || !track.SNG_TITLE) {
-        throw new Error("Track not found");
+        console.error("[Deezer] Track metadata missing or invalid:", track);
+        throw new Error("Track metadata not found on Deezer");
     }
+
+    console.log(`[Deezer] Track Info: ${track.ART_NAME} - ${track.SNG_TITLE} (ID: ${track.SNG_ID})`);
 
     // Intentar diferentes calidades: 1 (128kbps), 3 (320kbps), 9 (FLAC/320)
     // Priorizamos 1 porque es el más compatible con ARLs gratuitos/estándar
@@ -102,6 +105,13 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     }
 
     if (!trackUrlRes || !trackUrlRes.trackUrl) {
+        console.warn("[Deezer] Full stream URL generation failed. Details:", { lastError, hasMedia: !!(track as any).MEDIA });
+        // Fallback a preview si está disponible en la metadata
+        const preview = (track as any).MEDIA?.find((m: any) => m.TYPE === 'preview')?.HREF || (track as any).PREVIEW;
+        if (preview) {
+            console.log("[Deezer] CDN stream failed, falling back to public preview URL:", preview);
+            return NextResponse.redirect(new URL(preview));
+        }
         throw new Error(`Could not get stream URL: ${lastError}`);
     }
 
@@ -267,10 +277,11 @@ export async function GET(request: NextRequest) {
         console.error("[Deezer API Error]:", deezerErr.message);
 
         // Si es un error de licencia o ARL, intentamos re-inicializar una vez
-        if (deezerErr.message.includes("License") || deezerErr.message.includes("ARL")) {
+        if (deezerErr.message.includes("License") || deezerErr.message.includes("ARL") || deezerErr.message.includes("token")) {
             try {
                 console.log("[Deezer] Attempting forced re-initialization...");
-                await streamFromDeezer(request, trackId, finalTitle, finalArtist);
+                isDeezerInitialized = false; // Forzar re-inicialización
+                return await streamFromDeezer(request, trackId, finalTitle, finalArtist);
             } catch (retryErr: any) {
                 console.error("[Deezer API Retry Error]:", retryErr.message);
             }
