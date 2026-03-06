@@ -210,16 +210,16 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
             </div>
 
             {/* Main Content Area */}
-            <div className="relative z-10 flex-1 flex flex-col items-center px-6 md:px-12 pb-6 md:pb-8 max-w-2xl mx-auto w-full min-h-0">
+            <div className="relative z-10 flex-1 flex flex-col items-center px-6 md:px-12 pb-2 md:pb-4 max-w-2xl mx-auto w-full min-h-0">
 
                 {/* Spacer */}
-                <div className="flex-[0.5] hidden md:block w-full min-h-0"></div>
+                <div className="flex-[0.5] max-h-[4vh] hidden md:block w-full min-h-0"></div>
 
                 {/* Artwork */}
                 <div className="w-full flex items-center justify-center relative flex-shrink-0 animate-fade-in-up md:my-2 min-h-0">
                     <div
                         className={`relative w-full shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] transition-all duration-500 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden ${isPlaying ? "scale-100 translate-y-0" : "scale-[0.92] opacity-80 translate-y-2"} border border-white/5`}
-                        style={{ maxWidth: 'min(88vw, 45vh, 420px)', aspectRatio: '1/1' }}
+                        style={{ maxWidth: 'min(88vw, 38vh, 380px)', aspectRatio: '1/1' }}
                     >
                         <div className="absolute inset-0 bg-white/5 z-10 pointer-events-none mix-blend-overlay"></div>
                         <img
@@ -235,11 +235,11 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                 </div>
 
                 {/* Bottom Controls Bundle */}
-                <div className="w-full flex flex-col justify-end flex-1 pb-4 z-20">
-                    <div className="flex-1 min-h-[4vh] max-h-[14vh]"></div> {/* Flexible spacer */}
+                <div className="w-full flex flex-col justify-end flex-1 pb-2 z-20">
+                    <div className="flex-1 min-h-[2vh] max-h-[8vh]"></div> {/* Flexible spacer */}
 
                     {/* Track Info & Like */}
-                    <div className="w-full flex items-center justify-between mt-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                    <div className="w-full flex items-center justify-between mt-auto mb-5 md:mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                         <div className="flex flex-col min-w-0 pr-4">
                             <h2 title={currentTrack.title} className="text-[28px] md:text-4xl font-black text-white truncate drop-shadow-md mb-1.5 tracking-tight">
                                 {currentTrack.title}
@@ -281,7 +281,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
 
                     {/* Scrubber / Progress Bar */}
                     <div
-                        className="w-full mb-6 md:mb-8 relative group"
+                        className="w-full mb-5 md:mb-6 relative group"
                         onTouchStart={(e) => e.stopPropagation()}
                         onTouchMove={(e) => e.stopPropagation()}
                     >
@@ -309,7 +309,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                     </div>
 
                     {/* Primary Controls */}
-                    <div className="w-full flex items-center justify-between mb-8 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                    <div className="w-full flex items-center justify-between mb-5 md:mb-6 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                         <button onClick={toggleShuffle} className={`transition-colors p-3 active:scale-90 ${isShuffle ? 'text-brand-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/40 hover:text-white'}`} aria-label="Aleatorio">
                             <Shuffle size={24} />
                         </button>
@@ -325,7 +325,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                         <button
                             onClick={togglePlay}
                             disabled={isLoading}
-                            className="relative flex items-center justify-center w-[84px] h-[84px] rounded-full bg-white text-black shadow-[0_10px_40px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all duration-300 mx-2 disabled:opacity-80 disabled:hover:scale-100 disabled:active:scale-100 disabled:cursor-wait"
+                            className="relative flex items-center justify-center w-[74px] h-[74px] md:w-[84px] md:h-[84px] rounded-full bg-white text-black shadow-[0_10px_40px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all duration-300 mx-2 disabled:opacity-80 disabled:hover:scale-100 disabled:active:scale-100 disabled:cursor-wait"
                             aria-label={isPlaying ? "Pausar" : "Reproducir"}
                         >
                             {isLoading ? (
