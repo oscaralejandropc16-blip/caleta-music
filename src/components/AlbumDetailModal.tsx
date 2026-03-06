@@ -220,9 +220,10 @@ export default function AlbumDetailModal({
                 <button
                     onClick={(e) => { e.stopPropagation(); onClose(); }}
                     aria-label="Cerrar modal"
-                    className="absolute top-5 right-5 z-30 p-2.5 rounded-full bg-white/5 hover:bg-white/15 backdrop-blur-md border border-white/10 text-white/70 hover:text-white transition-all duration-300 shadow-lg hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                    className="absolute right-5 z-50 p-2.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 text-white/90 hover:text-white transition-all duration-300 shadow-lg hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                    style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
                 >
-                    <X size={20} strokeWidth={2.5} />
+                    <X size={22} strokeWidth={2.5} />
                 </button>
 
                 {/* Scrollable content: header + tracks */}

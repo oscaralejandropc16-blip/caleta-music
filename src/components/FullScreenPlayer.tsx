@@ -97,7 +97,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     const hasPrev = currentIndex > 0;
 
     // Create high-res artwork if available
-    const highResArtwork = currentTrack.coverUrl?.replace("100x100", "600x600")?.replace("200x200", "600x600") || "/placeholder.png";
+    const highResArtwork = currentTrack.coverUrl?.replace("100x100", "1000x1000")?.replace("200x200", "1000x1000")?.replace("500x500", "1000x1000") || "/placeholder.png";
 
     return (
         <div
@@ -114,16 +114,16 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
             }}
         >
             {/* Dynamic Background */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none transition-all duration-1000">
                 <div
-                    className="absolute inset-x-0 top-0 h-1/2 opacity-30 blur-[100px] scale-150 transform-gpu satuate-200"
+                    className="absolute inset-0 opacity-40 blur-[120px] scale-125 transform-gpu saturate-[1.5] contrast-125 transition-all duration-1000"
                     style={{
                         backgroundImage: `url(${highResArtwork})`,
-                        backgroundPosition: "center top",
+                        backgroundPosition: "center",
                         backgroundSize: "cover",
                     }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#060913]/80 to-[#060913]" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#060913]/90 to-[#060913] transition-all duration-1000" />
             </div>
 
             {/* Header — swipeable zone indicator */}
@@ -153,30 +153,35 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
             {/* Main Content Area */}
             <div className="relative z-10 flex-1 flex flex-col items-center px-6 md:px-12 pb-6 md:pb-8 max-w-2xl mx-auto w-full min-h-0">
 
-                {/* Spacer (keeps image vertically centered if screen is tall) */}
+                {/* Spacer */}
                 <div className="flex-[0.5] hidden md:block w-full min-h-0"></div>
 
                 {/* Artwork */}
-                <div className="w-full flex items-center justify-center relative my-2 md:my-4 flex-shrink-0">
+                <div className="w-full flex items-center justify-center relative flex-shrink-0 animate-fade-in-up md:my-6">
                     <div
-                        className={`relative w-full shadow-[0_25px_50px_rgba(0,0,0,0.5)] border border-white/10 transition-transform duration-500 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden ${isPlaying ? "scale-100" : "scale-95 opacity-90"}`}
-                        style={{ maxWidth: 'min(100%, 45vh, 420px)', aspectRatio: '1/1' }}
+                        className={`relative w-[88vw] max-w-[420px] aspect-square shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] transition-all duration-500 rounded-[2.5rem] overflow-hidden ${isPlaying ? "scale-100 translate-y-0" : "scale-[0.92] opacity-80 translate-y-2"} border border-white/5`}
                     >
+                        <div className="absolute inset-0 bg-white/5 z-10 pointer-events-none mix-blend-overlay"></div>
                         <img
                             src={highResArtwork}
                             alt={currentTrack.title}
                             className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => {
+                                // Fallback if 1000x1000 fails
+                                (e.target as HTMLImageElement).src = currentTrack.coverUrl || "/placeholder.png";
+                            }}
                         />
                     </div>
                 </div>
 
                 {/* Bottom Controls Bundle */}
-                <div className="w-full flex flex-col items-center flex-shrink-0 z-20">
+                <div className="w-full flex flex-col justify-end flex-1 pb-4 z-20">
+                    <div className="flex-1 min-h-[4vh] max-h-[14vh]"></div> {/* Flexible spacer */}
 
                     {/* Track Info & Like */}
-                    <div className="w-full flex items-center justify-between mb-6 md:mb-8 mt-6 md:mt-4">
+                    <div className="w-full flex items-center justify-between mt-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                         <div className="flex flex-col min-w-0 pr-4">
-                            <h2 title={currentTrack.title} className="text-2xl md:text-4xl font-black text-white truncate drop-shadow-sm mb-1 leading-tight">
+                            <h2 title={currentTrack.title} className="text-[28px] md:text-4xl font-black text-white truncate drop-shadow-md mb-1.5 tracking-tight">
                                 {currentTrack.title}
                             </h2>
                             <div
@@ -241,53 +246,65 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                     </div>
 
                     {/* Primary Controls */}
-                    <div className="w-full flex items-center justify-between mb-6 md:mb-8 max-w-[360px]">
-                        <button onClick={toggleShuffle} className={`transition-colors p-2 md:p-3 active:scale-90 ${isShuffle ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Aleatorio">
+                    <div className="w-full flex items-center justify-between mb-8 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                        <button onClick={toggleShuffle} className={`transition-colors p-3 active:scale-90 ${isShuffle ? 'text-brand-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/40 hover:text-white'}`} aria-label="Aleatorio">
                             <Shuffle size={24} />
                         </button>
 
                         <button
                             onClick={playPrev}
                             disabled={!hasPrev}
-                            aria-label="Anterior"
-                            className={`text-white transition-all p-2 md:p-3 hover:scale-110 active:scale-90 ${!hasPrev && 'opacity-30 cursor-not-allowed'}`}
+                            className={`text-white/80 hover:text-white transition-all p-2 mx-2 active:scale-90 ${!hasPrev && 'opacity-30 cursor-not-allowed'}`}
                         >
-                            <SkipBack className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" />
+                            <SkipBack className="w-9 h-9 md:w-11 md:h-11 shadow-sm" fill="currentColor" />
                         </button>
 
                         <button
                             onClick={togglePlay}
-                            disabled={isLoading}
+                            className="relative flex items-center justify-center w-[84px] h-[84px] rounded-full bg-white text-black shadow-[0_10px_40px_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 transition-all duration-300 mx-2"
                             aria-label={isPlaying ? "Pausar" : "Reproducir"}
-                            className="w-[72px] h-[72px] md:w-24 md:h-24 bg-brand-500 hover:bg-brand-400 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(99,102,241,0.5)] border flex-shrink-0 border-brand-500/30 disabled:opacity-80 disabled:hover:scale-100 disabled:active:scale-100"
                         >
-                            {isLoading ? <EqLoader size={28} /> : (isPlaying ? <Pause className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" /> : <Play className="w-8 h-8 md:w-10 md:h-10 ml-2" fill="currentColor" />)}
+                            {isLoading ? (
+                                <EqLoader size={34} />
+                            ) : isPlaying ? (
+                                <Pause size={38} fill="currentColor" strokeWidth={0} />
+                            ) : (
+                                <Play size={40} fill="currentColor" strokeWidth={0} className="ml-2" />
+                            )}
                         </button>
 
                         <button
                             onClick={playNext}
                             disabled={!hasNext && repeatMode === 'none' && !isShuffle}
-                            aria-label="Siguiente"
-                            className={`text-white transition-all p-2 md:p-3 hover:scale-110 active:scale-90 ${(!hasNext && repeatMode === 'none' && !isShuffle) && 'opacity-30 cursor-not-allowed'}`}
+                            className={`text-white/80 hover:text-white transition-all p-2 mx-2 active:scale-90 ${(!hasNext && repeatMode === 'none' && !isShuffle) && 'opacity-30 cursor-not-allowed'}`}
                         >
-                            <SkipForward className="w-8 h-8 md:w-10 md:h-10" fill="currentColor" />
+                            <SkipForward className="w-9 h-9 md:w-11 md:h-11 shadow-sm" fill="currentColor" />
                         </button>
 
-                        <button onClick={toggleRepeat} className={`relative transition-colors p-2 md:p-3 active:scale-90 ${repeatMode !== 'none' ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Repetir">
+                        <button onClick={toggleRepeat} className={`relative transition-colors p-3 active:scale-90 ${repeatMode !== 'none' ? 'text-brand-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-white/40 hover:text-white'}`} aria-label="Repetir">
                             <Repeat size={24} />
-                            {repeatMode === 'one' && <span className="absolute text-[10px] font-bold -top-0 -right-0 bg-black rounded-full w-[16px] h-[16px] flex items-center justify-center text-white">1</span>}
+                            {repeatMode === 'one' && <span className="absolute text-[10px] font-bold -top-0 -right-0 bg-brand-500 rounded-full w-[16px] h-[16px] flex items-center justify-center text-white">1</span>}
                         </button>
                     </div>
 
                     {/* Secondary Actions / Footer */}
-                    <div className="w-full flex justify-between items-center max-w-[360px] pb-4 md:pb-0 px-2 mt-2">
-                        <button onClick={() => { onClose(); toggleLyrics(); }} className={`transition-colors p-2 active:scale-90 ${isLyricsVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Letras">
+                    <div className="w-full flex items-center justify-between text-white/40 px-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                        <button
+                            onClick={() => { onClose(); toggleLyrics(); }}
+                            className={`p-3 transition-colors rounded-xl active:scale-90 ${isLyricsVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                        >
                             <Mic2 size={22} />
                         </button>
-                        <button onClick={() => { onClose(); toggleDevices(); }} className={`transition-colors p-2 active:scale-90 ${isDevicesVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Dispositivos">
+                        <button
+                            onClick={() => { onClose(); toggleDevices(); }}
+                            className={`p-3 transition-colors rounded-xl active:scale-90 ${isDevicesVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                        >
                             <MonitorSpeaker size={22} />
                         </button>
-                        <button onClick={() => { onClose(); toggleQueue(); }} className={`transition-colors p-2 active:scale-90 ${isQueueVisible ? 'text-brand-500' : 'text-white/40 hover:text-white'}`} aria-label="Cola de reproducción">
+                        <button
+                            onClick={() => { onClose(); toggleQueue(); }}
+                            className={`p-3 transition-colors rounded-xl flex items-center gap-2 active:scale-90 ${isQueueVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                        >
                             <ListMusic size={22} />
                         </button>
                     </div>

@@ -12,7 +12,6 @@ export default function ProfilePage() {
     const [username, setUsername] = useState(profile?.username || "");
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const userAvatar = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
     const userEmail = user?.email || "";
@@ -29,26 +28,6 @@ export default function ProfilePage() {
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
-
-    const handleDeleteAccount = async () => {
-        // Enlaza con AuthContext para hacer limpieza profunda si es posible
-        // Por ahora limpiamos localStorage y cerramos sesion para desactivar
-        try {
-            if (audioRef?.current) {
-                audioRef.current.pause();
-                audioRef.current.removeAttribute('src');
-                audioRef.current.load();
-            }
-            if (typeof window !== 'undefined') {
-                const { clearAllLocalData } = await import('@/lib/db');
-                await clearAllLocalData();
-                localStorage.clear();
-            }
-        } catch (err) { }
-
-        await signOut();
-        window.location.href = "/";
-    }
 
     return (
         <main className="p-4 md:p-8 max-w-3xl mx-auto animate-fade-in-up">
@@ -194,52 +173,6 @@ export default function ProfilePage() {
                 </div>
                 <ChevronRight size={20} className="text-slate-500 group-hover:text-brand-400 group-hover:translate-x-1 transition-all" />
             </Link>
-
-            {/* Danger Zone Card */}
-            <div className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border border-red-500/20 bg-red-500/5">
-                <div className="flex-1">
-                    <h3 className="text-xl font-bold text-red-500 mb-2 flex items-center gap-2">
-                        Zona de Peligro
-                    </h3>
-                    <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-                        Una vez que elimines tu cuenta, no hay vuelta atrás. Esto borrará permanentemente toda tu información y preferencias de nuestros servidores.
-                    </p>
-                </div>
-                <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="px-6 py-3.5 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white shadow-[0_4px_15px_rgba(239,68,68,0.3)] active:scale-95 transition-all w-full sm:w-auto outline-none focus-visible:ring-4 focus-visible:ring-red-500/50 whitespace-nowrap"
-                >
-                    Eliminar cuenta
-                </button>
-            </div>
-
-            {/* Modal de confirmacion de eliminacion */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-up">
-                    <div className="bg-[#121216] border border-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.15)] rounded-3xl w-full max-w-md p-6 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 to-rose-500"></div>
-                        <h3 className="text-xl font-bold text-white mb-2">¿Estás seguro?</h3>
-                        <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                            Esta acción <strong className="text-red-400 font-bold">no se puede deshacer</strong>. Todas tus canciones descargadas, tu biblioteca en la nube y tus configuraciones serán eliminadas permanentemente.
-                        </p>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowDeleteConfirm(false)}
-                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors text-sm"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleDeleteAccount}
-                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.4)] active:scale-95 transition-all text-sm"
-                            >
-                                Sí, eliminar mi cuenta
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </main>
     );
 }

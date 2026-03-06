@@ -1,7 +1,8 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft, Moon, Bell, Shield, Smartphone, HardDrive, AlertCircle } from "lucide-react";
+import { usePlayer } from "@/context/PlayerContext";
+import { ArrowLeft, Moon, Bell, AlertCircle, HardDrive } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
@@ -9,8 +10,11 @@ import { clearEntireLibrary } from "@/lib/syncLibrary";
 
 export default function SettingsPage() {
     const { signOut } = useAuth();
+    const { audioRef } = usePlayer();
+
     const [clearing, setClearing] = useState(false);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [darkMode, setDarkMode] = useState(true);
     const [notificationsOn, setNotificationsOn] = useState(false);
 
@@ -50,6 +54,24 @@ export default function SettingsPage() {
         }
         setClearing(false);
     };
+
+    const handleDeleteAccount = async () => {
+        try {
+            if (audioRef?.current) {
+                audioRef.current.pause();
+                audioRef.current.removeAttribute('src');
+                audioRef.current.load();
+            }
+            if (typeof window !== 'undefined') {
+                const { clearAllLocalData } = await import('@/lib/db');
+                await clearAllLocalData();
+                localStorage.clear();
+            }
+        } catch (err) { }
+
+        await signOut();
+        window.location.href = "/";
+    }
 
     const handleDakModeToggle = () => {
         const newDarkMode = !darkMode;
@@ -166,6 +188,27 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
+                {/* Danger Zone */}
+                <div className="bg-red-500/5 backdrop-blur-xl border border-red-500/20 rounded-3xl p-6">
+                    <h2 className="text-sm font-bold text-red-500 uppercase tracking-widest mb-4">Zona de Peligro</h2>
+
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <p className="font-semibold text-red-500">Eliminar cuenta</p>
+                                <p className="text-xs text-slate-400 max-w-sm">
+                                    Borrará permanentemente toda tu información y preferencias.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="px-5 py-2.5 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white shadow-[0_4px_15px_rgba(239,68,68,0.3)] active:scale-95 transition-all outline-none focus-visible:ring-4 focus-visible:ring-red-500/50"
+                            >
+                                Eliminar cuenta
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Custom Confirm Modal */}
@@ -197,6 +240,34 @@ export default function SettingsPage() {
                                     Cancelar
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmacion de eliminacion de cuenta */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-up">
+                    <div className="bg-[#121216] border border-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.15)] rounded-3xl w-full max-w-md p-6 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 to-rose-500"></div>
+                        <h3 className="text-xl font-bold text-white mb-2">¿Estás seguro?</h3>
+                        <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                            Esta acción <strong className="text-red-400 font-bold">no se puede deshacer</strong>. Todas tus canciones descargadas, tu biblioteca en la nube y tus configuraciones serán eliminadas permanentemente.
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteAccount}
+                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.4)] active:scale-95 transition-all text-sm"
+                            >
+                                Sí, eliminar mi cuenta
+                            </button>
                         </div>
                     </div>
                 </div>
