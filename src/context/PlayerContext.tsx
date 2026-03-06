@@ -322,24 +322,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                 try {
                     if (cancelled) return;
-                    await audio.play();
-                    setIsPlaying(true);
+                    setIsLoading(true);
+
+                    const playPromise = audio.play();
+
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            if (!cancelled) {
+                                setIsPlaying(true);
+                            }
+                        }).catch((err: any) => {
+                            if (cancelled) return;
+                            if (err.name === 'NotAllowedError') { setIsPlaying(false); return; }
+                            if (err.name === 'AbortError') return;
+
+                            console.warn("[Player] Play promise error:", err?.message);
+                            if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
+                                const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                                attemptPlay(ytUrl, 1);
+                            } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
+                                attemptPlay(currentTrack.previewUrl, 2);
+                            }
+                            setIsPlaying(false);
+                        }).finally(() => {
+                            if (!cancelled) setIsLoading(false);
+                        });
+                    }
                 } catch (err: any) {
                     if (cancelled) return;
-                    if (err.name === 'NotAllowedError') { setIsPlaying(false); return; }
-                    if (err.name === 'AbortError') return;
-
-                    console.warn("[Player] Play error:", err?.message);
-                    if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                        const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
-                        attemptPlay(ytUrl, 1);
-                        return;
-                    }
-                    if (fallbackLevel === 1 && currentTrack.previewUrl) {
-                        attemptPlay(currentTrack.previewUrl, 2);
-                        return;
-                    }
+                    setIsPlaying(false);
                     setIsLoading(false);
+                    console.warn("[Player] Play attempt error:", err?.message);
                 }
             };
 
