@@ -40,24 +40,7 @@ export default function LoadingScreen() {
 
             {/* Logo with animated ring */}
             <div className="relative mb-8">
-                {/* Spinning ring */}
-                <svg className="absolute -inset-4 w-[calc(100%+32px)] h-[calc(100%+32px)] animate-spin" style={{ animationDuration: '3s' }} viewBox="0 0 100 100">
-                    <defs>
-                        <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
-                            <stop offset="50%" stopColor="#a855f7" stopOpacity="0.4" />
-                            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    <circle
-                        cx="50" cy="50" r="46"
-                        fill="none"
-                        stroke="url(#ring-grad)"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeDasharray="100 200"
-                    />
-                </svg>
+
 
                 {/* Pulsing glow behind logo */}
                 <div className="absolute inset-0 bg-brand-500/30 rounded-2xl blur-xl animate-pulse" />
