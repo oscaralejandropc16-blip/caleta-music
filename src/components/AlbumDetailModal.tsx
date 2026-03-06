@@ -53,96 +53,98 @@ export default function AlbumDetailModal({
             setAlbumMeta(null);
 
             try {
-                // Step 1: Search for the album to get collectionId
-                const searchRes = await fetch(
-                    `https://itunes.apple.com/search?term=${encodeURIComponent(albumName + " " + artistName)}&entity=album&limit=10`
-                );
-                const searchData = await searchRes.json();
+                try {
+                    // Step 1: Search for the album to get collectionId (via Deezer)
+                    const searchRes = await fetch(
+                        `https://api.deezer.com/search/album?q=${encodeURIComponent(albumName + " " + artistName)}&limit=10`
+                    );
+                    const searchData = await searchRes.json();
 
-                const albums = searchData.results || [];
-                const targetAlbumStr = albumName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-                const targetArtistStr = artistName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+                    const albums = searchData.data || [];
+                    const targetAlbumStr = albumName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+                    const targetArtistStr = artistName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
 
-                let matchedAlbum = albums.find(
-                    (a: any) =>
-                        a.collectionName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim() === targetAlbumStr &&
-                        a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
-                );
-
-                if (!matchedAlbum) {
-                    matchedAlbum = albums.find(
+                    let matchedAlbum = albums.find(
                         (a: any) =>
-                            (a.collectionName?.toLowerCase().includes(targetAlbumStr) || targetAlbumStr.includes(a.collectionName?.toLowerCase() || "")) &&
-                            a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                            a.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim() === targetAlbumStr &&
+                            a.artist.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
                     );
-                }
 
-                if (!matchedAlbum) {
-                    matchedAlbum = albums.find(
-                        (a: any) => a.artistName?.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
-                    ) || albums[0];
-                }
-
-                if (matchedAlbum && matchedAlbum.collectionId) {
-                    // Step 2: Use lookup API to get ALL tracks + album metadata
-                    const lookupRes = await fetch(
-                        `https://itunes.apple.com/lookup?id=${matchedAlbum.collectionId}&entity=song`
-                    );
-                    const lookupData = await lookupRes.json();
-                    const results = lookupData.results || [];
-
-                    // First result is the collection (album) wrapper with metadata
-                    const collectionWrapper = results.find((r: any) => r.wrapperType === "collection");
-                    if (collectionWrapper) {
-                        setAlbumMeta({
-                            releaseDate: collectionWrapper.releaseDate || "",
-                            primaryGenreName: collectionWrapper.primaryGenreName || "",
-                            copyright: collectionWrapper.copyright || "",
-                            trackCount: collectionWrapper.trackCount || 0,
-                            collectionType: collectionWrapper.collectionType || "Album",
-                            contentAdvisoryRating: collectionWrapper.contentAdvisoryRating || "",
-                            collectionPrice: collectionWrapper.collectionPrice || 0,
-                            currency: collectionWrapper.currency || "USD",
-                            country: collectionWrapper.country || "",
-                        });
+                    if (!matchedAlbum) {
+                        matchedAlbum = albums.find(
+                            (a: any) =>
+                                (a.title.toLowerCase().includes(targetAlbumStr) || targetAlbumStr.includes(a.title.toLowerCase() || "")) &&
+                                a.artist.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                        );
                     }
 
-                    // Remaining results are the tracks
-                    const tracks = results
-                        .filter((r: any) => r.wrapperType === "track" && r.kind === "song")
-                        .sort((a: any, b: any) => (a.discNumber || 1) * 100 + (a.trackNumber || 0) - ((b.discNumber || 1) * 100 + (b.trackNumber || 0)));
+                    if (!matchedAlbum) {
+                        matchedAlbum = albums.find(
+                            (a: any) => a.artist.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().includes(targetArtistStr)
+                        ) || albums[0];
+                    }
 
-                    setItunesTracks(tracks);
-                } else {
-                    // Fallback: regular search
-                    const fallbackRes = await fetch(
-                        `https://itunes.apple.com/search?term=${encodeURIComponent(albumName)}&entity=song&limit=30`
-                    );
-                    const fallbackData = await fallbackRes.json();
-                    const filtered = (fallbackData.results || []).filter(
-                        (t: ItunesTrack) => t.collectionName?.toLowerCase() === albumName.toLowerCase()
-                    );
-                    setItunesTracks(filtered.length > 0 ? filtered : fallbackData.results || []);
+                    if (matchedAlbum && matchedAlbum.id) {
+                        // Step 2: Extract ALL tracks via Deezer Album API
+                        const albumRes = await fetch(`https://api.deezer.com/album/${matchedAlbum.id}`);
+                        const albumData = await albumRes.json();
+
+                        setAlbumMeta({
+                            releaseDate: albumData.release_date || "",
+                            primaryGenreName: (albumData.genres?.data && albumData.genres.data.length > 0) ? albumData.genres.data[0].name : "Music",
+                            copyright: albumData.label || "",
+                            trackCount: albumData.nb_tracks || 0,
+                            collectionType: albumData.record_type || "Album",
+                            contentAdvisoryRating: albumData.explicit_lyrics ? "Explicit" : "",
+                            collectionPrice: 0,
+                            currency: "USD",
+                            country: "US",
+                        });
+
+                        // Remaining results are the tracks mapped to ItunesTrack
+                        const tracks: ItunesTrack[] = (albumData.tracks?.data || []).map((t: any) => ({
+                            wrapperType: "track",
+                            kind: "song",
+                            artistId: t.artist.id,
+                            collectionId: albumData.id,
+                            trackId: t.id,
+                            artistName: t.artist.name,
+                            collectionName: albumData.title,
+                            trackName: t.title,
+                            previewUrl: t.preview,
+                            artworkUrl30: albumData.cover_small,
+                            artworkUrl60: albumData.cover_small,
+                            artworkUrl100: albumData.cover_medium,
+                            releaseDate: albumData.release_date || "",
+                            trackTimeMillis: parseInt(t.duration || "0") * 1000,
+                            primaryGenreName: "Música",
+                            isStreamable: true,
+                            _source: "deezer"
+                        }));
+
+                        setItunesTracks(tracks);
+                    } else {
+                        setItunesTracks([]);
+                    }
+                } catch (err) {
+                    console.error("Error loading album:", err);
                 }
-            } catch (err) {
-                console.error("Error loading album:", err);
-            }
 
-            // Load saved tracks
-            const saved = await getAllTracksFromDB();
-            setSavedTrackIds(new Set(saved.map(s => s.id)));
+                // Load saved tracks
+                const saved = await getAllTracksFromDB();
+                setSavedTrackIds(new Set(saved.map(s => s.id)));
 
-            const likes: Record<string, boolean> = {};
-            for (const s of saved) {
-                likes[s.id] = await isTrackLiked(s.id);
-            }
-            setLikedMap(likes);
+                const likes: Record<string, boolean> = {};
+                for (const s of saved) {
+                    likes[s.id] = await isTrackLiked(s.id);
+                }
+                setLikedMap(likes);
 
-            setLoading(false);
-        };
+                setLoading(false);
+            };
 
-        loadAlbum();
-    }, [isOpen, albumName, artistName]);
+            loadAlbum();
+        }, [isOpen, albumName, artistName]);
 
     if (!isOpen) return null;
 

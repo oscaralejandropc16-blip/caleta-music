@@ -9,6 +9,7 @@ import FullScreenPlayer from "./FullScreenPlayer";
 import { useRouter } from "next/navigation";
 import EqLoader from "./EqLoader";
 import Link from "next/link";
+import AddToPlaylistModal from "./AddToPlaylistModal";
 
 export default function AudioPlayer() {
     const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, audioRef, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices, isLyricsVisible, toggleLyrics } = usePlayer();
@@ -18,6 +19,7 @@ export default function AudioPlayer() {
     const [volume, setVolume] = useState(100);
     const [prevVolume, setPrevVolume] = useState(100);
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
 
     useEffect(() => {
         setIsClient(true);
@@ -169,7 +171,7 @@ export default function AudioPlayer() {
                             >
                                 <Heart size={18} fill={liked ? "currentColor" : "none"} />
                             </button>
-                            <button onClick={() => toast("Añadir a playlist próximamente", { icon: "🎵", style: { background: "#1e1e24", color: "#fff", borderColor: "#ffffff10", borderWidth: "1px" } })} className="p-2 text-neutral-400 hover:text-white transition-colors outline-none active:scale-90" title="Añadir a playlist">
+                            <button onClick={() => setIsPlaylistModalOpen(true)} className="p-2 text-neutral-400 hover:text-white transition-colors outline-none active:scale-90" title="Añadir a playlist">
                                 <Plus size={18} />
                             </button>
                         </div>
@@ -285,6 +287,13 @@ export default function AudioPlayer() {
                     onClose={() => setIsFullScreen(false)}
                 />
             )}
+
+            {/* Add to Playlist Modal */}
+            <AddToPlaylistModal
+                isOpen={isPlaylistModalOpen}
+                onClose={() => setIsPlaylistModalOpen(false)}
+                track={currentTrack}
+            />
         </>
     );
 }
