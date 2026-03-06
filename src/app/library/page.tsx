@@ -114,10 +114,20 @@ function LibraryContent() {
 
     const handleDownloadCloud = async (e: React.MouseEvent, track: UnifiedTrack) => {
         e.stopPropagation();
-        if (!track.sourceAudioUrl) return;
+
+        const mockTrack = {
+            trackId: 0,
+            trackName: track.title,
+            artistName: track.artist,
+            collectionName: track.album || "",
+            artworkUrl100: track.coverUrl || "",
+            previewUrl: track.sourceAudioUrl || "",
+            _source: 'deezer'
+        } as any;
 
         setDownloadingCloudIds(prev => new Set(prev).add(track.id));
-        const result = await downloadAndSaveTrack(null, track.sourceAudioUrl, track.id);
+
+        const result = await downloadAndSaveTrack(mockTrack, track.sourceAudioUrl || null, track.id);
 
         if (result.success) {
             await loadLibrary();
@@ -189,8 +199,18 @@ function LibraryContent() {
     };
 
     const getMergedTracks = (): UnifiedTrack[] => {
-        const mergedTracks: UnifiedTrack[] = [...tracks];
-        const localTrackIds = new Set(tracks.map(t => t.id));
+        const localTrackIds = new Set<string>();
+
+        const mergedTracks: UnifiedTrack[] = tracks.map(t => {
+            localTrackIds.add(t.id);
+            // Local tracks that lack a blob means they were pulled from cloud sync, but not downloaded locally
+            const isCloud = !t.blob;
+            return {
+                ...t,
+                isCloudOnly: isCloud,
+                sourceAudioUrl: t.streamUrl || t.previewUrl || ''
+            };
+        });
 
         cloudTracks.forEach(ct => {
             if (!localTrackIds.has(ct.id)) {

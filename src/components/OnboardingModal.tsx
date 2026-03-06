@@ -40,7 +40,9 @@ export default function OnboardingModal({
 
     const handleSave = () => {
         if (selected.length < 3) return;
-        localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify(selected));
+        try {
+            localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify(selected));
+        } catch { /* localStorage not available */ }
         onComplete(selected);
     };
 
@@ -108,7 +110,9 @@ export default function OnboardingModal({
                     <div className="flex gap-4 items-center">
                         <button
                             onClick={() => {
-                                localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify([]));
+                                try {
+                                    localStorage.setItem(`caleta_artists_${userId}`, JSON.stringify([]));
+                                } catch { /* localStorage not available */ }
                                 onComplete([]);
                             }}
                             className="px-6 py-3.5 text-slate-400 hover:text-white font-bold rounded-xl transition-all active:scale-95 hover:bg-white/5"

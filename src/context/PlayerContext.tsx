@@ -58,18 +58,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     // Restore state from localStorage on mount
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         try {
             const savedState = localStorage.getItem("caleta-player-state");
             if (savedState) {
-                const { queue: savedQueue, currentIndex: savedIdx, isShuffle: savedIsShuffle, repeatMode: savedRepeatMode } = JSON.parse(savedState);
-                if (savedQueue && savedQueue.length > 0) {
+                const parsed = JSON.parse(savedState);
+                const savedQueue = parsed?.queue;
+                const savedIdx = parsed?.currentIndex ?? 0;
+                const savedIsShuffle = parsed?.isShuffle ?? false;
+                const savedRepeatMode = parsed?.repeatMode ?? 'none';
+                if (Array.isArray(savedQueue) && savedQueue.length > 0) {
                     // Rehydrate optional blobs for offline tracks
                     import("@/lib/db").then(({ getTrackFromDB }) => {
                         Promise.all(savedQueue.map(async (t: any) => {
-                            if (!t.streamUrl && t.id) {
-                                const dbTrack = await getTrackFromDB(t.id);
-                                if (dbTrack) return dbTrack;
-                            }
+                            try {
+                                if (!t.streamUrl && t.id) {
+                                    const dbTrack = await getTrackFromDB(t.id);
+                                    if (dbTrack) return dbTrack;
+                                }
+                            } catch { /* ignore individual track errors */ }
                             return t;
                         })).then(restoredQueue => {
                             // Primero establecemos la bandera a false antes de setear track
@@ -77,21 +84,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                             setQueue(restoredQueue);
                             setCurrentIndex(savedIdx);
-                            setIsShuffle(savedIsShuffle || false);
-                            setRepeatMode(savedRepeatMode || 'none');
+                            setIsShuffle(savedIsShuffle);
+                            setRepeatMode(savedRepeatMode);
                             setCurrentTrack(restoredQueue[savedIdx] || null);
                             // Avoid automatically playing on reload to respect browser policies
-                        });
-                    });
+                        }).catch(e => console.warn("Failed to rehydrate queue", e));
+                    }).catch(e => console.warn("Failed to import db module", e));
                 }
             }
         } catch (e) {
             console.warn("Failed to restore player state", e);
+            // Clear corrupt state
+            try { localStorage.removeItem("caleta-player-state"); } catch { }
         }
     }, []);
 
     // Save state to localStorage when it changes
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         if (queue.length > 0) {
             try {
                 // Strip blob because it can't be serialized to JSON
@@ -123,6 +133,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }, [queue, isShuffle]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         if (!audioRef.current) {
             audioRef.current = new Audio();
         }
@@ -296,47 +307,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 // Para URLs de API que devuelven JSON (Vercel), necesitamos resolver la URL real.
                 // Para URLs de API locales o blobs, asignar directamente (reproducción instantánea).
                 if ((url.includes('/api/deezer') || url.includes('/api/download')) && !url.startsWith('blob:')) {
+                    // Para reproducción inmediata (streaming real) asignamos la URL directamente.
+                    // Se envía play=true para que las rutas API devuelvan un redirect 302 hacia 
+                    // los servidores externos (YouTube, etc) en vez de un JSON.
+                    // Esto permite que el navegador haga el buffering nativo de la canción mucho más rápido.
                     setIsLoading(true);
-                    const timeoutId = setTimeout(() => !cancelled && abortController.abort(), 90000);
-                    try {
-                        const res = await fetch(url, { signal: abortController.signal });
-                        clearTimeout(timeoutId);
-                        if (cancelled) return;
-                        if (!res.ok) throw new Error(`API returned ${res.status}`);
-
-                        const contentType = res.headers.get('content-type') || '';
-                        if (contentType.includes('application/json')) {
-                            // Vercel: JSON con URL directa
-                            const data = await res.json();
-                            if (data.audioUrl) {
-                                audio.src = data.audioUrl;
-                            } else {
-                                throw new Error("No audioUrl in JSON");
-                            }
-                        } else {
-                            // Local: audio binario directo → blob para reproducción estable
-                            const blob = await res.blob();
-                            if (cancelled) return;
-                            if (blob.size < 50000) throw new Error(`Audio too small (${blob.size} bytes)`);
-                            const blobUrlTemp = URL.createObjectURL(blob);
-                            audio.src = blobUrlTemp;
-                        }
-                    } catch (err: any) {
-                        if (cancelled) return;
-                        console.warn("[Player] API fetch failed:", err?.message);
-
-                        if (url.includes('/api/deezer') && fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                            const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
-                            attemptPlay(ytUrl, 1);
-                            return;
-                        }
-                        if (fallbackLevel <= 1 && currentTrack.previewUrl) {
-                            audio.src = currentTrack.previewUrl;
-                        } else {
-                            setIsLoading(false);
-                            return;
-                        }
-                    }
+                    const separator = url.includes('?') ? '&' : '?';
+                    audio.src = `${url}${separator}play=true`;
                 } else {
                     audio.src = url;
                 }

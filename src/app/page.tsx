@@ -192,29 +192,39 @@ export default function Home() {
     if (!user) {
       setFavoriteArtists([]);
     } else {
-      const metadataArtists = user.user_metadata?.favorite_artists;
-      if (metadataArtists && Array.isArray(metadataArtists) && metadataArtists.length > 0) {
-        setFavoriteArtists(metadataArtists);
-        localStorage.setItem(`caleta_artists_${user.id}`, JSON.stringify(metadataArtists));
-      } else {
-        const saved = localStorage.getItem(`caleta_artists_${user.id}`);
-        if (saved) {
+      try {
+        const metadataArtists = user.user_metadata?.favorite_artists;
+        if (metadataArtists && Array.isArray(metadataArtists) && metadataArtists.length > 0) {
+          setFavoriteArtists(metadataArtists);
           try {
-            const parsed = JSON.parse(saved);
-            setFavoriteArtists(parsed);
-
-            // Si estaba en el local storage pero no en la nube, guárdalo 
-            if (parsed.length > 0) {
-              import('@/lib/supabase').then(({ supabase }) => {
-                supabase.auth.updateUser({ data: { favorite_artists: parsed } });
-              });
-            }
-          } catch (e) {
-            setFavoriteArtists([]);
-          }
+            localStorage.setItem(`caleta_artists_${user.id}`, JSON.stringify(metadataArtists));
+          } catch { /* localStorage not available */ }
         } else {
-          setFavoriteArtists(null); // Null will trigger the Onboarding modal!
+          let saved: string | null = null;
+          try {
+            saved = localStorage.getItem(`caleta_artists_${user.id}`);
+          } catch { /* localStorage not available */ }
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              setFavoriteArtists(parsed);
+
+              // Si estaba en el local storage pero no en la nube, guárdalo 
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                import('@/lib/supabase').then(({ supabase }) => {
+                  supabase.auth.updateUser({ data: { favorite_artists: parsed } });
+                }).catch(() => { });
+              }
+            } catch (e) {
+              setFavoriteArtists([]);
+            }
+          } else {
+            setFavoriteArtists(null); // Null will trigger the Onboarding modal!
+          }
         }
+      } catch (e) {
+        console.warn("Error loading favorite artists:", e);
+        setFavoriteArtists([]);
       }
     }
   }, [user, authLoading]);

@@ -63,13 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let isMounted = true;
 
-        // Safety timeout — never stay loading more than 5 seconds
+        // Safety timeout — never stay loading more than 10 seconds (mobile can be slow)
         const timeout = setTimeout(() => {
             if (isMounted && loading) {
                 console.warn("Auth loading timeout — proceeding without session");
                 setLoading(false);
             }
-        }, 5000);
+        }, 10000);
 
         const init = async () => {
             try {

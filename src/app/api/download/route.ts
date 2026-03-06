@@ -431,6 +431,9 @@ export async function GET(request: NextRequest) {
 
             const result = await resolveAudioUrlWithPiped(query);
 
+            const isPlay = searchParams.get("play") === "true";
+            if (isPlay) return NextResponse.redirect(result.audioUrl);
+
             // Devolver JSON con la URL directa del audio
             // El cliente descargará directamente desde Piped CDN
             return NextResponse.json({
@@ -446,6 +449,9 @@ export async function GET(request: NextRequest) {
             const videoId = extractYouTubeVideoId(directUrl);
             if (videoId) {
                 const result = await resolveVideoAudioUrl(videoId);
+                const isPlay = searchParams.get("play") === "true";
+                if (isPlay) return NextResponse.redirect(result.audioUrl);
+
                 return NextResponse.json({
                     audioUrl: result.audioUrl,
                     contentType: result.contentType,

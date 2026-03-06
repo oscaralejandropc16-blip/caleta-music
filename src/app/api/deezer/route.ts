@@ -391,6 +391,8 @@ export async function GET(request: NextRequest) {
                 });
 
                 console.log(`[yt-dlp] Resolved: "${ytDlpResult.title}" in ~2s`);
+                const isPlay = searchParams.get("play") === "true";
+                if (isPlay) return NextResponse.redirect(ytDlpResult.audioUrl);
                 return NextResponse.json({
                     audioUrl: ytDlpResult.audioUrl,
                     title: ytDlpResult.title || query,
@@ -407,6 +409,8 @@ export async function GET(request: NextRequest) {
             const result = await resolveYouTubeAudio(query);
             if (result) {
                 console.log(`[Deezer→YT] YouTube resolved successfully: ${result.title}`);
+                const isPlay = searchParams.get("play") === "true";
+                if (isPlay) return NextResponse.redirect(result.audioUrl);
                 return NextResponse.json({
                     audioUrl: result.audioUrl,
                     title: result.title,

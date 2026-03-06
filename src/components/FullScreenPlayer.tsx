@@ -102,7 +102,10 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     return (
         <div
             ref={containerRef}
-            className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
             style={{
                 transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
                 transition: isDragging.current ? 'none' : 'transform 0.3s ease-out',
@@ -123,13 +126,8 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#060913]/80 to-[#060913]" />
             </div>
 
-            {/* Header — swipeable zone */}
-            <div
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                className="relative z-10 flex flex-col items-center"
-            >
+            {/* Header — swipeable zone indicator */}
+            <div className="relative z-10 flex flex-col items-center shrink-0">
                 {/* Drag handle indicator */}
                 <div className="w-10 h-1 bg-white/20 rounded-full mt-3 mb-1" />
                 <div className="flex items-center justify-between w-full p-6 pt-2">
@@ -217,7 +215,11 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                     </div>
 
                     {/* Scrubber / Progress Bar */}
-                    <div className="w-full mb-6 md:mb-8 relative group">
+                    <div
+                        className="w-full mb-6 md:mb-8 relative group"
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchMove={(e) => e.stopPropagation()}
+                    >
                         <div
                             className="h-2.5 bg-white/10 rounded-full cursor-pointer overflow-hidden transition-all duration-200 group-hover:h-3.5"
                             onClick={(e) => {
