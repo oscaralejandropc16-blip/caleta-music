@@ -187,7 +187,7 @@ export default function Sidebar() {
                         </Link>
 
                         <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setShowUserMenu(false);
@@ -200,6 +200,9 @@ export default function Sidebar() {
                                         audioRef.current.load();
                                     }
                                     localStorage.removeItem('caleta-player-state');
+                                    // Borrar BD local del UI para que otro usuario no la vea de inmediato
+                                    const { clearAllLocalData } = await import('@/lib/db');
+                                    await clearAllLocalData();
                                 } catch (e) { console.error("Error pausing", e); }
 
                                 signOut().finally(() => {
