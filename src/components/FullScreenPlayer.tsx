@@ -25,6 +25,64 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
     const containerRef = useRef<HTMLDivElement>(null);
     const [dragOffset, setDragOffset] = useState(0);
 
+    // Scrubber dragging state
+    const [isDraggingProgress, setIsDraggingProgress] = useState(false);
+    const [dragProgress, setDragProgress] = useState(0);
+    const progressBarRef = useRef<HTMLDivElement>(null);
+
+    const handleProgressDragEvent = useCallback((clientX: number) => {
+        if (!progressBarRef.current) return;
+        const rect = progressBarRef.current.getBoundingClientRect();
+        const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        setDragProgress(pos * duration);
+    }, [duration]);
+
+    const handleProgressTouchStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+        setIsDraggingProgress(true);
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        handleProgressDragEvent(clientX);
+    }, [handleProgressDragEvent]);
+
+    const handleProgressTouchMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+        if (!isDraggingProgress) return;
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        handleProgressDragEvent(clientX);
+    }, [isDraggingProgress, handleProgressDragEvent]);
+
+    const handleProgressTouchEnd = useCallback(() => {
+        if (isDraggingProgress) {
+            seekTo(dragProgress);
+            setIsDraggingProgress(false);
+        }
+    }, [isDraggingProgress, dragProgress, seekTo]);
+
+    // Global mouse events for scrubber
+    useEffect(() => {
+        const handleMouseUp = () => {
+            if (isDraggingProgress) {
+                seekTo(dragProgress);
+                setIsDraggingProgress(false);
+            }
+        };
+        const handleMouseMove = (e: MouseEvent) => {
+            if (isDraggingProgress) {
+                handleProgressDragEvent(e.clientX);
+            }
+        };
+
+        if (isDraggingProgress) {
+            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('touchend', handleMouseUp, { passive: true });
+        }
+
+        return () => {
+            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('touchend', handleMouseUp);
+        };
+    }, [isDraggingProgress, dragProgress, seekTo, handleProgressDragEvent]);
+
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
         touchStartY.current = e.touches[0].clientY;
         touchCurrentY.current = e.touches[0].clientY;
@@ -157,9 +215,10 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                 <div className="flex-[0.5] hidden md:block w-full min-h-0"></div>
 
                 {/* Artwork */}
-                <div className="w-full flex items-center justify-center relative flex-shrink-0 animate-fade-in-up md:my-6">
+                <div className="w-full flex items-center justify-center relative flex-shrink-0 animate-fade-in-up md:my-2 min-h-0">
                     <div
-                        className={`relative w-[88vw] max-w-[420px] aspect-square shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] transition-all duration-500 rounded-[2.5rem] overflow-hidden ${isPlaying ? "scale-100 translate-y-0" : "scale-[0.92] opacity-80 translate-y-2"} border border-white/5`}
+                        className={`relative w-full shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] transition-all duration-500 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden ${isPlaying ? "scale-100 translate-y-0" : "scale-[0.92] opacity-80 translate-y-2"} border border-white/5`}
+                        style={{ maxWidth: 'min(88vw, 45vh, 420px)', aspectRatio: '1/1' }}
                     >
                         <div className="absolute inset-0 bg-white/5 z-10 pointer-events-none mix-blend-overlay"></div>
                         <img
@@ -226,21 +285,24 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                         onTouchMove={(e) => e.stopPropagation()}
                     >
                         <div
-                            className="h-2.5 bg-white/10 rounded-full cursor-pointer overflow-hidden transition-all duration-200 group-hover:h-3.5"
-                            onClick={(e) => {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const pos = (e.clientX - rect.left) / rect.width;
-                                const newTime = pos * duration;
-                                seekTo(newTime);
-                            }}
+                            ref={progressBarRef}
+                            className="relative h-6 flex items-center cursor-pointer group-hover:h-6 -my-2 py-2"
+                            onMouseDown={handleProgressTouchStart}
+                            onTouchStart={handleProgressTouchStart}
+                            onTouchMove={handleProgressTouchMove}
+                            onTouchEnd={handleProgressTouchEnd}
                         >
-                            <div
-                                className="h-full bg-white rounded-full relative shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-                                style={{ width: `${(progress / (duration || 1)) * 100}%` }}
-                            ></div>
+                            <div className="w-full h-2.5 bg-white/10 rounded-full overflow-visible relative group-hover:h-3.5 transition-all duration-200">
+                                <div
+                                    className="h-full bg-white rounded-full relative shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+                                    style={{ width: `${((isDraggingProgress ? dragProgress : progress) / (duration || 1)) * 100}%` }}
+                                >
+                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${isDraggingProgress ? 'scale-100' : 'scale-0 group-hover:scale-100'}`}></div>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex justify-between items-center text-[13px] font-bold text-white/50 mt-3 tabular-nums">
-                            <span>{formatTime(progress)}</span>
+                            <span>{formatTime(isDraggingProgress ? dragProgress : progress)}</span>
                             <span>{formatTime(duration)}</span>
                         </div>
                     </div>
