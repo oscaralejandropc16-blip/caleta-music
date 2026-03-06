@@ -9,7 +9,7 @@ import { toast } from "react-hot-toast";
 import { clearEntireLibrary } from "@/lib/syncLibrary";
 
 export default function SettingsPage() {
-    const { signOut } = useAuth();
+    const { signOut, session } = useAuth();
     const { audioRef } = usePlayer();
 
     const [clearing, setClearing] = useState(false);
@@ -56,6 +56,30 @@ export default function SettingsPage() {
     };
 
     const handleDeleteAccount = async () => {
+        if (!session?.access_token) {
+            toast.error("Tu sesión ha expirado o no es válida.");
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/auth/delete", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`
+                }
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                toast.error(`Error de servidor: ${data.error}`, { duration: 5000 });
+                return;
+            }
+        } catch (e: any) {
+            toast.error("Error de red al eliminar la cuenta");
+            return;
+        }
+
         try {
             if (audioRef?.current) {
                 audioRef.current.pause();
