@@ -389,6 +389,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const playTrack = async (track: SavedTrack, newQueue?: SavedTrack[]) => {
         isReadyToPlayRef.current = true; // Activar reproducción si es accion del usuario
 
+        // Reset progress visually immediately to prevent old track's progress bleeding
+        setProgress(0);
+        setDuration(0);
+
         // Si el track no tiene blob, intentar recuperarlo de IndexedDB para reproducción instantánea
         let resolvedTrack = track;
         if (!track.blob && track.id) {
