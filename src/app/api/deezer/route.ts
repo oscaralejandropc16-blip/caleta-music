@@ -62,14 +62,48 @@ async function initializeDeezer(forceReinit = false) {
 async function streamFromDeezer(request: NextRequest, trackId: string | null, title: string | null, artist: string | null): Promise<NextResponse> {
     const dfi = await initializeDeezer();
 
+    // Si el ID es negativo o falso, lo ignoramos para forzar búsqueda por nombre (pasa con IDs locales cacheados viejos)
+    if (trackId && parseInt(trackId, 10) < 0) {
+        console.warn(`[Deezer] Ignoring fake/negative track ID: ${trackId}`);
+        trackId = null;
+    }
+
     // Si NO tenemos ID, buscamos por texto
     if (!trackId) {
         console.log(`[Deezer] Searching for: ${artist} - ${title}`);
-        const searchObj = await dfi.searchMusic(`${artist} ${title}`);
-        if (searchObj?.TRACK?.data?.length > 0) {
-            trackId = searchObj.TRACK.data[0].SNG_ID;
-            console.log(`[Deezer] Found track ID: ${trackId}`);
+        let foundId: string | null = null;
+
+        try {
+            const searchObj = await dfi.searchMusic(`${artist} ${title}`);
+            if (searchObj?.TRACK?.data?.length > 0) {
+                foundId = searchObj.TRACK.data[0].SNG_ID.toString();
+            }
+        } catch (e) {
+            console.warn(`[Deezer] dfi.searchMusic error for ${title}:`, e);
+        }
+
+        // Si la búsqueda interna falla (ej. por caracteres especiales), usamos la API pública que es más robusta
+        if (!foundId) {
+            try {
+                const searchStr = encodeURIComponent(`${title} ${artist}`.trim());
+                const res = await fetch(`https://api.deezer.com/search?q=${searchStr}&limit=1`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.data && data.data.length > 0) {
+                        foundId = data.data[0].id.toString();
+                        console.log(`[Deezer] Found track ID via public api: ${foundId}`);
+                    }
+                }
+            } catch (e) {
+                console.warn(`[Deezer] public api search error for ${title}:`, e);
+            }
+        }
+
+        if (foundId) {
+            trackId = foundId;
+            console.log(`[Deezer] Found valid track ID: ${trackId}`);
         } else {
+            console.error(`[Deezer] Track totally not found on Deezer: ${title} - ${artist}`);
             throw new Error("Track not found on Deezer");
         }
     }
