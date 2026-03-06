@@ -193,7 +193,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                 if (track.title && track.artist) {
                     console.log("[Player] Audio error → Trying YouTube fallback directly...");
-                    const ytUrl = `/api/download?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
+                    const ytUrl = `/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
                     if (audioRef.current) {
                         audioRef.current.src = ytUrl;
                         audioRef.current.play().catch(() => { });
@@ -273,8 +273,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (!srcUrl) {
                 if ((currentTrack as any).sourceAudioUrl) {
                     srcUrl = (currentTrack as any).sourceAudioUrl;
+                } else if (currentTrack.id) {
+                    srcUrl = `/api/deezer?id=${currentTrack.id}&title=${encodeURIComponent(currentTrack.title || "")}&artist=${encodeURIComponent(currentTrack.artist || "")}`;
                 } else if (currentTrack.title && currentTrack.artist) {
-                    srcUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                    srcUrl = `/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
                 } else if (currentTrack.previewUrl) {
                     srcUrl = currentTrack.previewUrl;
                 } else {
@@ -319,7 +321,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             if (!hasRetriedRef.current) {
                                 hasRetriedRef.current = true;
                                 if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                                    const ytUrl = `/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                                    const ytUrl = `/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(ytUrl, 1);
                                 } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
                                     attemptPlay(currentTrack.previewUrl, 2);

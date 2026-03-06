@@ -157,7 +157,7 @@ export default function AlbumDetailModal({
         artist: t.artistName,
         album: t.collectionName || "",
         coverUrl: t.artworkUrl100?.replace("100x100", "500x500") || "",
-        streamUrl: `/api/download?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}&stream=true`,
+        streamUrl: `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`,
         downloadedAt: Date.now(),
     });
 
