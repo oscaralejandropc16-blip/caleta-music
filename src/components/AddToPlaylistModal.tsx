@@ -51,16 +51,10 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew
             });
 
             if (playlist.trackIds.includes(track.id)) {
-                toast(`Ya está en "${playlist.name}"`, {
-                    icon: "ℹ️",
-                    style: { background: "#1e1e24", color: "#fff", borderColor: "#ffffff10", borderWidth: "1px" }
-                });
+                toast(`Ya está en "${playlist.name}"`, { icon: "ℹ️" });
             } else {
                 await addTrackToPlaylist(playlist.id, track.id);
-                toast(`Añadida a "${playlist.name}"`, {
-                    icon: "🎵",
-                    style: { background: "#1e1e24", color: "#fff", borderColor: "#ffffff10", borderWidth: "1px" }
-                });
+                toast.success(`Añadida a "${playlist.name}"`);
             }
             onClose();
         } catch (error) {

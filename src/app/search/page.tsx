@@ -100,7 +100,7 @@ export default function SearchPage() {
             toast.dismiss(loadingToastId);
             if (result.success) {
                 setSavedTrackIds((prev) => new Set(prev).add(id));
-                toast.success(`"${trackName}" descargada ✓`);
+                toast.success(`"${trackName}" descargada`);
             } else {
                 toast.error(`Error: ${result.error || "Desconocido"}`);
             }
@@ -551,7 +551,7 @@ export default function SearchPage() {
                         toast.dismiss(loadingToastId);
                         if (result.success) {
                             setSavedTrackIds((prev) => new Set(prev).add(id));
-                            toast.success(`"${saved.title}" descargada ✓`);
+                            toast.success(`"${saved.title}" descargada`);
 
                             // Ensure track in DB first, just in case
                             await saveTrackToDB({ ...saved, downloadedAt: Date.now() });

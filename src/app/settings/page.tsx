@@ -104,11 +104,11 @@ export default function SettingsPage() {
         if (newDarkMode) {
             document.body.classList.remove("light-mode");
             localStorage.setItem("theme", "dark");
-            toast("Has vuelto al modo oscuro 🌙", { icon: '😎', style: { borderRadius: '10px', background: '#1e293b', color: '#fff' } });
+            toast("Has vuelto al modo oscuro 🌙", { icon: '😎' });
         } else {
             document.body.classList.add("light-mode");
             localStorage.setItem("theme", "light");
-            toast("Modo Claro activado ☀️", { icon: '😎', style: { borderRadius: '10px', background: '#f8fafc', color: '#000' } });
+            toast("Modo Claro activado ☀️", { icon: '😎' });
         }
     };
 
