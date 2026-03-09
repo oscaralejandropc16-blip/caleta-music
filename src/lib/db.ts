@@ -25,6 +25,13 @@ const likesStore = localforage.createInstance({
     storeName: "likes"
 });
 
+// Store para álbumes guardados
+const albumsStore = localforage.createInstance({
+    name: "CaletaMusicDB",
+    storeName: "albums"
+});
+
+
 export interface SavedTrack {
     id: string;
     title: string;
@@ -36,6 +43,16 @@ export interface SavedTrack {
     previewUrl?: string; // URL de preview de Deezer (30s) como último fallback
     downloadedAt: number;
 }
+
+export interface SavedAlbum {
+    id: string; // collectionId from iTunes/Deezer
+    name: string;
+    artist: string;
+    coverUrl: string;
+    trackCount?: number;
+    savedAt: number;
+}
+
 
 export interface Playlist {
     id: string;
@@ -203,7 +220,38 @@ export async function clearAllLocalData(): Promise<void> {
         await tracksStore.clear();
         await likesStore.clear();
         await playlistsStore.clear();
+        await albumsStore.clear();
     } catch (e) {
         console.error("Failed to clear local DBs:", e);
     }
 }
+
+// --- ALBUMS ---
+
+export async function saveAlbum(album: SavedAlbum): Promise<void> {
+    await albumsStore.setItem(album.id, album);
+}
+
+export async function removeAlbum(id: string): Promise<void> {
+    await albumsStore.removeItem(id);
+}
+
+export async function isAlbumSaved(id: string): Promise<boolean> {
+    if (!id) return false;
+    const val = await albumsStore.getItem(id);
+    return val !== null;
+}
+
+export async function getAllSavedAlbums(): Promise<SavedAlbum[]> {
+    const albums: SavedAlbum[] = [];
+    try {
+        await albumsStore.iterate((value: unknown) => {
+            albums.push(value as SavedAlbum);
+        });
+        return albums.sort((a, b) => b.savedAt - a.savedAt);
+    } catch (err) {
+        console.error("Error obteniendo álbumes:", err);
+        return [];
+    }
+}
+

@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, TrendingUp,
   Headphones, Music2, Sparkles, ListMusic
 } from "lucide-react";
-import { getAllTracksFromDB, toggleLike, getAllLikedTrackIds, getAllPlaylists, Playlist } from "@/lib/db";
+import { getAllTracksFromDB, toggleLike, getAllLikedTrackIds, getAllPlaylists, Playlist, getAllSavedAlbums, SavedAlbum } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
 import Logo from "@/components/Logo";
@@ -178,7 +178,9 @@ export default function Home() {
   const [genreTracks, setGenreTracks] = useState<ItunesTrack[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
   const [albums, setAlbums] = useState<AlbumGroup[]>([]);
+  const [savedAlbums, setSavedAlbums] = useState<SavedAlbum[]>([]);
   const [activeCategory, setActiveCategory] = useState<"all" | "music">("all");
+
 
   const { playTrack } = usePlayer();
   const router = useRouter();
@@ -231,9 +233,12 @@ export default function Home() {
     Promise.all([
       getAllTracksFromDB(),
       getAllLikedTrackIds(),
-      getAllPlaylists()
-    ]).then(([tracks, likedIdsList, playlistsData]) => {
+      getAllPlaylists(),
+      getAllSavedAlbums()
+    ]).then(([tracks, likedIdsList, playlistsData, savedAlbumsData]) => {
       setSavedTrackIds(new Set(tracks.map((t) => t.id)));
+      setSavedAlbums(savedAlbumsData);
+
       const albumMap = new Map<string, AlbumGroup>();
       tracks.forEach(t => {
         if (t.album) {
@@ -407,6 +412,64 @@ export default function Home() {
               {recommendations.map((track) => <TrackCard key={`rec-${track.trackId}`} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => router.push(`/album?name=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}&coverUrl=${encodeURIComponent(cover)}`)} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
             </HorizontalScroller>
           )}
+
+          {/* 📀 MIS ÁLBUMES */}
+          {(() => {
+            // All tracks grouped by album (threshold > 1 to avoid clutter)
+            const albumMap = new Map<string, AlbumGroup>();
+            savedTrackIds.size > 0 && Array.from(savedTrackIds).forEach(id => {
+              // We need the tracks to group them. Fortunately we have them or can derive them.
+              // But on home page we only have IDs mostly. 
+              // Wait, in the initial load we had the 'tracks' array. Let's reuse that.
+            });
+
+            // Actually let's use the 'albums' state which is already calculated in the useEffect
+            const groupedAlbums = albums.filter(a => a.trackCount > 2);
+            const hasSaved = savedAlbums.length > 0;
+            const hasGrouped = groupedAlbums.length > 0;
+
+            if (!hasSaved && !hasGrouped) return null;
+
+            return (
+              <HorizontalScroller title="Mis Álbumes" icon={<Disc3 size={26} className="text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.6)]" />}>
+                {/* Saved Albums first */}
+                {savedAlbums.map((album, idx) => (
+                  <button
+                    key={`saved-${album.id}`}
+                    onClick={() => router.push(`/album?name=${encodeURIComponent(album.name)}&artist=${encodeURIComponent(album.artist)}&coverUrl=${encodeURIComponent(album.coverUrl)}`)}
+                    className="min-w-[160px] md:min-w-[200px] w-[160px] md:w-[200px] flex-shrink-0 p-3.5 md:p-4 rounded-[24px] bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col text-left"
+                  >
+                    <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-2xl mb-4 bg-[#0a0f1e] border border-white/[0.05]">
+                      <img src={album.coverUrl || '/placeholder.png'} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                    </div>
+                    <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight mb-1 group-hover:text-emerald-400 transition-colors">{album.name}</h3>
+                    <p className="text-[12px] font-medium text-slate-400 truncate">{album.artist}</p>
+                    <span className="text-[10px] text-emerald-500/80 font-bold mt-2 flex items-center gap-1">
+                      <Heart size={10} fill="currentColor" /> Guardado
+                    </span>
+                  </button>
+                ))}
+                {/* Then Grouped Albums (not in saved) */}
+                {groupedAlbums.map((album, idx) => {
+                  if (savedAlbums.some(sa => sa.name === album.name && sa.artist === album.artist)) return null;
+                  return (
+                    <button
+                      key={`grouped-${idx}`}
+                      onClick={() => router.push(`/album?name=${encodeURIComponent(album.name)}&artist=${encodeURIComponent(album.artist)}&coverUrl=${encodeURIComponent(album.cover)}`)}
+                      className="min-w-[160px] md:min-w-[200px] w-[160px] md:w-[200px] flex-shrink-0 p-3.5 md:p-4 rounded-[24px] bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col text-left"
+                    >
+                      <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-2xl mb-4 bg-[#0a0f1e] border border-white/[0.05]">
+                        <img src={album.cover || '/placeholder.png'} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                      </div>
+                      <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight mb-1 group-hover:text-emerald-400 transition-colors">{album.name}</h3>
+                      <p className="text-[12px] font-medium text-slate-400 truncate">{album.artist}</p>
+                      <span className="text-[10px] text-slate-500 font-bold mt-2">{album.trackCount} canciones</span>
+                    </button>
+                  );
+                })}
+              </HorizontalScroller>
+            );
+          })()}
 
           {/* 🎧 GÉNEROS */}
           <section className="mb-12 animate-fade-in-up">

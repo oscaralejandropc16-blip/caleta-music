@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Play, Heart, Music, Download, Check, Disc3, Loader, DownloadCloud, Calendar, Tag, Clock } from "lucide-react";
-import { getAllTracksFromDB, isTrackLiked, toggleLike } from "@/lib/db";
+import { getAllTracksFromDB, isTrackLiked, toggleLike, saveAlbum, removeAlbum, isAlbumSaved } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
 
@@ -36,6 +36,9 @@ export default function AlbumPage() {
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
     const [downloadingAll, setDownloadingAll] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
+    const [isAlbumSavedState, setIsAlbumSavedState] = useState(false);
+    const [collectionId, setCollectionId] = useState<string | null>(null);
+
 
     const { playTrack, currentTrack, isPlaying, isLoading } = usePlayer();
 
@@ -116,6 +119,9 @@ export default function AlbumPage() {
                     }));
 
                     setItunesTracks(tracks);
+                    setCollectionId(albumData.id.toString());
+                    const saved = await isAlbumSaved(albumData.id.toString());
+                    setIsAlbumSavedState(saved);
                 } else {
                     setItunesTracks([]);
                 }
@@ -144,6 +150,25 @@ export default function AlbumPage() {
         const newState = await toggleLike(trackId);
         setLikedMap(prev => ({ ...prev, [trackId]: newState }));
     };
+
+    const handleToggleSaveAlbum = async () => {
+        if (!collectionId || !albumName) return;
+        if (isAlbumSavedState) {
+            await removeAlbum(collectionId);
+            setIsAlbumSavedState(false);
+        } else {
+            await saveAlbum({
+                id: collectionId,
+                name: albumName,
+                artist: artistName,
+                coverUrl: coverUrl,
+                trackCount: itunesTracks.length,
+                savedAt: Date.now()
+            });
+            setIsAlbumSavedState(true);
+        }
+    };
+
 
     const handleDownload = async (track: ItunesTrack) => {
         const strId = track.trackId.toString();
@@ -193,6 +218,18 @@ export default function AlbumPage() {
                 setSavedTrackIds(prev => new Set(prev).add(strId));
             }
             setDownloadProgress(Math.round(((i + 1) / tracksToDownload.length) * 100));
+        }
+
+        if (collectionId && !isAlbumSavedState) {
+            await saveAlbum({
+                id: collectionId,
+                name: albumName,
+                artist: artistName,
+                coverUrl: coverUrl,
+                trackCount: itunesTracks.length,
+                savedAt: Date.now()
+            });
+            setIsAlbumSavedState(true);
         }
 
         setDownloadingId(null);
@@ -326,8 +363,20 @@ export default function AlbumPage() {
                         >
                             <Play size={24} fill="currentColor" className="ml-1" />
                         </button>
+
+                        <button
+                            onClick={handleToggleSaveAlbum}
+                            className={`p-4 rounded-full transition-all duration-300 active:scale-90 flex-shrink-0 flex items-center justify-center border ${isAlbumSavedState
+                                ? "bg-pink-500/10 text-pink-500 border-pink-500/30 shadow-[0_0_15px_rgba(236,72,153,0.2)]"
+                                : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white"
+                                }`}
+                            title={isAlbumSavedState ? "Quitar de la biblioteca" : "Guardar en la biblioteca"}
+                        >
+                            <Heart size={24} fill={isAlbumSavedState ? "currentColor" : "none"} />
+                        </button>
                     </div>
                 )}
+
             </div>
 
             {/* Tracklist */}

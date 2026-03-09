@@ -26,6 +26,8 @@ import {
     Playlist,
     getAllLikedTrackIds,
     toggleLike,
+    getAllSavedAlbums,
+    SavedAlbum,
 } from "@/lib/db";
 import { downloadAndSaveTrack } from "@/lib/download";
 import { getUserLibrary, removeSongFromLibrary } from "@/lib/syncLibrary";
@@ -47,9 +49,11 @@ function LibraryContent() {
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [query, setQuery] = useState("");
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-    const [activeTab, setActiveTab] = useState<"all" | "likes" | "playlists">(
-        tab === "likes" ? "likes" : tab === "playlists" ? "playlists" : "all"
+    const [activeTab, setActiveTab] = useState<"all" | "likes" | "playlists" | "albums">(
+        tab === "likes" ? "likes" : tab === "playlists" ? "playlists" : tab === "albums" ? "albums" : "all"
     );
+    const [savedAlbums, setSavedAlbums] = useState<SavedAlbum[]>([]);
+
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [contextMenuTrackId, setContextMenuTrackId] = useState<string | null>(null);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
@@ -70,6 +74,9 @@ function LibraryContent() {
 
         const cloud = await getUserLibrary();
         setCloudTracks(cloud);
+
+        const albums = await getAllSavedAlbums();
+        setSavedAlbums(albums);
 
         return pls;
     };
@@ -280,6 +287,16 @@ function LibraryContent() {
                     Favoritas
                 </button>
                 <button
+                    onClick={() => setActiveTab("albums")}
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/40 ${activeTab === "albums"
+                        ? "bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                        : "bg-white/[0.04] text-slate-300 hover:bg-white/[0.1] hover:text-emerald-100 border border-white/[0.05]"
+                        }`}
+                >
+                    <Disc3 size={16} />
+                    Álbumes
+                </button>
+                <button
                     onClick={() => setActiveTab("playlists")}
                     className={`px-5 py-2.5 rounded-full font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 ${activeTab === "playlists"
                         ? "bg-brand-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]"
@@ -294,9 +311,9 @@ function LibraryContent() {
 
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 ml-auto outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-95"
+                    className="bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-5 py-2.5 rounded-full font-bold text-sm hidden md:flex items-center gap-2 transition-all duration-300 ml-auto outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-95"
                 >
-                    <Plus size={18} strokeWidth={2.5} /> <span className="hidden sm:inline">Nueva Playlist</span><span className="sm:hidden">Crear</span>
+                    <Plus size={18} strokeWidth={2.5} /> <span>Nueva Playlist</span>
                 </button>
             </div>
 
@@ -383,9 +400,75 @@ function LibraryContent() {
             )
             }
 
+            {/* Albums Tab */}
+            {activeTab === "albums" && (
+                <section className="mb-10 animate-fade-in-up">
+                    {/* Combine explicitly saved albums with smart grouping (threshold > 1) */}
+                    {(() => {
+                        // All tracks grouped by album
+                        const albumMap = allMergedTracks.reduce((acc, track) => {
+                            if (track.album) {
+                                const key = `${track.album}||${track.artist}`;
+                                if (!acc.has(key)) acc.set(key, { name: track.album, artist: track.artist, cover: track.coverUrl, count: 0 });
+                                acc.get(key)!.count++;
+                            }
+                            return acc;
+                        }, new Map<string, { name: string, artist: string, cover: string, count: number }>());
+
+                        // Filter groups to only show those with > 2 songs (to avoid single-song clutter)
+                        // OR those that are explicitly in savedAlbums.
+                        const groupedAlbums = Array.from(albumMap.values()).filter(a => a.count > 2);
+
+                        // If no saved albums and no significantly downloaded albums
+                        if (savedAlbums.length === 0 && groupedAlbums.length === 0) {
+                            return (
+                                <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.04] bg-[#060913]/40 backdrop-blur-xl shadow-inner mt-4 py-24 px-4 text-center">
+                                    <div className="w-20 h-20 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(16,185,129,0.1)] border border-emerald-500/10 mx-auto">
+                                        <Disc3 size={36} className="text-emerald-500 opacity-60" strokeWidth={1.5} />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-white mb-2 tracking-tight">Tu biblioteca de álbumes está vacía</h3>
+                                    <p className="text-slate-400 max-w-sm mx-auto mb-8 font-medium">Guarda álbumes con el icono de corazón o descarga álbumes completos para verlos aquí.</p>
+                                </div>
+                            );
+                        }
+
+                        // Use SavedAlbums as base, then complement with grouped albums not already in savedAlbums
+                        const displayAlbums = [...savedAlbums.map(sa => ({ ...sa, fromSaved: true }))];
+
+                        groupedAlbums.forEach(ga => {
+                            if (!displayAlbums.some(da => da.name === ga.name && da.artist === ga.artist)) {
+                                displayAlbums.push({ ...ga, fromSaved: false, id: `grouped-${ga.name}`, savedAt: 0 } as any);
+                            }
+                        });
+
+                        return (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
+                                {displayAlbums.map((album, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => router.push(`/album?name=${encodeURIComponent(album.name)}&artist=${encodeURIComponent(album.artist)}&coverUrl=${encodeURIComponent(album.coverUrl || (album as any).cover)}`)}
+                                        className="bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] rounded-[24px] p-3.5 md:p-4 text-left transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/40 relative overflow-hidden flex flex-col"
+                                    >
+                                        <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.4)] mb-4 bg-[#0a0f1e] border border-white/[0.05] flex-shrink-0">
+                                            <img src={(album.coverUrl || (album as any).cover) || '/placeholder.png'} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                                        </div>
+                                        <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight mb-0.5 group-hover:text-emerald-400 transition-colors">{album.name}</h3>
+                                        <p className="text-[12px] font-medium text-slate-400 truncate mt-auto">{album.artist}</p>
+                                        <p className="text-[10px] text-slate-500 font-bold mt-1">
+                                            {(album as any).fromSaved ? 'Álbum guardado' : `${(album as any).count} canciones`}
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
+                </section>
+            )}
+
+
             {/* Tracks Tab (All or Likes) */}
             {
-                activeTab !== "playlists" && (
+                activeTab !== "playlists" && activeTab !== "albums" && (
                     <>
                         {/* Search bar */}
                         <div className="relative mb-8 max-w-xl group">
