@@ -367,7 +367,7 @@ export default function Home() {
 
 
   return (
-    <main className="relative p-4 md:p-8 md:pt-10 max-w-[1400px] mx-auto min-h-screen">
+    <main className="relative p-4 md:p-8 md:pt-10 max-w-[1400px] mx-auto min-h-screen overflow-hidden">
       {/* Dynamic Background Auras for Premium Feel */}
       <div className="absolute top-0 left-[10%] w-[600px] h-[600px] bg-brand-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
       <div className="absolute top-[20%] right-[10%] w-[500px] h-[500px] bg-pink-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />

@@ -242,14 +242,14 @@ export default function AudioPlayer() {
 
                     {/* Auxiliary Controls */}
                     <div className="hidden lg:flex w-[30%] min-w-[200px] max-w-[350px] justify-end gap-3 text-neutral-400 items-center">
-                        <button onClick={toggleLyrics} className={`transition-colors p-1.5 outline-none ${isLyricsVisible ? 'text-brand-500' : 'hover:text-white'}`} title="Letras">
-                            <Mic2 size={18} />
+                        <button onClick={toggleLyrics} className={`transition-all duration-300 p-2 outline-none rounded-lg ${isLyricsVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white hover:bg-white/5'}`} title="Letras">
+                            <Mic2 size={20} strokeWidth={2.2} />
                         </button>
-                        <button onClick={toggleQueue} className={`transition-colors p-1.5 outline-none ${isQueueVisible ? 'text-brand-500' : 'hover:text-white'}`} title="Cola de reproducción">
-                            <ListMusic size={18} />
+                        <button onClick={toggleQueue} className={`transition-all duration-300 p-2 outline-none rounded-lg ${isQueueVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white hover:bg-white/5'}`} title="Cola de reproducción">
+                            <ListMusic size={20} strokeWidth={2.2} />
                         </button>
-                        <button onClick={toggleDevices} className={`transition-colors p-1.5 outline-none ${isDevicesVisible ? 'text-brand-500' : 'hover:text-white'}`} title="Dispositivos">
-                            <MonitorSpeaker size={18} />
+                        <button onClick={toggleDevices} className={`transition-all duration-300 p-2 outline-none rounded-lg ${isDevicesVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white hover:bg-white/5'}`} title="Dispositivos">
+                            <MonitorSpeaker size={20} strokeWidth={2.2} />
                         </button>
 
                         <div className="flex items-center gap-2 w-28 mx-2">

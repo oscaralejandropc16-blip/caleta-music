@@ -355,21 +355,21 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                     <div className="w-full flex items-center justify-between text-white/40 px-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                         <button
                             onClick={() => { onClose(); toggleLyrics(); }}
-                            className={`p-3 transition-colors rounded-xl active:scale-90 ${isLyricsVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                            className={`p-4 transition-all duration-300 rounded-2xl active:scale-95 flex items-center justify-center ${isLyricsVisible ? 'text-brand-400 bg-brand-500/15 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
-                            <Mic2 size={22} />
+                            <Mic2 size={26} strokeWidth={2.5} className={isLyricsVisible ? "drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]" : ""} />
                         </button>
                         <button
                             onClick={() => { onClose(); toggleDevices(); }}
-                            className={`p-3 transition-colors rounded-xl active:scale-90 ${isDevicesVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                            className={`p-4 transition-all duration-300 rounded-2xl active:scale-95 flex items-center justify-center ${isDevicesVisible ? 'text-brand-400 bg-brand-500/15 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
-                            <MonitorSpeaker size={22} />
+                            <MonitorSpeaker size={26} strokeWidth={2.5} className={isDevicesVisible ? "drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]" : ""} />
                         </button>
                         <button
                             onClick={() => { onClose(); toggleQueue(); }}
-                            className={`p-3 transition-colors rounded-xl flex items-center gap-2 active:scale-90 ${isQueueVisible ? 'text-brand-400 bg-brand-500/10' : 'hover:text-white'}`}
+                            className={`p-4 transition-all duration-300 rounded-2xl active:scale-95 flex items-center justify-center ${isQueueVisible ? 'text-brand-400 bg-brand-500/15 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
-                            <ListMusic size={22} />
+                            <ListMusic size={26} strokeWidth={2.5} className={isQueueVisible ? "drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]" : ""} />
                         </button>
                     </div>
 

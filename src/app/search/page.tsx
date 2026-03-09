@@ -204,7 +204,7 @@ export default function SearchPage() {
     };
 
     return (
-        <main className="p-4 md:p-8 max-w-7xl mx-auto pb-32">
+        <main className="p-4 md:p-8 max-w-7xl mx-auto pb-32 overflow-hidden">
 
             {/* ═══ Hero Header ═══ */}
             <header className="mb-10 animate-fade-in-up relative">

@@ -242,7 +242,7 @@ function LibraryContent() {
     const displayTracks = activeTab === "likes" ? likedTracks : filteredTracks;
 
     return (
-        <main className="relative p-4 md:p-8 md:pt-10 max-w-7xl mx-auto min-h-screen">
+        <main className="relative p-4 md:p-8 md:pt-10 max-w-7xl mx-auto min-h-screen overflow-hidden">
             {/* Dynamic Background Auras for Premium Feel */}
             <div className="absolute top-0 right-[10%] w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
             <div className="absolute top-[20%] left-[10%] w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
