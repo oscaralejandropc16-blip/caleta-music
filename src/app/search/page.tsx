@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-    Search, Download, Check, CheckCircle, XCircle, Loader, SearchX,
+    Search, Download, Check, CheckCircle, XCircle, Loader, SearchX, Plus,
     Music, RefreshCw, Disc3, Play, Link2, Sparkles, TrendingUp, Headphones
 } from "lucide-react";
-import { getAllTracksFromDB } from "@/lib/db";
+import { getAllTracksFromDB, Playlist, addTrackToPlaylist, SavedTrack, saveTrackToDB } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
-import AlbumDetailModal from "@/components/AlbumDetailModal";
+import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import { useRouter } from "next/navigation";
 
 import toast from 'react-hot-toast';
@@ -43,14 +43,12 @@ export default function SearchPage() {
     const [activeLinkId, setActiveLinkId] = useState<string | null>(null);
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
     const [linkDownloading, setLinkDownloading] = useState(false);
+    const [playlistModalTrack, setPlaylistModalTrack] = useState<{ itunes: ItunesTrack, saved: SavedTrack, id: string } | null>(null);
     const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
     const [searchError, setSearchError] = useState(false);
     const [viewMode, setViewMode] = useState<"songs" | "albums">("songs");
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    const [albumModal, setAlbumModal] = useState<{
-        open: boolean; album: string; artist: string; cover: string;
-    }>({ open: false, album: "", artist: "", cover: "" });
 
     useEffect(() => {
         getAllTracksFromDB().then((tracks) => {
@@ -175,6 +173,7 @@ export default function SearchPage() {
             return;
         }
 
+        router.replace(`/search?q=${encodeURIComponent(trimmed)}`);
         doSearch(trimmed);
     };
 
@@ -278,7 +277,7 @@ export default function SearchPage() {
                             {SUGGESTIONS.map((s) => (
                                 <button
                                     key={s.label}
-                                    onClick={() => { setQuery(s.label); doSearch(s.label); }}
+                                    onClick={() => { setQuery(s.label); router.replace(`/search?q=${encodeURIComponent(s.label)}`); doSearch(s.label); }}
                                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
                                 >
                                     {s.icon}
@@ -324,7 +323,7 @@ export default function SearchPage() {
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3">Prueba buscando</p>
                         <div className="flex flex-wrap justify-center gap-2">
                             {SUGGESTIONS.slice(0, 6).map((s) => (
-                                <button key={s.label} onClick={() => { setQuery(s.label); doSearch(s.label); }}
+                                <button key={s.label} onClick={() => { setQuery(s.label); router.replace(`/search?q=${encodeURIComponent(s.label)}`); doSearch(s.label); }}
                                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
                                     {s.icon} {s.label}
                                 </button>
@@ -428,7 +427,7 @@ export default function SearchPage() {
                                                     <>
                                                         <span className="text-slate-600 text-[10px]">•</span>
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 }); }}
+                                                            onClick={(e) => { e.stopPropagation(); router.push(`/album?name=${encodeURIComponent(track.collectionName || "")}&artist=${encodeURIComponent(track.artistName)}&coverUrl=${encodeURIComponent(track.artworkUrl100 || "")}`); }}
                                                             className="text-slate-500 text-[12px] truncate hover:text-brand-400 transition-colors outline-none flex items-center gap-1 font-medium"
                                                         >
                                                             <Disc3 size={10} />
@@ -446,6 +445,29 @@ export default function SearchPage() {
 
                                         {/* Actions */}
                                         <div className="flex gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                                className="p-2.5 rounded-full text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50"
+                                                onClick={() => {
+                                                    setPlaylistModalTrack({
+                                                        itunes: track,
+                                                        id: strId,
+                                                        saved: {
+                                                            id: strId,
+                                                            title: track.trackName,
+                                                            artist: track.artistName,
+                                                            album: track.collectionName || "",
+                                                            coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
+                                                            streamUrl: "",
+                                                            previewUrl: track.previewUrl || "",
+                                                            downloadedAt: Date.now()
+                                                        }
+                                                    });
+                                                }}
+                                                title="Añadir a Playlist"
+                                                aria-label={`Añadir ${track.trackName} a Playlist`}
+                                            >
+                                                <Plus size={18} />
+                                            </button>
                                             <button
                                                 className={`p-2.5 rounded-full transition-all duration-300 active:scale-90 outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 ${isDownloaded
                                                     ? "text-green-500 bg-green-500/10 cursor-default"
@@ -483,8 +505,7 @@ export default function SearchPage() {
                                 return (
                                     <button
                                         key={idx}
-                                        aria-label={`Explorar álbum ${album.name}`}
-                                        onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })}
+                                        onClick={() => router.push(`/album?name=${encodeURIComponent(album.name)}&artist=${encodeURIComponent(album.artist)}&coverUrl=${encodeURIComponent(album.cover)}`)}
                                         className="bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] hover:border-white/[0.08] rounded-2xl p-4 text-left transition-all duration-300 group active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40"
                                     >
                                         <div className="w-full aspect-square rounded-xl overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.3)] mb-4 bg-slate-800/80">
@@ -509,13 +530,51 @@ export default function SearchPage() {
                 </section>
             )}
 
-            {/* ═══ Album Detail Modal ═══ */}
-            <AlbumDetailModal
-                isOpen={albumModal.open}
-                onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
-                albumName={albumModal.album}
-                artistName={albumModal.artist}
-                coverUrl={albumModal.cover}
+            {/* ═══ Add To Playlist Modal ═══ */}
+            <AddToPlaylistModal
+                isOpen={!!playlistModalTrack}
+                onClose={() => setPlaylistModalTrack(null)}
+                track={playlistModalTrack?.saved || null}
+                onSelectPlaylist={async (playlist) => {
+                    if (!playlistModalTrack) return;
+                    const { saved, itunes, id } = playlistModalTrack;
+                    setPlaylistModalTrack(null);
+
+                    if (!savedTrackIds.has(id)) {
+                        const loadingToastId = toast.loading(`Descargando "${saved.title}" para añadir a la playlist...`);
+
+                        // Force ID here
+                        const result = await downloadAndSaveTrack(itunes, null, id, (progress) => {
+                            setDownloadProgresses(prev => ({ ...prev, [id]: progress }));
+                        });
+
+                        toast.dismiss(loadingToastId);
+                        if (result.success) {
+                            setSavedTrackIds((prev) => new Set(prev).add(id));
+                            toast.success(`"${saved.title}" descargada ✓`);
+
+                            // Ensure track in DB first, just in case
+                            await saveTrackToDB({ ...saved, downloadedAt: Date.now() });
+
+                            await addTrackToPlaylist(playlist.id, id);
+                            toast.success(`Añadida a "${playlist.name}"`);
+                        } else {
+                            toast.error(`Error al intentar añadir: ${result.error || "Desconocido"}`);
+                        }
+                    } else {
+                        // Ya está descargada
+                        try {
+                            if (playlist.trackIds.includes(id)) {
+                                toast(`Ya está en "${playlist.name}"`, { icon: "ℹ️" });
+                            } else {
+                                await addTrackToPlaylist(playlist.id, id);
+                                toast.success(`Añadida a "${playlist.name}"`);
+                            }
+                        } catch (error) {
+                            toast.error(`Error al añadir`);
+                        }
+                    }
+                }}
             />
         </main>
     );

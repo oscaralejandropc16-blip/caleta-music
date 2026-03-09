@@ -6,7 +6,6 @@ import { ItunesTrack, downloadAndSaveTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
 import { SavedTrack, getAllTracksFromDB, toggleLike, getAllLikedTrackIds } from "@/lib/db";
 import { useParams, useRouter } from "next/navigation";
-import AlbumDetailModal from "@/components/AlbumDetailModal";
 
 interface AlbumGroup {
     name: string;
@@ -30,7 +29,6 @@ export default function ArtistProfile() {
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
 
-    const [albumModal, setAlbumModal] = useState({ open: false, album: "", artist: "", cover: "" });
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [showArtistMenu, setShowArtistMenu] = useState(false);
 
@@ -301,7 +299,7 @@ export default function ArtistProfile() {
                                                         <>
                                                             <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
                                                             <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50">
-                                                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); setAlbumModal({ open: true, album: track.collectionName, artist: track.artistName, cover: track.artworkUrl100 }); }}>
+                                                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); router.push(`/album?name=${encodeURIComponent(track.collectionName || "")}&artist=${encodeURIComponent(track.artistName)}&coverUrl=${encodeURIComponent(track.artworkUrl100 || "")}`); }}>
                                                                     Ver álbum
                                                                 </button>
                                                                 <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/10 transition-colors" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDownload(track); }}>
@@ -331,7 +329,7 @@ export default function ArtistProfile() {
                                         return (
                                             <button
                                                 key={idx}
-                                                onClick={() => setAlbumModal({ open: true, album: album.name, artist: album.artist, cover: album.cover })}
+                                                onClick={() => router.push(`/album?name=${encodeURIComponent(album.name)}&artist=${encodeURIComponent(album.artist)}&coverUrl=${encodeURIComponent(album.cover)}`)}
                                                 className="text-left group flex-shrink-0 snap-center min-w-[160px] w-[160px] md:min-w-[200px] md:w-[200px]"
                                             >
                                                 <div className="w-full aspect-square rounded-[1.5rem] overflow-hidden mb-4 bg-slate-800 shadow-[0_15px_30px_rgba(0,0,0,0.3)] border border-white/5 relative">
@@ -349,11 +347,6 @@ export default function ArtistProfile() {
                 </>
             )}
 
-            <AlbumDetailModal
-                isOpen={albumModal.open}
-                onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
-                albumName={albumModal.album} artistName={albumModal.artist} coverUrl={albumModal.cover}
-            />
         </main>
     );
 }

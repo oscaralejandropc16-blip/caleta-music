@@ -9,10 +9,11 @@ interface AddToPlaylistModalProps {
     isOpen: boolean;
     onClose: () => void;
     track: SavedTrack | null;
-    onCreateNew?: () => void; // Option to open the CreatePlaylistModal
+    onCreateNew?: () => void;
+    onSelectPlaylist?: (playlist: Playlist, track: SavedTrack) => void;
 }
 
-export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew }: AddToPlaylistModalProps) {
+export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew, onSelectPlaylist }: AddToPlaylistModalProps) {
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -36,6 +37,11 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew
 
     const handleAddToPlaylist = async (playlist: Playlist) => {
         if (!track) return;
+
+        if (onSelectPlaylist) {
+            onSelectPlaylist(playlist, track);
+            return;
+        }
 
         try {
             // First, make sure track is saved in the DB so it can be played later
@@ -125,12 +131,12 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew
                                     onClick={() => handleAddToPlaylist(playlist)}
                                     className="w-full flex items-center gap-4 px-4 py-3 hover:bg-slate-800/80 transition-colors rounded-2xl group"
                                 >
-                                    <div 
+                                    <div
                                         className="w-14 h-14 rounded-xl bg-slate-800 flex items-center justify-center flex-shrink-0 border border-slate-700/50 overflow-hidden"
                                         style={playlist.coverBlob || playlist.coverUrl ? {
-                                            backgroundImage: playlist.coverBlob 
-                                                ? \`url(\${URL.createObjectURL(playlist.coverBlob)})\`
-                                                : \`url(\${playlist.coverUrl})\`,
+                                            backgroundImage: playlist.coverBlob
+                                                ? `url(${URL.createObjectURL(playlist.coverBlob)})`
+                                                : `url(${playlist.coverUrl})`,
                                             backgroundSize: "cover",
                                             backgroundPosition: "center"
                                         } : {}}
@@ -149,11 +155,11 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew
                                         <Plus size={20} className="text-brand-500" />
                                     </div>
                                 </button>
-                    ))}
-                </div>
+                            ))}
+                        </div>
                     )}
+                </div>
             </div>
-        </div>
         </div >
     );
 }

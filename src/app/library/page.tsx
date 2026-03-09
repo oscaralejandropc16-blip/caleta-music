@@ -32,7 +32,6 @@ import { getUserLibrary, removeSongFromLibrary } from "@/lib/syncLibrary";
 import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
-import AlbumDetailModal from "@/components/AlbumDetailModal";
 import PlaylistDetailModal from "@/components/PlaylistDetailModal";
 
 function LibraryContent() {
@@ -58,14 +57,6 @@ function LibraryContent() {
 
     // Playlist detail modal state
     const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
-
-    // Album detail modal state
-    const [albumModal, setAlbumModal] = useState<{
-        open: boolean;
-        album: string;
-        artist: string;
-        cover: string;
-    }>({ open: false, album: "", artist: "", cover: "" });
 
     const { playTrack, currentTrack, isPlaying } = usePlayer();
 
@@ -208,12 +199,7 @@ function LibraryContent() {
     const openAlbumDetail = (e: React.MouseEvent, track: SavedTrack) => {
         e.stopPropagation();
         if (track.album) {
-            setAlbumModal({
-                open: true,
-                album: track.album,
-                artist: track.artist,
-                cover: track.coverUrl,
-            });
+            router.push(`/album?name=${encodeURIComponent(track.album)}&artist=${encodeURIComponent(track.artist)}&coverUrl=${encodeURIComponent(track.coverUrl)}`);
         }
     };
 
@@ -256,87 +242,97 @@ function LibraryContent() {
     const displayTracks = activeTab === "likes" ? likedTracks : filteredTracks;
 
     return (
-        <main className="p-4 md:p-8 max-w-7xl mx-auto">
-            <header className="mb-10 flex items-center justify-between">
+        <main className="relative p-4 md:p-8 md:pt-10 max-w-7xl mx-auto min-h-screen">
+            {/* Dynamic Background Auras for Premium Feel */}
+            <div className="absolute top-0 right-[10%] w-[500px] h-[500px] bg-brand-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
+            <div className="absolute top-[20%] left-[10%] w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
+
+            <header className="mb-10 lg:mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 px-1 md:px-0">
                 <div>
-                    <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-                        <LibraryIcon className="text-brand-500" size={32} /> Tu Biblioteca
+                    <h1 className="text-4xl md:text-5xl font-black text-white mb-3 flex items-center gap-3 md:gap-4 drop-shadow-lg tracking-tight">
+                        <LibraryIcon className="text-brand-500 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" size={38} strokeWidth={2.5} /> Tu Biblioteca
                     </h1>
-                    <p className="text-slate-400 text-lg">
-                        Música 100% offline y sin consumo de datos.
+                    <p className="text-slate-400 font-medium text-[15px] md:text-lg max-w-sm leading-snug">
+                        Música 100% offline, sin anuncios y a tu manera.
                     </p>
                 </div>
             </header>
 
             {/* Tabs */}
-            <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-2">
+            <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-8">
                 <button
                     onClick={() => setActiveTab("all")}
-                    className={`px-6 py-2 rounded-full font-bold flex-shrink-0 transition-all ${activeTab === "all"
-                        ? "bg-white text-black"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm tracking-wide transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 ${activeTab === "all"
+                        ? "bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)]"
+                        : "bg-white/[0.04] text-slate-300 hover:bg-white/[0.1] hover:text-white border border-white/[0.05]"
                         }`}
                 >
-                    Todas las Canciones
+                    Canciones
                 </button>
                 <button
                     onClick={() => setActiveTab("likes")}
-                    className={`px-6 py-2 rounded-full font-bold flex items-center gap-2 flex-shrink-0 transition-all ${activeTab === "likes"
-                        ? "bg-pink-500 text-white"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-pink-500/40 ${activeTab === "likes"
+                        ? "bg-pink-500 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]"
+                        : "bg-white/[0.04] text-slate-300 hover:bg-white/[0.1] hover:text-pink-100 border border-white/[0.05]"
                         }`}
                 >
                     <Heart size={16} fill={activeTab === "likes" ? "currentColor" : "none"} />
-                    Me Gusta ({likedIds.size})
+                    Favoritas
                 </button>
                 <button
                     onClick={() => setActiveTab("playlists")}
-                    className={`px-6 py-2 rounded-full font-bold flex items-center gap-2 flex-shrink-0 transition-all ${activeTab === "playlists"
-                        ? "bg-brand-500 text-white"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm tracking-wide flex items-center gap-2 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 ${activeTab === "playlists"
+                        ? "bg-brand-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                        : "bg-white/[0.04] text-slate-300 hover:bg-white/[0.1] hover:text-brand-100 border border-white/[0.05]"
                         }`}
                 >
                     <ListMusic size={16} />
                     Playlists
                 </button>
+
+                <div className="flex-1 min-w-[10px]"></div>
+
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-full font-bold flex items-center gap-2 transition-colors flex-shrink-0 ml-auto"
+                    className="bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 ml-auto outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-95"
                 >
-                    <Plus size={18} /> Nueva Playlist
+                    <Plus size={18} strokeWidth={2.5} /> <span className="hidden sm:inline">Nueva Playlist</span><span className="sm:hidden">Crear</span>
                 </button>
             </div>
 
             {/* Playlists Tab */}
             {activeTab === "playlists" && (
-                <section className="mb-10">
+                <section className="mb-10 animate-fade-in-up">
                     {playlists.length === 0 ? (
-                        <div className="text-center py-20 bg-slate-900/40 rounded-3xl border border-slate-800">
-                            <ListMusic size={48} className="mx-auto text-slate-600 mb-4" />
-                            <h3 className="text-xl font-medium text-slate-400">
-                                No tienes playlists aún
+                        <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.04] bg-[#060913]/40 backdrop-blur-xl shadow-inner mt-4 py-24 px-4 text-center">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-slate-800/20 blur-[80px] rounded-full pointer-events-none" />
+                            <div className="w-20 h-20 bg-gradient-to-br from-brand-500/10 to-brand-500/5 rounded-[24px] flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(99,102,241,0.1)] border border-brand-500/10 mx-auto">
+                                <ListMusic size={36} className="text-brand-500 opacity-60" strokeWidth={1.5} />
+                            </div>
+                            <h3 className="text-2xl font-black text-white mb-2 tracking-tight">
+                                Sin playlists organizadas
                             </h3>
-                            <p className="text-slate-500 mb-6">
-                                Crea tu primera playlist para organizar tu música.
+                            <p className="text-slate-400 max-w-sm mx-auto mb-8 font-medium">
+                                Comienza a organizar tu música favorita. Crea una playlist y añade canciones desde tu biblioteca.
                             </p>
                             <button
                                 onClick={() => setShowCreateModal(true)}
-                                className="bg-brand-500 hover:bg-brand-400 text-white px-8 py-3.5 rounded-full font-bold transition-all duration-300 shadow-lg hover:shadow-[0_8px_25px_rgba(99,102,241,0.5)] active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
+                                className="bg-brand-500 hover:bg-brand-400 text-white px-8 py-3.5 rounded-full font-bold transition-all duration-300 shadow-lg hover:shadow-[0_8px_25px_rgba(99,102,241,0.4)] active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
                             >
                                 <Plus size={20} className="inline mr-2" strokeWidth={2.5} />
-                                Crear Playlist
+                                Empezar a Crear
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
                             {/* Create New Card */}
                             <button
                                 onClick={() => setShowCreateModal(true)}
                                 aria-label="Crear nueva playlist"
-                                className="aspect-square rounded-3xl border-2 border-dashed border-white/10 hover:border-brand-500/50 hover:bg-brand-500/5 flex flex-col items-center justify-center gap-4 text-slate-400 hover:text-brand-400 transition-all duration-300 group outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 active:scale-[0.98]"
+                                className="aspect-square rounded-[24px] border-2 border-dashed border-white/[0.05] hover:border-brand-500/30 hover:bg-white/[0.01] flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-brand-300 transition-all duration-300 group outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 active:scale-[0.98] card-glow"
                             >
-                                <div className="w-16 h-16 rounded-full bg-slate-800/80 group-hover:bg-brand-500/20 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-lg group-hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] border border-white/5">
-                                    <Plus size={32} className="text-slate-500 group-hover:text-brand-400 transition-colors" />
+                                <div className="w-16 h-16 rounded-full bg-white/[0.03] group-hover:bg-brand-500/20 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-lg group-hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                                    <Plus size={32} strokeWidth={1.5} className="group-hover:text-brand-400 transition-colors" />
                                 </div>
                                 <span className="text-sm font-bold tracking-wide">Nueva Playlist</span>
                             </button>
@@ -349,34 +345,34 @@ function LibraryContent() {
                                         key={pl.id}
                                         onClick={() => router.push(`/playlist/${pl.id}`)}
                                         aria-label={`Abrir playlist ${pl.name}`}
-                                        className="bg-white/[0.03] hover:bg-white/[0.08] border border-transparent hover:border-white/[0.04] rounded-3xl p-4 text-left transition-all duration-300 group card-glow active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 relative overflow-hidden"
+                                        className="bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] rounded-[24px] p-3.5 md:p-4 text-left transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 relative overflow-hidden flex flex-col"
                                     >
-                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-brand-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                                        <div className="w-full aspect-square rounded-2xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.3)] mb-4 bg-slate-800/80 relative z-10">
+                                        <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.4)] mb-4 bg-[#0a0f1e] border border-white/[0.05] relative z-10 flex-shrink-0">
                                             {coverBlobUrl ? (
                                                 <img
                                                     src={coverBlobUrl}
                                                     alt={pl.name}
                                                     className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110"
                                                 />
+                                            ) : pl.coverUrl ? (
+                                                <img
+                                                    src={pl.coverUrl}
+                                                    alt={pl.name}
+                                                    className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110"
+                                                />
                                             ) : (
-                                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 group-hover:from-slate-700 group-hover:to-slate-800 transition-colors duration-500 flex items-center justify-center border border-white/5">
-                                                    <ListMusic size={48} className="text-slate-600 group-hover:text-slate-400 transition-colors duration-500" strokeWidth={1.5} />
+                                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 group-hover:from-slate-700 group-hover:to-slate-800 transition-colors duration-500 flex items-center justify-center">
+                                                    <ListMusic size={48} className="text-slate-600 group-hover:text-slate-400 group-hover:scale-110 transition-all duration-500" strokeWidth={1} />
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="relative z-10 px-1">
-                                            <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm group-hover:text-brand-300 transition-colors">
+                                        <div className="relative z-10 flex-1 flex flex-col">
+                                            <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight transition-colors mb-0.5">
                                                 {pl.name}
                                             </h3>
-                                            <p className="text-[11px] font-bold text-slate-500/80 uppercase tracking-widest mt-1">
+                                            <p className="text-[12px] font-medium text-slate-400 truncate mt-auto">
                                                 {pl.trackIds.length} canci{pl.trackIds.length !== 1 ? "ones" : "ón"}
                                             </p>
-                                            {pl.description && (
-                                                <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">
-                                                    {pl.description}
-                                                </p>
-                                            )}
                                         </div>
                                     </button>
                                 );
@@ -392,22 +388,25 @@ function LibraryContent() {
                 activeTab !== "playlists" && (
                     <>
                         {/* Search bar */}
-                        <div className="relative mb-8 max-w-lg">
-                            <Search
-                                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                                size={20}
-                            />
-                            <input
-                                type="text"
-                                value={query}
-                                onChange={e => setQuery(e.target.value)}
-                                placeholder={
-                                    activeTab === "likes"
-                                        ? "Buscar en tus favoritas..."
-                                        : "Buscar en tus descargas..."
-                                }
-                                className="w-full bg-slate-800/50 border border-slate-700 text-white rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder-slate-500"
-                            />
+                        <div className="relative mb-8 max-w-xl group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-brand-500/20 to-cyan-500/20 rounded-2xl blur group-focus-within:opacity-100 opacity-0 transition-opacity duration-500" />
+                            <div className="relative">
+                                <Search
+                                    className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-400 transition-colors"
+                                    size={22}
+                                />
+                                <input
+                                    type="text"
+                                    value={query}
+                                    onChange={e => setQuery(e.target.value)}
+                                    placeholder={
+                                        activeTab === "likes"
+                                            ? "Buscar en tus favoritas..."
+                                            : "Buscar en tus descargas..."
+                                    }
+                                    className="w-full bg-[#0a0f1e]/80 backdrop-blur-md border border-white/[0.05] focus:border-brand-500/50 text-white rounded-2xl py-4 pl-14 pr-4 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all duration-300 placeholder-slate-500 font-medium text-[15px] shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+                                />
+                            </div>
                         </div>
 
                         <div className="flex flex-col gap-2">
@@ -454,10 +453,10 @@ function LibraryContent() {
                             ) : (
                                 <>
                                     {/* Table Header */}
-                                    <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-4 py-2 text-sm text-slate-500 font-medium uppercase tracking-wider border-b border-slate-800 mb-2">
-                                        <div className="w-8 text-center">#</div>
+                                    <div className="hidden md:grid grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_40px] gap-4 px-5 py-3 text-xs text-slate-400 font-bold uppercase tracking-widest border-b border-white/[0.05] mb-4">
+                                        <div className="w-8 text-center text-slate-500">#</div>
                                         <div>Título</div>
-                                        <div className="hidden md:block w-48 truncate">Álbum</div>
+                                        <div className="hidden md:block w-48 lg:w-64 truncate">Álbum</div>
                                         <div className="w-10"></div>
                                         <div className="w-10"></div>
                                     </div>
@@ -471,20 +470,21 @@ function LibraryContent() {
                                             <div
                                                 key={track.id}
                                                 onClick={() => handlePlay(track)}
-                                                className={`group grid grid-cols-[32px_minmax(0,1fr)_auto_auto] md:grid-cols-[32px_minmax(0,1.5fr)_minmax(0,1fr)_auto_auto] items-center gap-3 md:gap-4 px-4 py-3 rounded-xl transition-all cursor-pointer ${isCurrent
-                                                    ? "bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
-                                                    : "hover:bg-slate-800/80"
+                                                className={`group grid grid-cols-[32px_1fr_40px_40px] md:grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_40px] items-center gap-3 md:gap-4 px-3 md:px-5 py-3 rounded-[16px] transition-all duration-300 ease-out cursor-pointer ${isCurrent
+                                                    ? "bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20"
+                                                    : "bg-transparent hover:bg-white/[0.04] border border-transparent hover:border-white/[0.03] hover:shadow-lg"
                                                     }`}
                                             >
                                                 {/* Track number */}
-                                                <div className="w-8 flex-shrink-0 flex items-center justify-center font-medium text-slate-400 group-hover:text-white">
+                                                <div className="w-6 md:w-8 flex-shrink-0 flex items-center justify-center font-bold text-[13px] text-slate-500 group-hover:text-white transition-colors relative">
                                                     {isCurrent && isPlaying ? (
                                                         <Music
                                                             size={16}
-                                                            className="text-brand-500 animate-pulse"
+                                                            className="text-brand-500 animate-[bounce_1s_infinite]"
+                                                            strokeWidth={3}
                                                         />
                                                     ) : (
-                                                        <span className="group-hover:hidden">
+                                                        <span className="group-hover:opacity-0 transition-opacity duration-200">
                                                             {idx + 1}
                                                         </span>
                                                     )}
@@ -492,14 +492,14 @@ function LibraryContent() {
                                                         <Play
                                                             size={16}
                                                             fill="currentColor"
-                                                            className="text-white hidden group-hover:block"
+                                                            className="text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                                         />
                                                     )}
                                                     {isCurrent && !isPlaying && !track.isCloudOnly && (
                                                         <Play
                                                             size={16}
                                                             fill="currentColor"
-                                                            className="text-brand-500 hidden group-hover:block"
+                                                            className="text-brand-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                                         />
                                                     )}
                                                 </div>
@@ -518,14 +518,14 @@ function LibraryContent() {
                                                     />
                                                     <div className="flex flex-col min-w-0">
                                                         <span
-                                                            className={`font-semibold truncate ${isCurrent
+                                                            className={`font-bold text-[15px] truncate transition-colors leading-tight ${isCurrent
                                                                 ? "text-brand-400"
-                                                                : "text-white"
+                                                                : "text-white group-hover:text-brand-100"
                                                                 }`}
                                                         >
                                                             {track.title}
                                                         </span>
-                                                        <span className="text-sm text-slate-400 truncate">
+                                                        <span className="text-[13px] font-medium text-slate-400 truncate mt-[1px]">
                                                             {track.artist}
                                                         </span>
                                                     </div>
@@ -651,20 +651,10 @@ function LibraryContent() {
                 )
             }
 
-            {/* Create Playlist Modal */}
             <CreatePlaylistModal
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 onCreated={handleCreatePlaylist}
-            />
-
-            {/* Album Detail Modal */}
-            <AlbumDetailModal
-                isOpen={albumModal.open}
-                onClose={() => setAlbumModal(prev => ({ ...prev, open: false }))}
-                albumName={albumModal.album}
-                artistName={albumModal.artist}
-                coverUrl={albumModal.cover}
             />
 
             {/* Playlist Detail Modal */}

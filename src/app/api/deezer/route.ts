@@ -158,7 +158,21 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     const trackDuration = parseInt(track.DURATION || '0', 10);
     console.log(`[Deezer] Streaming encrypted file from: ${trackUrlRes.trackUrl.substring(0, 50)}...`);
 
-    const rangeHeader = request.headers.get("range");
+    const CHUNK_SIZE = 2048;
+    let rangeHeader = request.headers.get("range");
+    let skipBytes = 0;
+
+    // Calculate aligned range chunk for correct Blowfish decryption
+    if (rangeHeader) {
+        const match = rangeHeader.match(/bytes=(\d+)-(.*)/);
+        if (match) {
+            const requestedStart = parseInt(match[1], 10);
+            const alignedStart = Math.floor(requestedStart / CHUNK_SIZE) * CHUNK_SIZE;
+            skipBytes = requestedStart - alignedStart;
+            rangeHeader = `bytes=${alignedStart}-${match[2]}`;
+        }
+    }
+
     const fetchHeaders: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     };
@@ -171,9 +185,23 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
         throw new Error(`Failed to fetch from Deezer CDN: ${response.status}`);
     }
 
-    const totalSize = parseInt(response.headers.get("content-length") || "0", 10);
-    const contentRange = response.headers.get("content-range");
+    let totalSize = parseInt(response.headers.get("content-length") || "0", 10);
+    let contentRange = response.headers.get("content-range");
+    const originalContentRange = contentRange; // Store for internal stream calculation
 
+    // Adjust headers back to what the browser originally requested
+    if (contentRange && skipBytes > 0) {
+        const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/);
+        if (match) {
+            const deezerStart = parseInt(match[1], 10);
+            const deezerEnd = parseInt(match[2], 10);
+            const deezerTotal = parseInt(match[3], 10);
+
+            const browserStart = deezerStart + skipBytes;
+            contentRange = `bytes ${browserStart}-${deezerEnd}/${deezerTotal}`;
+            totalSize = totalSize - skipBytes;
+        }
+    }
 
     const coverUrl = `https://e-cdns-images.dzcdn.net/images/cover/${track.ALB_PICTURE}/500x500-000000-80-0-0.jpg`;
     const artistName = track.ART_NAME || "Desconocido";
@@ -192,7 +220,6 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
     if (contentRange) baseHeaders["Content-Range"] = contentRange;
 
 
-    const CHUNK_SIZE = 2048;
     const blowFishKey = getBlowfishKey(track.SNG_ID);
     const reader = response.body.getReader();
 
@@ -201,17 +228,31 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
             let buffer = Buffer.alloc(0);
             let currentByteIndex = 0;
 
-            if (contentRange) {
-                const match = contentRange.match(/bytes (\d+)-/);
+            if (originalContentRange) {
+                const match = originalContentRange.match(/bytes (\d+)-/);
                 if (match) currentByteIndex = parseInt(match[1], 10);
             }
+
+            let bytesToSkip = skipBytes;
 
             try {
                 // eslint-disable-next-line no-constant-condition
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
-                        if (buffer.length > 0) controller.enqueue(new Uint8Array(buffer));
+                        if (buffer.length > 0) {
+                            let leftover = buffer;
+                            if (bytesToSkip > 0) {
+                                if (bytesToSkip < leftover.length) {
+                                    leftover = leftover.subarray(bytesToSkip);
+                                    bytesToSkip = 0;
+                                } else {
+                                    bytesToSkip -= leftover.length;
+                                    leftover = Buffer.alloc(0);
+                                }
+                            }
+                            if (leftover.length > 0) controller.enqueue(new Uint8Array(leftover));
+                        }
                         break;
                     }
 
@@ -226,7 +267,22 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
                             processedChunk = decryptChunk(chunkToProcess, blowFishKey);
                         }
 
-                        controller.enqueue(new Uint8Array(processedChunk));
+                        // Handle offset skipping for misaligned Range requests
+                        let chunkToSend = processedChunk;
+                        if (bytesToSkip > 0) {
+                            if (bytesToSkip >= chunkToSend.length) {
+                                bytesToSkip -= chunkToSend.length;
+                                chunkToSend = Buffer.alloc(0);
+                            } else {
+                                chunkToSend = chunkToSend.subarray(bytesToSkip);
+                                bytesToSkip = 0;
+                            }
+                        }
+
+                        if (chunkToSend.length > 0) {
+                            controller.enqueue(new Uint8Array(chunkToSend));
+                        }
+
                         buffer = buffer.subarray(CHUNK_SIZE);
                         currentByteIndex += CHUNK_SIZE;
                     }
