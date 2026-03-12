@@ -34,6 +34,9 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+# Para Railway/Docker necesitamos output: "standalone" (no "export" que es para Capacitor)
+RUN sed -i 's/output: "export"/output: "standalone"/' next.config.ts
+
 # Ejecutar next build directamente (sin cross-env/openssl-legacy-provider de Windows)
 RUN npx next build
 
