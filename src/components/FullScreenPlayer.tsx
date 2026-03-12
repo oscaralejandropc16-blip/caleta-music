@@ -164,7 +164,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+            className="fixed inset-0 z-[100] flex flex-col bg-[#060913] animate-slideIn pt-safe pb-safe"
             style={{
                 transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
                 transition: isDragging.current ? 'none' : 'transform 0.3s ease-out',

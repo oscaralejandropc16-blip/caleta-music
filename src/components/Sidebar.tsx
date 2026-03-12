@@ -119,7 +119,7 @@ export default function Sidebar() {
                         </Link>
                     ) : (
                         playlists.slice(0, 8).map((pl) => (
-                            <Link key={pl.id} href={`/playlist/${pl.id}`}
+                            <Link key={pl.id} href={`/playlist?id=${pl.id}`}
                                 className="flex items-center gap-3 px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all group">
                                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0 border border-white/[0.05]">
                                     <ListMusic size={14} className="text-slate-400 group-hover:text-brand-400 transition-colors" />

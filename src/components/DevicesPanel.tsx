@@ -61,7 +61,7 @@ export default function DevicesPanel() {
                 transition: isDragging.current ? 'none' : 'transform 0.3s ease-out',
                 opacity: dragOffset > 0 ? Math.max(1 - dragOffset / 500, 0.5) : 1,
             }}
-            className={`fixed inset-x-0 bottom-0 pt-[env(safe-area-inset-top)] md:pt-0 pb-[env(safe-area-inset-bottom)] top-0 md:top-0 md:left-auto md:w-[400px] bg-[#121216] md:border-l border-white/5 z-[100] md:z-40 flex flex-col shadow-2xl transition-transform duration-300 transform ${isDevicesVisible ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}`}>
+            className={`fixed inset-x-0 bottom-0 pt-safe md:pt-0 pb-safe top-0 md:top-0 md:left-auto md:w-[400px] bg-[#121216] md:border-l border-white/5 z-[100] md:z-40 flex flex-col shadow-2xl transition-transform duration-300 transform ${isDevicesVisible ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}`}>
 
             {/* Drag handle indicator (Mobile only) */}
             <div className="w-10 h-1.5 bg-white/20 rounded-full mx-auto mt-3 mb-1 md:hidden" />

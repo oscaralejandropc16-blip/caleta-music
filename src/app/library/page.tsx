@@ -35,6 +35,7 @@ import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
 import PlaylistDetailModal from "@/components/PlaylistDetailModal";
+import { Preferences } from '@capacitor/preferences';
 
 function LibraryContent() {
     const searchParams = useSearchParams();
@@ -65,8 +66,27 @@ function LibraryContent() {
     const { playTrack, currentTrack, isPlaying } = usePlayer();
 
     const loadLibrary = async () => {
-        const downloaded = await getAllTracksFromDB();
+        let downloaded: SavedTrack[] = [];
+        try {
+            // Reemplazando IndexedDB por Capacitor Preferences (Lógica móvil offline nativa)
+            const { value } = await Preferences.get({ key: 'caleta_downloaded_tracks' });
+            if (value) {
+                const parsed = JSON.parse(value);
+                downloaded = parsed.map((t: any) => ({
+                    id: t.id,
+                    title: t.title,
+                    artist: t.artist,
+                    coverUrl: t.coverUrl,
+                    album: t.album || '', // Fallback for some properties
+                    downloadedAt: t.downloadedAt || Date.now()
+                }));
+            }
+        } catch (error) {
+            console.error("Error al cargar descargas de Capacitor Preferences:", error);
+        }
+
         setTracks(downloaded);
+
         const pls = await getAllPlaylists();
         setPlaylists(pls);
         const liked = await getAllLikedTrackIds();
@@ -162,7 +182,22 @@ function LibraryContent() {
             // Remove visually immediately for snappiness
             setTracks(prev => prev.filter(t => t.id !== trackIdToDelete));
 
-            await removeTrackFromDB(trackIdToDelete);
+            // Eliminar de Capacitor Preferences (Lógica offline)
+            try {
+                const { value } = await Preferences.get({ key: 'caleta_downloaded_tracks' });
+                if (value) {
+                    const tracksData = JSON.parse(value);
+                    const updatedTracks = tracksData.filter((t: any) => t.id !== trackIdToDelete);
+                    await Preferences.set({
+                        key: 'caleta_downloaded_tracks',
+                        value: JSON.stringify(updatedTracks)
+                    });
+                }
+            } catch (e) {
+                console.error("Error removiendo de Preferences:", e);
+            }
+
+            await removeTrackFromDB(trackIdToDelete); // Fallback para data vieja
 
             // Also remove from cloud so it doesn't re-sync back
             try {
@@ -360,7 +395,7 @@ function LibraryContent() {
                                 return (
                                     <button
                                         key={pl.id}
-                                        onClick={() => router.push(`/playlist/${pl.id}`)}
+                                        onClick={() => router.push(`/playlist?id=${pl.id}`)}
                                         aria-label={`Abrir playlist ${pl.name}`}
                                         className="bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] rounded-[24px] p-3.5 md:p-4 text-left transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] active:scale-[0.98] outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 relative overflow-hidden flex flex-col"
                                     >

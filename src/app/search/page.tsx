@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Search, Download, Check, CheckCircle, XCircle, Loader, SearchX, Plus,
-    Music, RefreshCw, Disc3, Play, Link2, Sparkles, TrendingUp, Headphones
+    Music, RefreshCw, Disc3, Play, Link2, Sparkles, TrendingUp, Headphones,
+    Mic, Mic2, History, X
 } from "lucide-react";
 import { getAllTracksFromDB, Playlist, addTrackToPlaylist, SavedTrack, saveTrackToDB } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
 import { usePlayer } from "@/context/PlayerContext";
+import { useDownloadSong } from "@/hooks/useDownloadSong";
+import { MusicApiService } from "@/lib/nativeHttp";
 import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import { useRouter } from "next/navigation";
 
@@ -39,22 +42,114 @@ export default function SearchPage() {
     const [hasSearched, setHasSearched] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [linkInput, setLinkInput] = useState("");
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
-    const [activeLinkId, setActiveLinkId] = useState<string | null>(null);
+
+    // Inyectamos el nuevo Hook móvil para descargas offline (vía Capacitor)
+    const { downloadSong, downloadingIds, downloadProgress, getDownloadedSongs } = useDownloadSong();
     const [downloadProgresses, setDownloadProgresses] = useState<Record<string, number>>({});
+
+
+    const [activeLinkId, setActiveLinkId] = useState<string | null>(null);
     const [linkDownloading, setLinkDownloading] = useState(false);
     const [playlistModalTrack, setPlaylistModalTrack] = useState<{ itunes: ItunesTrack, saved: SavedTrack, id: string } | null>(null);
     const [savedTrackIds, setSavedTrackIds] = useState<Set<string>>(new Set());
     const [searchError, setSearchError] = useState(false);
     const [viewMode, setViewMode] = useState<"songs" | "albums">("songs");
     const searchInputRef = useRef<HTMLInputElement>(null);
-
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    const [isInputFocused, setIsInputFocused] = useState(false);
+    const [listening, setListening] = useState(false);
 
     useEffect(() => {
-        getAllTracksFromDB().then((tracks) => {
-            setSavedTrackIds(new Set(tracks.map((t) => t.id)));
-        });
+        if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("caletaSearchHistory");
+            if (saved) {
+                try { setRecentSearches(JSON.parse(saved)); } catch (e) { }
+            }
+        }
     }, []);
+
+    const addToHistory = (term: string) => {
+        if (!term.trim()) return;
+        setRecentSearches(prev => {
+            const newHistory = [term, ...prev.filter(t => t !== term)].slice(0, 10);
+            if (typeof window !== "undefined") {
+                localStorage.setItem("caletaSearchHistory", JSON.stringify(newHistory));
+            }
+            return newHistory;
+        });
+    };
+
+    const clearHistory = () => {
+        setRecentSearches([]);
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("caletaSearchHistory");
+        }
+    };
+
+    const toggleListen = () => {
+        if (listening) {
+            setListening(false);
+            return;
+        }
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            toast.error("Tu navegador no soporta búsqueda por voz", { icon: '🎤' });
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = "es-ES";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            setListening(true);
+        };
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setQuery(transcript);
+            handleDirectSearch(transcript);
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error("SpeechRecognition error:", event.error);
+            let errorMessage = "No se pudo reconocer tu voz";
+
+            if (event.error === 'no-speech') {
+                errorMessage = "No escuché nada. Intenta hablar más cerca del micrófono.";
+            } else if (event.error === 'audio-capture') {
+                errorMessage = "No se detectó un micrófono en tu dispositivo.";
+            } else if (event.error === 'not-allowed') {
+                errorMessage = "Permiso de micrófono denegado.";
+            } else if (event.error === 'network') {
+                errorMessage = "Error de red. Esta función requiere conexión a internet en tu navegador.";
+            } else if (event.error === 'aborted') {
+                errorMessage = "Se canceló la escucha emergente de voz.";
+            }
+
+            toast.error(errorMessage, { icon: '🔇' });
+            setListening(false);
+        };
+
+        recognition.onend = () => {
+            setListening(false);
+        };
+
+        recognition.start();
+    };
+
+    useEffect(() => {
+        // Cargar las canciones primero desde IndexedDB (viejo) y luego desde Capacitor Preferences
+        getAllTracksFromDB().then((tracks) => {
+            setSavedTrackIds(prev => new Set([...prev, ...tracks.map((t) => t.id)]));
+        });
+
+        getDownloadedSongs().then((tracks) => {
+            setSavedTrackIds(prev => new Set([...prev, ...tracks.map((t) => t.id)]));
+        });
+    }, [getDownloadedSongs]);
 
     const { playTrack } = usePlayer();
 
@@ -86,26 +181,34 @@ export default function SearchPage() {
         }, queueTracks);
     };
 
-    const handleDownload = (track: ItunesTrack | null, url: string | null, id: string) => {
-        if (downloadingId === id) return; // ya descargando
-        setDownloadingId(id);
+    const handleDownload = async (track: ItunesTrack, strId: string) => {
+        if (downloadingIds[strId]) return; // ya descargando
 
-        const trackName = track?.trackName || "enlace";
-        const loadingToastId = toast.loading(`Descargando "${trackName}"...`);
+        const trackName = track.trackName || "canción";
+        const loadingToastId = toast.loading(`Descargando "${trackName}" localmente...`);
 
-        // Descarga en background — no bloqueamos la UI
-        downloadAndSaveTrack(track, url, id, (progress) => {
-            setDownloadProgresses(prev => ({ ...prev, [id]: progress }));
-        }).then(result => {
-            toast.dismiss(loadingToastId);
-            if (result.success) {
-                setSavedTrackIds((prev) => new Set(prev).add(id));
-                toast.success(`"${trackName}" descargada`);
-            } else {
-                toast.error(`Error: ${result.error || "Desconocido"}`);
-            }
-            setDownloadingId(prev => prev === id ? null : prev);
+        // Idealmente, aquí construirás la URL correcta para obtener el MP3 directo.
+        // Por ahora, asumimos que obtienes el audio de un proxy público o tu viejo API si lo alojaste
+        const trackDownloadUrl = (track as any)._source === 'deezer'
+            ? `https://caleta-music-production.up.railway.app/api/deezer?id=${track.trackId}`
+            : `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+
+        const result = await downloadSong({
+            id: strId,
+            title: track.trackName,
+            artist: track.artistName,
+            coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
+            downloadUrl: trackDownloadUrl
         });
+
+        toast.dismiss(loadingToastId);
+
+        if (result.success) {
+            setSavedTrackIds((prev) => new Set(prev).add(strId));
+            toast.success(`"${trackName}" guardada en offline (Capacitor)`, { icon: '⬇️' });
+        } else {
+            toast.error(`Error: ${result.error || "Desconocido"}`);
+        }
     };
 
     const executeLinkDownload = async (url: string) => {
@@ -137,13 +240,15 @@ export default function SearchPage() {
         setSearchTerm(term);
         setSearchError(false);
         try {
-            const response = await fetch(
-                `/api/search?term=${encodeURIComponent(term)}`
-            );
-            const data = await response.json();
+            // Reemplazando el fetch estándar por el cliente nativo CapacitorHttp (sortea CORS)
+            // Utilizando base URL externa si el API interno fue eliminado en la app
+            const apiUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=30`;
+            const data = await MusicApiService.get(apiUrl);
+
+            // Format data from iTunes logic
             setResults(data.results || []);
         } catch (error) {
-            console.error("Error fetching from iTunes:", error);
+            console.error("Error fetching from iTunes via CapacitorHttp:", error);
             setSearchError(true);
             setResults([]);
         } finally {
@@ -162,19 +267,23 @@ export default function SearchPage() {
         }
     }, [doSearch]);
 
+    const handleDirectSearch = (term: string) => {
+        if (term.startsWith("http://") || term.startsWith("https://")) {
+            executeLinkDownload(term);
+            return;
+        }
+        addToHistory(term);
+        router.replace(`/search?q=${encodeURIComponent(term)}`);
+        doSearch(term);
+        setIsInputFocused(false);
+        if (searchInputRef.current) searchInputRef.current.blur();
+    };
+
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmed = query.trim();
         if (!trimmed) return;
-
-        // Si el usuario pega un link directo (youtube, etc) en la barra principal
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            executeLinkDownload(trimmed);
-            return;
-        }
-
-        router.replace(`/search?q=${encodeURIComponent(trimmed)}`);
-        doSearch(trimmed);
+        handleDirectSearch(trimmed);
     };
 
     // Group results by album
@@ -242,6 +351,8 @@ export default function SearchPage() {
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
+                            onFocus={() => setIsInputFocused(true)}
+                            onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
                             placeholder="Busca una canción, artista, o pega un link de YouTube..."
                             className="w-full bg-[#0c1225]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl py-4 md:py-5 pl-12 md:pl-16 pr-[90px] md:pr-40 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/30 transition-all text-base md:text-lg font-medium shadow-[0_8px_40px_-15px_rgba(0,0,0,0.5)] light-mode:bg-white/80 light-mode:text-slate-900 light-mode:border-slate-200"
                         />
@@ -261,23 +372,98 @@ export default function SearchPage() {
                     <div className="mb-4 animate-fade-in-up">
                         <div className="flex items-center gap-3 text-sm text-brand-400 mb-2">
                             <Loader size={16} className="animate-spin" />
-                            <span className="font-medium">Descargando enlace... {downloadProgresses[activeLinkId] || 0}%</span>
+                            <span className="font-medium">Descargando enlace... {downloadProgress[activeLinkId] || 0}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300" style={{ width: `${downloadProgresses[activeLinkId] || 0}%` }} />
+                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300" style={{ width: `${downloadProgress[activeLinkId] || 0}%` }} />
                         </div>
                     </div>
                 )}
 
+                {/* SoncCatcher & Recent Searches Dropdown */}
+                <div className="relative">
+                    {/* Floating Dropdown for Recent Searches */}
+                    {isInputFocused && recentSearches.length > 0 && !hasSearched && (
+                        <div className="absolute top-2 left-0 w-full bg-[#0c1225]/95 backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-4 shadow-2xl z-20 animate-fade-in-up">
+                            <div className="flex items-center justify-between mb-3 px-2">
+                                <h3 className="text-white font-bold text-sm">Búsquedas recientes</h3>
+                                <button type="button" onMouseDown={(e) => { e.preventDefault(); clearHistory(); }} className="text-brand-400 text-xs font-medium hover:text-brand-300">Borrar</button>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                {recentSearches.map((term, i) => (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            setQuery(term);
+                                            handleDirectSearch(term);
+                                        }}
+                                        className="flex items-center gap-3 w-full p-2.5 rounded-xl hover:bg-white/[0.06] transition-colors text-left group"
+                                    >
+                                        <History size={16} className="text-slate-400 group-hover:text-brand-400 transition-colors" />
+                                        <span className="text-slate-200 text-sm font-medium flex-1 truncate">{term}</span>
+                                        <X size={14} className="text-slate-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const updated = recentSearches.filter(t => t !== term);
+                                                setRecentSearches(updated);
+                                                localStorage.setItem("caletaSearchHistory", JSON.stringify(updated));
+                                            }}
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* Quick suggestion chips (show when no search done yet) */}
                 {!hasSearched && !loading && (
                     <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+
+                        {/* SongCatcher Card */}
+                        <div
+                            onClick={toggleListen}
+                            className={`relative overflow-hidden cursor-pointer group rounded-2xl p-5 mb-8 flex items-center justify-between transition-all duration-300 ${listening ? 'bg-[#7c3aed] shadow-[0_4px_30px_rgba(124,58,237,0.5)]' : 'bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] hover:from-[#6d28d9] hover:to-[#8b5cf6] shadow-[0_8px_25px_-5px_rgba(124,58,237,0.4)] hover:shadow-[0_8px_30px_rgba(124,58,237,0.5)]'}`}
+                        >
+                            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay pointer-events-none" />
+                            {listening && (
+                                <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />
+                            )}
+
+                            <div className="relative z-10 flex-1">
+                                <h3 className="text-white font-bold text-lg leading-tight md:text-xl drop-shadow-sm mb-1">
+                                    {listening ? "Escuchando..." : "SongCatcher"}
+                                </h3>
+                                <p className="text-purple-100/90 text-sm font-medium pr-4">
+                                    {listening ? "Canta, tararea o di el nombre..." : "Toca para identificar una canción o cantar/tararear"}
+                                </p>
+                            </div>
+
+                            <div className="relative z-10">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 ${listening ? 'bg-white text-purple-600 scale-110 shadow-lg' : 'bg-white/20 text-white backdrop-blur-sm group-hover:scale-105'}`}>
+                                    {listening ? (
+                                        <Mic className="animate-pulse" size={24} />
+                                    ) : (
+                                        <Mic2 size={24} />
+                                    )}
+                                </div>
+                                {listening && (
+                                    <>
+                                        <div className="absolute inset-0 border-[3px] border-white rounded-full animate-ping opacity-50" />
+                                        <div className="absolute -inset-2 border-[2px] border-white/50 rounded-full animate-ping opacity-30" style={{ animationDelay: '0.2s' }} />
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3 ml-1">Búsquedas populares</p>
                         <div className="flex flex-wrap gap-2">
                             {SUGGESTIONS.map((s) => (
                                 <button
                                     key={s.label}
-                                    onClick={() => { setQuery(s.label); router.replace(`/search?q=${encodeURIComponent(s.label)}`); doSearch(s.label); }}
+                                    onClick={() => { setQuery(s.label); handleDirectSearch(s.label); }}
                                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
                                 >
                                     {s.icon}
@@ -323,7 +509,7 @@ export default function SearchPage() {
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3">Prueba buscando</p>
                         <div className="flex flex-wrap justify-center gap-2">
                             {SUGGESTIONS.slice(0, 6).map((s) => (
-                                <button key={s.label} onClick={() => { setQuery(s.label); router.replace(`/search?q=${encodeURIComponent(s.label)}`); doSearch(s.label); }}
+                                <button key={s.label} onClick={() => { setQuery(s.label); handleDirectSearch(s.label); }}
                                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-sm font-semibold hover:bg-brand-500/10 hover:border-brand-500/20 hover:text-brand-300 transition-all duration-300 active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
                                     {s.icon} {s.label}
                                 </button>
@@ -383,8 +569,8 @@ export default function SearchPage() {
                             {results.map((track, idx) => {
                                 const strId = track.trackId.toString();
                                 const isDownloaded = savedTrackIds.has(strId);
-                                const isDownloading = downloadingId === strId;
-                                const progress = downloadProgresses[strId] || 0;
+                                const isDownloading = downloadingIds[strId];
+                                const progress = downloadProgress[strId] || 0;
 
                                 return (
                                     <div
@@ -475,7 +661,7 @@ export default function SearchPage() {
                                                         ? "text-brand-400"
                                                         : "text-slate-500 hover:text-brand-400 hover:bg-brand-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                                     }`}
-                                                onClick={() => { if (!isDownloaded && !isDownloading) handleDownload(track, null, strId); }}
+                                                onClick={() => { if (!isDownloaded && !isDownloading) handleDownload(track, strId); }}
                                                 disabled={isDownloading || isDownloaded}
                                                 title={isDownloaded ? "Ya descargado" : "Descargar"}
                                                 aria-label={isDownloaded ? "Ya descargado" : `Descargar ${track.trackName}`}

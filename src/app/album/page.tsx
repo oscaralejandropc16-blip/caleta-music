@@ -270,7 +270,7 @@ export default function AlbumPage() {
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#060913]/60 to-[#060913]" />
 
                 {/* Navbar/Back button */}
-                <div className="relative z-20 pt-[env(safe-area-inset-top,20px)] px-4 md:px-8 flex items-center mb-4 max-w-5xl mx-auto">
+                <div className="relative z-20 pt-safe pt-5 md:pt-8 px-4 md:px-8 flex items-center mb-4 max-w-5xl mx-auto">
                     <button
                         onClick={() => router.back()}
                         className="bg-black/30 backdrop-blur-md p-2.5 rounded-full hover:bg-black/50 transition-colors"

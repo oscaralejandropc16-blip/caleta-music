@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { SavedTrack } from "@/lib/db";
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 interface PlayerContextType {
     currentTrack: SavedTrack | null;
@@ -395,19 +397,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setProgress(0);
         setDuration(0);
 
-        // Si el track no tiene blob, intentar recuperarlo de IndexedDB para reproducción instantánea
-        let resolvedTrack = track;
-        if (!track.blob && track.id) {
-            try {
-                const { getTrackFromDB } = await import("@/lib/db");
-                const localTrack = await getTrackFromDB(track.id);
-                if (localTrack?.blob) {
-                    resolvedTrack = { ...track, blob: localTrack.blob };
-                }
-            } catch {
-                // Si falla, seguimos con el track original (streaming)
-            }
-        }
+        const resolvedTrack = await resolveLocalTrack(track);
 
         setCurrentTrack(resolvedTrack);
         if (newQueue) {
@@ -417,15 +407,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    // Helper: resolve a local blob from IndexedDB for instant playback
-    const resolveLocalBlob = async (track: SavedTrack): Promise<SavedTrack> => {
+    // Helper: resolve a local track from Capacitor Offline Preferences or IndexedDB
+    const resolveLocalTrack = async (track: SavedTrack): Promise<SavedTrack> => {
+        let resolvedTrack = { ...track };
+
+        // 1. Capacitor Preferences Check (Mobile Offline)
+        try {
+            const { value } = await Preferences.get({ key: 'caleta_downloaded_tracks' });
+            if (value) {
+                const offlineTracks: any[] = JSON.parse(value);
+                const trackId = String(track.id).replace('stream-', '');
+                const offlineMatch = offlineTracks.find((t: any) => String(t.id) === trackId || String(t.id) === String(track.id));
+
+                if (offlineMatch?.localPath) {
+                    const convertedUrl = Capacitor.convertFileSrc(offlineMatch.localPath);
+                    console.log("[Player] 📱 Usando archivo offline nativo:", convertedUrl);
+                    resolvedTrack.streamUrl = convertedUrl;
+                    return resolvedTrack;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed checking native Capacitor preferences", e);
+        }
+
+        // 2. IndexedDB Check (Web Legacy)
         if (track.blob) return track;
         try {
             const { getTrackFromDB } = await import("@/lib/db");
             const localTrack = await getTrackFromDB(track.id);
-            if (localTrack?.blob) return { ...track, blob: localTrack.blob };
+            if (localTrack?.blob) {
+                resolvedTrack.blob = localTrack.blob;
+                return resolvedTrack;
+            }
         } catch { /* fallback to streaming */ }
-        return track;
+
+        return resolvedTrack;
     };
 
     const playNext = (autoAdvance = false) => {
@@ -464,18 +480,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 nextIndex = Math.floor(Math.random() * queue.length);
             }
             setCurrentIndex(nextIndex);
-            resolveLocalBlob(queue[nextIndex]).then(setCurrentTrack);
+            resolveLocalTrack(queue[nextIndex]).then(setCurrentTrack);
         } else {
             // Flujo Normal secuencial
             if (currentIndex < queue.length - 1) {
                 const nextIndex = currentIndex + 1;
                 setCurrentIndex(nextIndex);
-                resolveLocalBlob(queue[nextIndex]).then(setCurrentTrack);
+                resolveLocalTrack(queue[nextIndex]).then(setCurrentTrack);
             } else {
                 // Fin de la cola
                 if (repeatMode === 'all' || !autoAdvance) {
                     setCurrentIndex(0);
-                    resolveLocalBlob(queue[0]).then(setCurrentTrack);
+                    resolveLocalTrack(queue[0]).then(setCurrentTrack);
                 } else {
                     setIsPlaying(false);
                 }
@@ -507,17 +523,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 prevIndex = Math.floor(Math.random() * queue.length);
             }
             setCurrentIndex(prevIndex);
-            resolveLocalBlob(queue[prevIndex]).then(setCurrentTrack);
+            resolveLocalTrack(queue[prevIndex]).then(setCurrentTrack);
         } else {
             if (currentIndex > 0) {
                 const prevIndex = currentIndex - 1;
                 setCurrentIndex(prevIndex);
-                resolveLocalBlob(queue[prevIndex]).then(setCurrentTrack);
+                resolveLocalTrack(queue[prevIndex]).then(setCurrentTrack);
             } else {
                 // Ir a la última de la cola
                 const lastIndex = queue.length - 1;
                 setCurrentIndex(lastIndex);
-                resolveLocalBlob(queue[lastIndex]).then(setCurrentTrack);
+                resolveLocalTrack(queue[lastIndex]).then(setCurrentTrack);
             }
         }
     };

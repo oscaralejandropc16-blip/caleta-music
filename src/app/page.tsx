@@ -392,7 +392,7 @@ export default function Home() {
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
                 {playlists.slice(0, 8).map((playlist) => (
-                  <button key={playlist.id} onClick={() => router.push(`/playlist/${playlist.id}`)} aria-label={`Ver playlist ${playlist.name}`}
+                  <button key={playlist.id} onClick={() => router.push(`/playlist?id=${playlist.id}`)} aria-label={`Ver playlist ${playlist.name}`}
                     className="flex items-center bg-white/[0.04] hover:bg-white/[0.09] active:scale-[0.98] transition-all duration-300 rounded-[12px] md:rounded-[16px] overflow-hidden group text-left h-[64px] md:h-[72px] shadow-lg md:shadow-xl hover:shadow-brand-500/10 border border-white/[0.02] hover:border-white/[0.08]">
                     <div className="h-full aspect-square flex-shrink-0 bg-slate-800/80 shadow-[4px_0_15px_rgba(0,0,0,0.5)] bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
                       style={playlist.coverBlob ? { backgroundImage: `url(${URL.createObjectURL(playlist.coverBlob)})` } : playlist.coverUrl ? { backgroundImage: `url(${playlist.coverUrl})` } : {}}>
