@@ -147,13 +147,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signInWithGoogle = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
+        // Detect if running inside Capacitor (Android/iOS)
+        const isCapacitor = typeof window !== 'undefined' && !!(window as any).Capacitor;
+        // In Capacitor, use the app's custom URL scheme for deep linking back
+        const redirectUrl = isCapacitor
+            ? 'com.caletamusic.app://auth/callback'
+            : `${window.location.origin}/`;
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
-                redirectTo: `${window.location.origin}/`,
+                redirectTo: redirectUrl,
+                // In Capacitor, don't let Supabase redirect the webview — we'll open externally
+                skipBrowserRedirect: isCapacitor,
             },
         });
+
         if (error) return { error: error.message };
+
+        // If on Capacitor, open the OAuth URL in the system browser
+        if (isCapacitor && data?.url) {
+            try {
+                const { Browser } = await import('@capacitor/browser');
+                // Listen for the app being reopened via deep link
+                const { App } = await import('@capacitor/app');
+                App.addListener('appUrlOpen', async (event) => {
+                    // The URL will be like: com.caletamusic.app://auth/callback#access_token=...&refresh_token=...
+                    if (event.url.includes('auth/callback')) {
+                        // Close the external browser
+                        Browser.close();
+                        // Extract tokens from the URL fragment
+                        const hashParams = new URLSearchParams(event.url.split('#')[1] || '');
+                        const access_token = hashParams.get('access_token');
+                        const refresh_token = hashParams.get('refresh_token');
+                        if (access_token && refresh_token) {
+                            await supabase.auth.setSession({ access_token, refresh_token });
+                        }
+                    }
+                });
+                // Open the OAuth URL in the system browser
+                await Browser.open({ url: data.url });
+            } catch (err) {
+                console.error('[Auth] Capacitor browser error:', err);
+                return { error: 'Error al abrir el navegador para Google' };
+            }
+        }
+
         return { error: null };
     };
 
