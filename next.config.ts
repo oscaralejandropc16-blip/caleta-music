@@ -1,11 +1,16 @@
 import type { NextConfig } from "next";
 
-const isStaticExport = process.env.STATIC_EXPORT === "true";
+// Railway/Docker: NEXT_OUTPUT=standalone → servidor Node con API routes
+// Capacitor (APK/iOS): STATIC_EXPORT=true → archivos HTML estáticos
+// Dev local: ninguno → modo desarrollo normal
+const outputMode = process.env.NEXT_OUTPUT === "standalone"
+  ? "standalone" as const
+  : process.env.STATIC_EXPORT === "true"
+    ? "export" as const
+    : undefined;
 
 const nextConfig: NextConfig = {
-  // Solo usar "export" para builds de Capacitor (APK/iOS).
-  // Railway necesita modo servidor para que funcionen las API routes (/api/deezer, /api/download, etc.)
-  ...(isStaticExport ? { output: "export" as const } : {}),
+  ...(outputMode ? { output: outputMode } : {}),
   trailingSlash: true,
   images: {
     unoptimized: true,
