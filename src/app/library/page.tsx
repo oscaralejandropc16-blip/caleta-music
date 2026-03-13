@@ -169,7 +169,10 @@ function LibraryContent() {
         try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
         if (isNative) {
-            const trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
+            let trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
+
+            // Fix 404 Native: Add play=true specifically so the API triggers a redirect to the MP3 URL
+            trackDownloadUrl += '&play=true';
 
             const result = await downloadSong({
                 id: track.id,

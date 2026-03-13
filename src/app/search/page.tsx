@@ -216,9 +216,12 @@ export default function SearchPage() {
 
         if (isNative) {
             // ── Flujo nativo (Capacitor) ──
-            const trackDownloadUrl = (track as any)._source === 'deezer'
+            const appendPlayParam = (url: string) => url.includes('?') ? `${url}&play=true` : `${url}?play=true`;
+            let trackDownloadUrl = (track as any)._source === 'deezer' && track.trackId
                 ? `https://caleta-music-production.up.railway.app/api/deezer?id=${track.trackId}`
                 : `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+
+            trackDownloadUrl = appendPlayParam(trackDownloadUrl);
 
             const result = await downloadSong({
                 id: strId,
