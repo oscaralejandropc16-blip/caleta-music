@@ -38,12 +38,14 @@ import PlaylistDetailModal from "@/components/PlaylistDetailModal";
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { useDownloadSong } from "@/hooks/useDownloadSong";
+import { useAuth } from "@/context/AuthContext";
 
 function LibraryContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const tab = searchParams.get("tab");
     const playlistIdParam = searchParams.get("playlist");
+    const { user } = useAuth();
 
     const [tracks, setTracks] = useState<SavedTrack[]>([]);
     const [cloudTracks, setCloudTracks] = useState<SavedTrack[]>([]);
@@ -192,7 +194,7 @@ function LibraryContent() {
             if (tab === "likes") setActiveTab("likes");
             else if (tab === "playlists") setActiveTab("playlists");
         });
-    }, [tab, playlistIdParam]);
+    }, [tab, playlistIdParam, user]);
 
     useEffect(() => {
         const handleLikeUpdate = () => {
