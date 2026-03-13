@@ -14,7 +14,7 @@ const tracksStore = localforage.createInstance({
 });
 
 // Store para las playlists
-const playlistsStore = localforage.createInstance({
+export const playlistsStore = localforage.createInstance({
     name: "CaletaMusicDB",
     storeName: "playlists"
 });

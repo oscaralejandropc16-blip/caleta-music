@@ -161,5 +161,16 @@ export async function fullSync(userId: string): Promise<void> {
     await pullLibraryFromCloud(userId);
     // 2. Push local to cloud (so new local tracks get uploaded)
     await pushLibraryToCloud(userId);
+
+    // 3. Sync playlists
+    try {
+        const { pullPlaylistsFromCloud, pushAllPlaylistsToCloud } = await import("./syncLibrary");
+        await pullPlaylistsFromCloud();
+        await pushAllPlaylistsToCloud();
+        console.log("[Sync] Playlists synced ✓");
+    } catch (err) {
+        console.warn("[Sync] Playlist sync error:", err);
+    }
+
     console.log("[Sync] Full sync complete ✓");
 }

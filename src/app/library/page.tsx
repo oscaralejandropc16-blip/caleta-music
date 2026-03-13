@@ -30,7 +30,7 @@ import {
     SavedAlbum,
 } from "@/lib/db";
 import { downloadAndSaveTrack } from "@/lib/download";
-import { getUserLibrary, removeSongFromLibrary } from "@/lib/syncLibrary";
+import { getUserLibrary, removeSongFromLibrary, syncPlaylistToCloud, pullPlaylistsFromCloud, removePlaylistFromCloud } from "@/lib/syncLibrary";
 import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
@@ -109,6 +109,20 @@ function LibraryContent() {
         setTracks(downloaded);
 
         const pls = await getAllPlaylists();
+
+        // Pull playlists from the cloud and merge
+        try {
+            const cloudPls = await pullPlaylistsFromCloud();
+            const localIds = new Set(pls.map(p => p.id));
+            for (const cp of cloudPls) {
+                if (!localIds.has(cp.id)) {
+                    pls.push(cp);
+                }
+            }
+        } catch (e) {
+            console.warn("[Library] Cloud playlist pull failed:", e);
+        }
+
         setPlaylists(pls);
         const liked = await getAllLikedTrackIds();
         setLikedIds(new Set(liked));
@@ -266,13 +280,21 @@ function LibraryContent() {
     };
 
     const handleCreatePlaylist = async (name: string, description: string, coverBlob?: Blob) => {
-        await createPlaylist(name, description, coverBlob);
+        const newPl = await createPlaylist(name, description, coverBlob);
+        // Sync to cloud so it appears on other devices
+        syncPlaylistToCloud(newPl).catch(e => console.warn("[Sync] Playlist create sync:", e));
         loadLibrary();
     };
 
     const handleAddToPlaylist = async (playlistId: string, trackId: string) => {
         await addTrackToPlaylist(playlistId, trackId);
         setContextMenuTrackId(null);
+        // Re-sync the updated playlist to cloud
+        const { getPlaylist } = await import("@/lib/db");
+        const updated = await getPlaylist(playlistId);
+        if (updated) {
+            syncPlaylistToCloud(updated).catch(e => console.warn("[Sync] Playlist update sync:", e));
+        }
         loadLibrary();
     };
 
