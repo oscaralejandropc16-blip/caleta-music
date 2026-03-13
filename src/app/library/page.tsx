@@ -36,6 +36,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
 import PlaylistDetailModal from "@/components/PlaylistDetailModal";
 import { Preferences } from '@capacitor/preferences';
+import { Capacitor } from '@capacitor/core';
+import { useDownloadSong } from "@/hooks/useDownloadSong";
 
 function LibraryContent() {
     const searchParams = useSearchParams();
@@ -59,6 +61,9 @@ function LibraryContent() {
     const [contextMenuTrackId, setContextMenuTrackId] = useState<string | null>(null);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+    // Native Capacitor download hook
+    const { downloadSong, downloadingIds, downloadProgress: nativeDownloadProgress } = useDownloadSong();
 
     // Playlist detail modal state
     const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
@@ -90,7 +95,9 @@ function LibraryContent() {
                             artist: t.artist,
                             coverUrl: t.coverUrl,
                             album: t.album || '',
-                            downloadedAt: t.downloadedAt || Date.now()
+                            downloadedAt: t.downloadedAt || Date.now(),
+                            localPath: t.localPath,
+                            isNativeDownload: true
                         });
                     }
                 });
@@ -158,29 +165,50 @@ function LibraryContent() {
             _source: 'deezer'
         } as any;
 
-        setDownloadingCloudIds(prev => new Set(prev).add(track.id));
-        setDownloadProgress(prev => ({ ...prev, [track.id]: 0 }));
+        let isNative = false;
+        try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
-        const result = await downloadAndSaveTrack(mockTrack, track.sourceAudioUrl || null, track.id, (progress) => {
-            setDownloadProgress(prev => ({ ...prev, [track.id]: progress }));
-        });
+        if (isNative) {
+            const trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
 
-        if (result.success) {
-            await loadLibrary();
+            const result = await downloadSong({
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                coverUrl: track.coverUrl || "",
+                downloadUrl: trackDownloadUrl
+            });
+
+            if (result.success) {
+                await loadLibrary();
+            } else {
+                alert(`Error al descargar: ${result.error || "Error desconocido"}`);
+            }
         } else {
-            alert(`Error al descargar: ${result.error || "Error desconocido"}`);
-        }
+            setDownloadingCloudIds(prev => new Set(prev).add(track.id));
+            setDownloadProgress(prev => ({ ...prev, [track.id]: 0 }));
 
-        setDownloadingCloudIds(prev => {
-            const next = new Set(prev);
-            next.delete(track.id);
-            return next;
-        });
-        setDownloadProgress(prev => {
-            const next = { ...prev };
-            delete next[track.id];
-            return next;
-        });
+            const result = await downloadAndSaveTrack(mockTrack, track.sourceAudioUrl || null, track.id, (progress) => {
+                setDownloadProgress(prev => ({ ...prev, [track.id]: progress }));
+            });
+
+            if (result.success) {
+                await loadLibrary();
+            } else {
+                alert(`Error al descargar: ${result.error || "Error desconocido"}`);
+            }
+
+            setDownloadingCloudIds(prev => {
+                const next = new Set(prev);
+                next.delete(track.id);
+                return next;
+            });
+            setDownloadProgress(prev => {
+                const next = { ...prev };
+                delete next[track.id];
+                return next;
+            });
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -265,7 +293,7 @@ function LibraryContent() {
         const mergedTracks: UnifiedTrack[] = tracks.map(t => {
             localTrackIds.add(t.id);
             // Local tracks that lack a blob means they were pulled from cloud sync, but not downloaded locally
-            const isCloud = !t.blob;
+            const isCloud = !t.blob && !(t as any).isNativeDownload;
             return {
                 ...t,
                 isCloudOnly: isCloud,
@@ -283,7 +311,7 @@ function LibraryContent() {
             }
         });
 
-        return mergedTracks.sort((a, b) => b.downloadedAt - a.downloadedAt);
+        return mergedTracks.sort((a, b) => (b.downloadedAt || 0) - (a.downloadedAt || 0));
     };
 
     const allMergedTracks = getMergedTracks();
@@ -699,11 +727,11 @@ function LibraryContent() {
 
                                                 <div className="w-10 flex-shrink-0 flex justify-end items-center">
                                                     {track.isCloudOnly ? (
-                                                        downloadingCloudIds.has(track.id) ? (
-                                                            <div className="relative flex items-center justify-center w-8 h-8" title={`${downloadProgress[track.id] || 0}%`}>
+                                                        (downloadingCloudIds.has(track.id) || downloadingIds[track.id]) ? (
+                                                            <div className="relative flex items-center justify-center w-8 h-8" title={`${downloadProgress[track.id] || nativeDownloadProgress[track.id] || 0}%`}>
                                                                 <Loader size={18} className="animate-spin text-brand-500" />
                                                                 <span className="absolute text-[8px] font-bold text-white">
-                                                                    {downloadProgress[track.id] || 0}
+                                                                    {downloadProgress[track.id] || nativeDownloadProgress[track.id] || 0}
                                                                 </span>
                                                             </div>
                                                         ) : (

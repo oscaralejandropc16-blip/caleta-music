@@ -46,9 +46,31 @@ export function useDownloadSong() {
                 });
             }, 300);
 
+            let finalDownloadUrl = trackParams.downloadUrl;
+            try {
+                // Si la URL es de nuestra API, nos devuelve un JSON con la "audioUrl" directa. 
+                // Necesitamos esa URL final para que Filesystem.downloadFile no descargue el JSON.
+                if (trackParams.downloadUrl.includes('/api/')) {
+                    const res = await CapacitorHttp.request({
+                        method: 'GET',
+                        url: trackParams.downloadUrl
+                    });
+                    if (res.data && typeof res.data === 'string') {
+                        try {
+                            const parsed = JSON.parse(res.data);
+                            if (parsed.audioUrl) finalDownloadUrl = parsed.audioUrl;
+                        } catch (e) { }
+                    } else if (res.data && res.data.audioUrl) {
+                        finalDownloadUrl = res.data.audioUrl;
+                    }
+                }
+            } catch (e) {
+                console.warn("[Download] Falló obtener url directa, usando original", e);
+            }
+
             // Escribir el archivo MP3 físico dentro del teléfono del usuario
             const savedFile = await Filesystem.downloadFile({
-                url: trackParams.downloadUrl,
+                url: finalDownloadUrl,
                 path: fileName,
                 directory: Directory.Data,
             });

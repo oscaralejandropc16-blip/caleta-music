@@ -90,7 +90,7 @@ export async function getAllTracksFromDB(): Promise<SavedTrack[]> {
         await tracksStore.iterate((value: unknown) => {
             tracks.push(value as SavedTrack);
         });
-        return tracks.sort((a, b) => b.downloadedAt - a.downloadedAt);
+        return tracks.sort((a, b) => (b.downloadedAt || 0) - (a.downloadedAt || 0));
     } catch (err) {
         console.error("Error obteniendo pistas:", err);
         return [];
