@@ -42,6 +42,8 @@ export interface SavedTrack {
     streamUrl?: string; // URL directa para hacer streaming (ej: API de descarga route.ts)
     previewUrl?: string; // URL de preview de Deezer (30s) como último fallback
     downloadedAt: number;
+    localPath?: string; // Ruta de guardado en móvil
+    isNativeDownload?: boolean; // Para identificar que fue descargado con Capacitor
 }
 
 export interface SavedAlbum {

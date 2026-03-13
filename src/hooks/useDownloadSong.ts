@@ -50,19 +50,10 @@ export function useDownloadSong() {
             try {
                 // Si la URL es de nuestra API, nos devuelve un JSON con la "audioUrl" directa. 
                 // Necesitamos esa URL final para que Filesystem.downloadFile no descargue el JSON.
+                // En su lugar, si enviamos play=true, nos redirige directamente al archivo de audio.
                 if (trackParams.downloadUrl.includes('/api/')) {
-                    const res = await CapacitorHttp.request({
-                        method: 'GET',
-                        url: trackParams.downloadUrl
-                    });
-                    if (res.data && typeof res.data === 'string') {
-                        try {
-                            const parsed = JSON.parse(res.data);
-                            if (parsed.audioUrl) finalDownloadUrl = parsed.audioUrl;
-                        } catch (e) { }
-                    } else if (res.data && res.data.audioUrl) {
-                        finalDownloadUrl = res.data.audioUrl;
-                    }
+                    const separator = trackParams.downloadUrl.includes('?') ? '&' : '?';
+                    finalDownloadUrl = `${trackParams.downloadUrl}${separator}play=true`;
                 }
             } catch (e) {
                 console.warn("[Download] Falló obtener url directa, usando original", e);
