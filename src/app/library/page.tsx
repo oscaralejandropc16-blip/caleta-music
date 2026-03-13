@@ -110,20 +110,21 @@ function LibraryContent() {
 
         const pls = await getAllPlaylists();
 
-        // Pull playlists from the cloud and merge
+        // Pull playlists from the cloud and merge safely
+        let mergedPls = [...pls];
         try {
             const cloudPls = await pullPlaylistsFromCloud();
             const localIds = new Set(pls.map(p => p.id));
             for (const cp of cloudPls) {
                 if (!localIds.has(cp.id)) {
-                    pls.push(cp);
+                    mergedPls.push(cp);
                 }
             }
         } catch (e) {
             console.warn("[Library] Cloud playlist pull failed:", e);
         }
 
-        setPlaylists(pls);
+        setPlaylists(mergedPls);
         const liked = await getAllLikedTrackIds();
         setLikedIds(new Set(liked));
 
@@ -133,7 +134,7 @@ function LibraryContent() {
         const albums = await getAllSavedAlbums();
         setSavedAlbums(albums);
 
-        return pls;
+        return mergedPls;
     };
 
     useEffect(() => {
@@ -280,10 +281,15 @@ function LibraryContent() {
     };
 
     const handleCreatePlaylist = async (name: string, description: string, coverBlob?: Blob) => {
-        const newPl = await createPlaylist(name, description, coverBlob);
-        // Sync to cloud so it appears on other devices
-        syncPlaylistToCloud(newPl).catch(e => console.warn("[Sync] Playlist create sync:", e));
-        loadLibrary();
+        try {
+            const newPl = await createPlaylist(name, description, coverBlob);
+            // Sync to cloud so it appears on other devices
+            syncPlaylistToCloud(newPl).catch(e => console.warn("[Sync] Playlist create sync:", e));
+        } catch (e) {
+            console.error("[Library] Error creating playlist:", e);
+        } finally {
+            loadLibrary();
+        }
     };
 
     const handleAddToPlaylist = async (playlistId: string, trackId: string) => {
