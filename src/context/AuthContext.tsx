@@ -147,8 +147,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signInWithGoogle = async () => {
-        // Detect if running inside Capacitor (Android/iOS)
-        const isCapacitor = typeof window !== 'undefined' && !!(window as any).Capacitor;
+        // Detect if running inside Capacitor native shell (Android/iOS)
+        // IMPORTANT: window.Capacitor exists even in web bundles, so we must check isNativePlatform()
+        let isCapacitor = false;
+        try {
+            const { Capacitor } = await import('@capacitor/core');
+            isCapacitor = Capacitor.isNativePlatform();
+        } catch { /* not native */ }
         // In Capacitor, use the app's custom URL scheme for deep linking back
         const redirectUrl = isCapacitor
             ? 'com.caletamusic.app://auth/callback'
