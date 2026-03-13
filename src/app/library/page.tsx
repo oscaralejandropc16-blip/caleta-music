@@ -409,7 +409,7 @@ function LibraryContent() {
 
     // 'Canciones' tab should only show truly downloaded tracks or cloud library tracks
     const libraryTracks = allMergedTracks.filter(t =>
-        t.blob || (t as any).isNativeDownload || cloudTracks.some(ct => ct.id === t.id)
+        t.blob || (t as any).isNativeDownload || cloudTracks.some(ct => ct.id === t.id) || t.isCloudOnly
     );
 
     const filteredLibraryTracks = libraryTracks.filter(
