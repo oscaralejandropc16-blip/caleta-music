@@ -139,7 +139,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
 
     const handleToggleLike = async () => {
         if (!currentTrack) return;
-        const nowLiked = await toggleLike(currentTrack.id);
+        const nowLiked = await toggleLike(currentTrack);
         setLiked(nowLiked);
     };
 

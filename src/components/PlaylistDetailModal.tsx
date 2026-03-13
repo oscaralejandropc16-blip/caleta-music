@@ -81,13 +81,13 @@ export default function PlaylistDetailModal({
         playTrack(track, tracks);
     };
 
-    const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+    const handleToggleLike = async (e: React.MouseEvent, track: SavedTrack) => {
         e.stopPropagation();
-        const nowLiked = await toggleLike(trackId);
+        const nowLiked = await toggleLike(track);
         setLikedIds(prev => {
             const next = new Set(prev);
-            if (nowLiked) next.add(trackId);
-            else next.delete(trackId);
+            if (nowLiked) next.add(track.id);
+            else next.delete(track.id);
             return next;
         });
     };
@@ -288,7 +288,7 @@ export default function PlaylistDetailModal({
 
                                         {/* Like */}
                                         <button
-                                            onClick={e => handleToggleLike(e, track.id)}
+                                            onClick={e => handleToggleLike(e, track)}
                                             className={`p-2.5 rounded-full transition-all duration-300 flex-shrink-0 active:scale-90 outline-none focus-visible:ring-4 focus-visible:ring-pink-500/40 ${isLiked
                                                 ? "text-pink-500 bg-pink-500/10 hover:bg-pink-500/20"
                                                 : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-0 group-hover:opacity-100"

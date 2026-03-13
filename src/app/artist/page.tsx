@@ -159,11 +159,28 @@ function ArtistProfileContent() {
         setDownloadingId(null);
     };
 
-    const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+    const handleToggleLike = async (e: React.MouseEvent, itunesTrack: ItunesTrack) => {
         e.stopPropagation();
-        if (!savedTrackIds.has(trackId)) return;
-        const nowLiked = await toggleLike(trackId);
-        setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(trackId); else next.delete(trackId); return next; });
+        const strId = itunesTrack.trackId.toString();
+
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+        const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
+            ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
+            : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+
+        const trackObj = {
+            id: strId,
+            title: itunesTrack.trackName,
+            artist: itunesTrack.artistName,
+            album: itunesTrack.collectionName || "",
+            coverUrl: itunesTrack.artworkUrl100?.replace("100x100", "500x500") || "",
+            streamUrl: downloadUrl(itunesTrack),
+            previewUrl: itunesTrack.previewUrl || "",
+            downloadedAt: Date.now()
+        };
+
+        const nowLiked = await toggleLike(trackObj);
+        setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(strId); else next.delete(strId); return next; });
     };
 
     const headerImage = tracks.length > 0 ? tracks[0].artworkUrl100.replace("100x100", "1000x1000") : "";
@@ -273,7 +290,7 @@ function ArtistProfileContent() {
                                             {/* Track Actions */}
                                             <div className="flex items-center gap-3 pr-2">
                                                 {isDownloaded ? (
-                                                    <button onClick={(e) => handleToggleLike(e, strId)} className={`p-2 transition-all active:scale-90 ${isLiked ? "text-pink-500 group-hover:scale-110 drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]" : "text-white/40 hover:text-white"}`}>
+                                                    <button onClick={(e) => handleToggleLike(e, track)} className={`p-2 transition-all active:scale-90 ${isLiked ? "text-pink-500 group-hover:scale-110 drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]" : "text-white/40 hover:text-white"}`}>
                                                         <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
                                                     </button>
                                                 ) : (

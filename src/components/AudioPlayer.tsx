@@ -34,7 +34,7 @@ export default function AudioPlayer() {
 
     const handleToggleLike = async () => {
         if (!currentTrack) return;
-        const nowLiked = await toggleLike(currentTrack.id);
+        const nowLiked = await toggleLike(currentTrack);
         setLiked(nowLiked);
     };
 

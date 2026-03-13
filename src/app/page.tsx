@@ -42,7 +42,7 @@ interface TrackCardProps {
   likedIds: Set<string>;
   onPlay: (e: React.MouseEvent, track: ItunesTrack) => void;
   onDownload: (track: ItunesTrack) => void;
-  onToggleLike: (e: React.MouseEvent, trackId: string) => void;
+  onToggleLike: (e: React.MouseEvent, track: ItunesTrack) => void;
   onAlbumClick: (album: string, artist: string, cover: string) => void;
   onArtistClick: (artist: string) => void;
 }
@@ -96,7 +96,7 @@ function TrackCard({
               )}
 
               {isDownloaded && (
-                <button onClick={(e) => onToggleLike(e, strId)} aria-label={isLiked ? `Quitar me gusta a ${track.trackName}` : `Dar me gusta a ${track.trackName}`}
+                <button onClick={(e) => onToggleLike(e, track)} aria-label={isLiked ? `Quitar me gusta a ${track.trackName}` : `Dar me gusta a ${track.trackName}`}
                   className={`p-2.5 md:p-3 rounded-full transition-colors focus-visible:ring-4 focus-visible:ring-pink-500/50 outline-none active:scale-95 ${isLiked ? "text-pink-500 bg-pink-500/20" : "text-white/80 hover:text-pink-400 bg-black/40 md:bg-white/20 hover:bg-white/30 backdrop-blur-md"}`}>
                   <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
                 </button>
@@ -308,11 +308,28 @@ export default function Home() {
     setDownloadingId(null);
   };
 
-  const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+  const handleToggleLike = async (e: React.MouseEvent, itunesTrack: ItunesTrack) => {
     e.stopPropagation();
-    if (!savedTrackIds.has(trackId)) return;
-    const nowLiked = await toggleLike(trackId);
-    setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(trackId); else next.delete(trackId); return next; });
+    const strId = itunesTrack.trackId.toString();
+
+    const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+    const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
+      ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
+      : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+
+    const trackObj = {
+      id: strId,
+      title: itunesTrack.trackName,
+      artist: itunesTrack.artistName,
+      album: itunesTrack.collectionName || "",
+      coverUrl: itunesTrack.artworkUrl100?.replace("100x100", "500x500") || "",
+      streamUrl: downloadUrl(itunesTrack),
+      previewUrl: itunesTrack.previewUrl || "",
+      downloadedAt: Date.now()
+    };
+
+    const nowLiked = await toggleLike(trackObj);
+    setLikedIds(prev => { const next = new Set(prev); if (nowLiked) next.add(strId); else next.delete(strId); return next; });
   };
 
   const handlePlay = (e: React.MouseEvent, track: ItunesTrack, contextTracks?: ItunesTrack[]) => {

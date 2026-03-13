@@ -146,10 +146,27 @@ export default function AlbumPage() {
         loadAlbum();
     }, [albumName, artistName]);
 
-    const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+    const handleToggleLike = async (e: React.MouseEvent, itunesTrack: ItunesTrack) => {
         e.stopPropagation();
-        const newState = await toggleLike(trackId);
-        setLikedMap(prev => ({ ...prev, [trackId]: newState }));
+        const strId = itunesTrack.trackId.toString();
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+        const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
+            ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
+            : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+
+        const trackObj = {
+            id: strId,
+            title: itunesTrack.trackName,
+            artist: itunesTrack.artistName,
+            album: itunesTrack.collectionName || "",
+            coverUrl: itunesTrack.artworkUrl100?.replace("100x100", "500x500") || "",
+            streamUrl: downloadUrl(itunesTrack),
+            previewUrl: itunesTrack.previewUrl || "",
+            downloadedAt: Date.now()
+        };
+
+        const newState = await toggleLike(trackObj);
+        setLikedMap(prev => ({ ...prev, [strId]: newState }));
     };
 
     const handleToggleSaveAlbum = async () => {
@@ -428,7 +445,7 @@ export default function AlbumPage() {
                                     {/* Action Buttons */}
                                     {isDownloaded && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleToggleLike(e, strId); }}
+                                            onClick={(e) => { e.stopPropagation(); handleToggleLike(e, track); }}
                                             className={`p-2 rounded-full transition-colors hidden sm:block ${isLiked ? "text-pink-500" : "text-slate-500 opacity-0 group-hover:opacity-100 hover:text-white"
                                                 }`}
                                         >

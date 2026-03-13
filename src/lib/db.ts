@@ -142,13 +142,37 @@ export async function getAllLikedTrackIds(): Promise<string[]> {
     return ids.sort((a, b) => b.ts - a.ts).map(i => i.id);
 }
 
-export async function toggleLike(trackId: string): Promise<boolean> {
-    const liked = await isTrackLiked(trackId);
+export async function toggleLike(track: SavedTrack): Promise<boolean> {
+    const liked = await isTrackLiked(track.id);
     if (liked) {
-        await unlikeTrack(trackId);
+        await unlikeTrack(track.id);
+
+        // Cleanup if not downloaded and not in playlists
+        const isDownloaded = (await getTrackFromDB(track.id))?.blob !== undefined;
+        let inAnyPlaylist = false;
+        await playlistsStore.iterate((pl: unknown) => {
+            if ((pl as Playlist).trackIds.includes(track.id)) inAnyPlaylist = true;
+        });
+        if (!isDownloaded && !inAnyPlaylist) {
+            await tracksStore.removeItem(track.id);
+        }
+
         return false;
     } else {
-        await likeTrack(trackId);
+        await likeTrack(track.id);
+        // Save metadata without blob so we have it for 'Favoritas' offline
+        const existing = await getTrackFromDB(track.id);
+        if (!existing) {
+            await tracksStore.setItem(track.id, {
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                album: track.album || '',
+                coverUrl: track.coverUrl,
+                streamUrl: track.streamUrl || track.previewUrl,
+                downloadedAt: Date.now()
+            });
+        }
         return true;
     }
 }

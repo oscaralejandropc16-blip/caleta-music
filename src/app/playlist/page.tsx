@@ -29,6 +29,7 @@ function PlaylistContent() {
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
     const { playTrack, currentTrack, isPlaying, togglePlay, isLoading: playerLoading } = usePlayer();
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const loadPlaylist = useCallback(async () => {
         setLoading(true);
@@ -78,13 +79,13 @@ function PlaylistContent() {
         playTrack(track, tracks);
     };
 
-    const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+    const handleToggleLike = async (e: React.MouseEvent, track: SavedTrack) => {
         e.stopPropagation();
-        const nowLiked = await toggleLike(trackId);
+        const nowLiked = await toggleLike(track);
         setLikedIds(prev => {
             const next = new Set(prev);
-            if (nowLiked) next.add(trackId);
-            else next.delete(trackId);
+            if (nowLiked) next.add(track.id);
+            else next.delete(track.id);
             return next;
         });
     };
@@ -97,12 +98,15 @@ function PlaylistContent() {
         }
     };
 
-    const handleDeletePlaylist = async () => {
+    const handleDeletePlaylist = () => {
         if (!playlist) return;
-        if (confirm(`¿Eliminar la playlist "${playlist.name}"? Esta acción no se puede deshacer.`)) {
-            await deletePlaylist(playlist.id);
-            router.push("/library?tab=playlists");
-        }
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDeletePlaylist = async () => {
+        if (!playlist) return;
+        await deletePlaylist(playlist.id);
+        router.push("/library?tab=playlists");
     };
 
     // Loading state
@@ -321,7 +325,7 @@ function PlaylistContent() {
 
                                     {/* Like */}
                                     <button
-                                        onClick={e => handleToggleLike(e, track.id)}
+                                        onClick={e => handleToggleLike(e, track)}
                                         className={`p-2.5 rounded-full transition-all duration-300 flex-shrink-0 active:scale-90 outline-none ${isLiked
                                             ? "text-pink-500 bg-pink-500/10 hover:bg-pink-500/20"
                                             : "text-slate-500 hover:text-pink-400 hover:bg-white/10 opacity-0 group-hover:opacity-100"
@@ -345,6 +349,44 @@ function PlaylistContent() {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-[#060913]/80 backdrop-blur-md" onClick={() => setShowDeleteConfirm(false)} />
+
+                    {/* Modal Content */}
+                    <div className="relative bg-gradient-to-b from-[#1a1f35] to-[#0a0f1e] border border-white/10 rounded-[32px] shadow-[0_0_80px_rgba(239,68,68,0.15)] p-8 max-w-sm w-full animate-modal-in flex flex-col items-center text-center overflow-hidden">
+                        {/* Background glow effect */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1/2 bg-red-500/10 blur-[50px] pointer-events-none" />
+
+                        <div className="relative w-20 h-20 bg-gradient-to-br from-red-500/20 to-rose-600/5 rounded-2xl flex items-center justify-center mb-6 shadow-inner border border-red-500/20">
+                            <Trash2 size={36} className="text-red-400 drop-shadow-md" strokeWidth={1.5} />
+                        </div>
+
+                        <h2 className="text-2xl font-black text-white mb-2 tracking-tight drop-shadow-sm">¿Eliminar Playlist?</h2>
+                        <p className="text-slate-400 font-medium mb-8 leading-relaxed">
+                            Estás a punto de eliminar de forma permanente <span className="text-white font-bold block mt-1 tracking-wide">"{playlist?.name}"</span>. Esta acción no se puede deshacer.
+                        </p>
+
+                        <div className="flex gap-3 w-full relative z-10">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="flex-1 py-3.5 px-4 rounded-[20px] font-bold text-slate-300 bg-white/[0.05] hover:bg-white/[0.1] hover:text-white border border-white/[0.05] transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-white/20"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmDeletePlaylist}
+                                className="flex-1 py-3.5 px-4 rounded-[20px] font-bold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-[0_8px_25px_rgba(225,29,72,0.4)] transition-all duration-300 active:scale-95 outline-none focus-visible:ring-4 focus-visible:ring-red-500/50"
+                            >
+                                Sí, eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

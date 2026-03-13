@@ -131,9 +131,45 @@ function LibraryContent() {
         }
 
         const liked = await getAllLikedTrackIds();
-        setLikedIds(new Set(liked));
 
         const cloud = await getUserLibrary();
+
+        // 3. Heal any orphaned liked tracks (from old caches)
+        const missingLikedIds = liked.filter(id => !downloaded.some(t => t.id === id) && !cloud.some(t => t.id === id));
+        if (missingLikedIds.length > 0) {
+            const { saveTrackToDB } = await import('@/lib/db');
+            let recovered = false;
+            for (const id of missingLikedIds) {
+                try {
+                    const res = await fetch(`https://api.deezer.com/track/${id}`);
+                    if (res.ok) {
+                        const dzTrack = await res.json();
+                        if (dzTrack.title) {
+                            const newTrack: SavedTrack = {
+                                id: dzTrack.id.toString(),
+                                title: dzTrack.title,
+                                artist: dzTrack.artist?.name || 'Unknown Artist',
+                                album: dzTrack.album?.title || '',
+                                coverUrl: dzTrack.album?.cover_xl || dzTrack.album?.cover_medium || '',
+                                previewUrl: dzTrack.preview,
+                                streamUrl: `https://caleta-music-production.up.railway.app/api/deezer?id=${dzTrack.id}`,
+                                downloadedAt: Date.now()
+                            };
+                            await saveTrackToDB(newTrack);
+                            downloaded.push(newTrack);
+                            recovered = true;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch missing liked track", id);
+                }
+            }
+            if (recovered) {
+                setTracks([...downloaded]);
+            }
+        }
+
+        setLikedIds(new Set(liked));
         setCloudTracks(cloud);
 
         const albums = await getAllSavedAlbums();
@@ -145,7 +181,7 @@ function LibraryContent() {
     useEffect(() => {
         loadLibrary().then((pls) => {
             // Auto-open playlist if ID is in the URL
-            if (playlistIdParam && pls.length > 0) {
+            if (playlistIdParam && pls && pls.length > 0) {
                 const match = pls.find(p => p.id === playlistIdParam);
                 if (match) {
                     setSelectedPlaylist(match);
@@ -158,6 +194,14 @@ function LibraryContent() {
         });
     }, [tab, playlistIdParam]);
 
+    useEffect(() => {
+        const handleLikeUpdate = () => {
+            loadLibrary();
+        };
+        window.addEventListener("caleta:like_updated", handleLikeUpdate);
+        return () => window.removeEventListener("caleta:like_updated", handleLikeUpdate);
+    }, []);
+
     // Close context menu on click outside
     useEffect(() => {
         const handler = () => setContextMenuTrackId(null);
@@ -168,7 +212,7 @@ function LibraryContent() {
     type UnifiedTrack = SavedTrack & { isCloudOnly?: boolean, sourceAudioUrl?: string };
 
     const handlePlay = (track: UnifiedTrack) => {
-        const list = activeTab === "likes" ? likedTracks : filteredTracks;
+        const list = displayTracks;
         playTrack(track, list as SavedTrack[]);
     };
 
@@ -274,13 +318,13 @@ function LibraryContent() {
         }
     };
 
-    const handleToggleLike = async (e: React.MouseEvent, trackId: string) => {
+    const handleToggleLike = async (e: React.MouseEvent, track: SavedTrack) => {
         e.stopPropagation();
-        const nowLiked = await toggleLike(trackId);
+        const nowLiked = await toggleLike(track);
         setLikedIds(prev => {
             const next = new Set(prev);
-            if (nowLiked) next.add(trackId);
-            else next.delete(trackId);
+            if (nowLiked) next.add(track.id);
+            else next.delete(track.id);
             return next;
         });
     };
@@ -352,14 +396,27 @@ function LibraryContent() {
 
     const allMergedTracks = getMergedTracks();
 
-    const filteredTracks = allMergedTracks.filter(
+    // Liked tracks can include metadata-only tracks
+    const likedTracks = allMergedTracks.filter(t => likedIds.has(t.id));
+
+    const filteredLikedTracks = likedTracks.filter(
         t =>
             t.title.toLowerCase().includes(query.toLowerCase()) ||
             t.artist.toLowerCase().includes(query.toLowerCase())
     );
 
-    const likedTracks = allMergedTracks.filter(t => likedIds.has(t.id));
-    const displayTracks = activeTab === "likes" ? likedTracks : filteredTracks;
+    // 'Canciones' tab should only show truly downloaded tracks or cloud library tracks
+    const libraryTracks = allMergedTracks.filter(t =>
+        t.blob || (t as any).isNativeDownload || cloudTracks.some(ct => ct.id === t.id)
+    );
+
+    const filteredLibraryTracks = libraryTracks.filter(
+        t =>
+            t.title.toLowerCase().includes(query.toLowerCase()) ||
+            t.artist.toLowerCase().includes(query.toLowerCase())
+    );
+
+    const displayTracks = activeTab === "likes" ? filteredLikedTracks : filteredLibraryTracks;
 
     return (
         <main className="relative p-4 md:p-8 md:pt-10 max-w-7xl mx-auto min-h-screen overflow-hidden">
@@ -747,7 +804,7 @@ function LibraryContent() {
                                                 {/* Like button */}
                                                 <div className="w-10 flex-shrink-0 flex justify-center">
                                                     <button
-                                                        onClick={e => handleToggleLike(e, track.id)}
+                                                        onClick={e => handleToggleLike(e, track)}
                                                         className={`p-2 rounded-full transition-all ${isLiked
                                                             ? "text-pink-500 hover:text-pink-400"
                                                             : "text-slate-500 hover:text-pink-500 md:opacity-0 md:group-hover:opacity-100"
