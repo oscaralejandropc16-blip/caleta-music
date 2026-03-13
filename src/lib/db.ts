@@ -164,10 +164,13 @@ export async function createPlaylist(
         id: `pl_${Date.now()}`,
         name,
         description: description || "",
-        coverBlob: coverBlob || undefined,
         trackIds: [],
         createdAt: Date.now()
     };
+    if (coverBlob) {
+        newPlaylist.coverBlob = coverBlob;
+    }
+
     await playlistsStore.setItem(newPlaylist.id, newPlaylist);
     return newPlaylist;
 }
