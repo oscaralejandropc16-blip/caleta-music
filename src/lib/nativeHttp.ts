@@ -24,6 +24,13 @@ export const MusicApiService = {
                 params: params || {},
             };
             const response = await CapacitorHttp.request({ ...options, method: 'GET' });
+            if (typeof response.data === 'string') {
+                try {
+                    return JSON.parse(response.data);
+                } catch {
+                    return response.data;
+                }
+            }
             return response.data;
         } else {
             // Navegador web: fetch estándar

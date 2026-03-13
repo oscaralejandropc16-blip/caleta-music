@@ -46,22 +46,21 @@ export function useDownloadSong() {
                 });
             }, 300);
 
-            // Usar CapacitorHttp nativo para obtener el archivo y sortear el CORS completamente
-            const response = await CapacitorHttp.request({
-                method: 'GET',
+            // Escribir el archivo MP3 físico dentro del teléfono del usuario
+            const savedFile = await Filesystem.downloadFile({
                 url: trackParams.downloadUrl,
-                responseType: 'blob', // Fix type to match Capacitor's acceptable HttpResponseType values like blob/text/document/json
+                path: fileName,
+                directory: Directory.Data,
+            });
+
+            // Obtener el URI completo para poder reproducirlo después
+            const fileUri = await Filesystem.getUri({
+                directory: Directory.Data,
+                path: fileName
             });
 
             clearInterval(progressInterval);
             setDownloadProgress(prev => ({ ...prev, [trackId]: 95 }));
-
-            // Escribir el archivo MP3 físico dentro del teléfono del usuario
-            const savedFile = await Filesystem.writeFile({
-                path: fileName,
-                data: response.data,
-                directory: Directory.Data,
-            });
 
             // Crear el JSON con la metadata de la canción para uso sin conexión a internet
             const metadata: SavedTrackMeta = {
@@ -69,7 +68,7 @@ export function useDownloadSong() {
                 title: trackParams.title,
                 artist: trackParams.artist,
                 coverUrl: trackParams.coverUrl,
-                localPath: savedFile.uri, // Ruta nativa
+                localPath: fileUri.uri, // Ruta nativa
                 downloadedAt: Date.now(),
             };
 
@@ -86,7 +85,7 @@ export function useDownloadSong() {
             });
 
             setDownloadProgress(prev => ({ ...prev, [trackId]: 100 }));
-            return { success: true, localPath: savedFile.uri };
+            return { success: true, localPath: fileUri.uri };
 
         } catch (error: any) {
             console.error('Error al descargar la canción:', error);
