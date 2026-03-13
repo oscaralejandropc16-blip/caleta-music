@@ -67,19 +67,33 @@ function LibraryContent() {
 
     const loadLibrary = async () => {
         let downloaded: SavedTrack[] = [];
+
+        // 1. Leer de IndexedDB (localforage) — funciona en web y nativo
         try {
-            // Reemplazando IndexedDB por Capacitor Preferences (Lógica móvil offline nativa)
+            const indexedDbTracks = await getAllTracksFromDB();
+            downloaded = [...indexedDbTracks];
+        } catch (error) {
+            console.error("Error al cargar descargas de IndexedDB:", error);
+        }
+
+        // 2. Leer de Capacitor Preferences (para canciones guardadas en nativo/móvil)
+        try {
             const { value } = await Preferences.get({ key: 'caleta_downloaded_tracks' });
             if (value) {
                 const parsed = JSON.parse(value);
-                downloaded = parsed.map((t: any) => ({
-                    id: t.id,
-                    title: t.title,
-                    artist: t.artist,
-                    coverUrl: t.coverUrl,
-                    album: t.album || '', // Fallback for some properties
-                    downloadedAt: t.downloadedAt || Date.now()
-                }));
+                const existingIds = new Set(downloaded.map(t => t.id));
+                parsed.forEach((t: any) => {
+                    if (!existingIds.has(t.id)) {
+                        downloaded.push({
+                            id: t.id,
+                            title: t.title,
+                            artist: t.artist,
+                            coverUrl: t.coverUrl,
+                            album: t.album || '',
+                            downloadedAt: t.downloadedAt || Date.now()
+                        });
+                    }
+                });
             }
         } catch (error) {
             console.error("Error al cargar descargas de Capacitor Preferences:", error);

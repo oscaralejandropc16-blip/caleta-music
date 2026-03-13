@@ -13,6 +13,7 @@ import { useDownloadSong } from "@/hooks/useDownloadSong";
 import { MusicApiService } from "@/lib/nativeHttp";
 import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import { useRouter } from "next/navigation";
+import { Capacitor } from '@capacitor/core';
 
 import toast from 'react-hot-toast';
 
@@ -187,27 +188,43 @@ export default function SearchPage() {
         const trackName = track.trackName || "canción";
         const loadingToastId = toast.loading(`Descargando "${trackName}" localmente...`);
 
-        // Idealmente, aquí construirás la URL correcta para obtener el MP3 directo.
-        // Por ahora, asumimos que obtienes el audio de un proxy público o tu viejo API si lo alojaste
-        const trackDownloadUrl = (track as any)._source === 'deezer'
-            ? `https://caleta-music-production.up.railway.app/api/deezer?id=${track.trackId}`
-            : `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+        let isNative = false;
+        try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
-        const result = await downloadSong({
-            id: strId,
-            title: track.trackName,
-            artist: track.artistName,
-            coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
-            downloadUrl: trackDownloadUrl
-        });
+        if (isNative) {
+            // ── Flujo nativo (Capacitor) ──
+            const trackDownloadUrl = (track as any)._source === 'deezer'
+                ? `https://caleta-music-production.up.railway.app/api/deezer?id=${track.trackId}`
+                : `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
 
-        toast.dismiss(loadingToastId);
+            const result = await downloadSong({
+                id: strId,
+                title: track.trackName,
+                artist: track.artistName,
+                coverUrl: track.artworkUrl100?.replace("100x100", "500x500") || "",
+                downloadUrl: trackDownloadUrl
+            });
 
-        if (result.success) {
-            setSavedTrackIds((prev) => new Set(prev).add(strId));
-            toast.success(`"${trackName}" guardada en offline (Capacitor)`, { icon: '⬇️' });
+            toast.dismiss(loadingToastId);
+            if (result.success) {
+                setSavedTrackIds((prev) => new Set(prev).add(strId));
+                toast.success(`"${trackName}" descargada`, { icon: '⬇️' });
+            } else {
+                toast.error(`Error: ${result.error || "Desconocido"}`);
+            }
         } else {
-            toast.error(`Error: ${result.error || "Desconocido"}`);
+            // ── Flujo web (IndexedDB via downloadAndSaveTrack) ──
+            const result = await downloadAndSaveTrack(track, null, strId, (progress) => {
+                setDownloadProgresses(prev => ({ ...prev, [strId]: progress }));
+            });
+
+            toast.dismiss(loadingToastId);
+            if (result.success) {
+                setSavedTrackIds((prev) => new Set(prev).add(strId));
+                toast.success(`"${trackName}" descargada`, { icon: '⬇️' });
+            } else {
+                toast.error(`Error: ${result.error || "Desconocido"}`);
+            }
         }
     };
 
