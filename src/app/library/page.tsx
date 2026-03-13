@@ -81,7 +81,7 @@ function LibraryContent() {
             console.error("Error al cargar descargas de IndexedDB:", error);
         }
 
-        // 2. Leer de Capacitor Preferences (para canciones guardadas en nativo/móvil)
+        // 2. Leer de Capacitor Preferences (para descargas nativas)
         try {
             const { value } = await Preferences.get({ key: 'caleta_downloaded_tracks' });
             if (value) {
@@ -106,25 +106,30 @@ function LibraryContent() {
             console.error("Error al cargar descargas de Capacitor Preferences:", error);
         }
 
+        // Set local tracks immediately
         setTracks(downloaded);
 
+        // Set local playlists immediately so they appear instantly
         const pls = await getAllPlaylists();
+        setPlaylists(pls);
 
-        // Pull playlists from the cloud and merge safely
+        // Pull playlists from the cloud and merge safely in the background
         let mergedPls = [...pls];
         try {
             const cloudPls = await pullPlaylistsFromCloud();
             const localIds = new Set(pls.map(p => p.id));
+            let changed = false;
             for (const cp of cloudPls) {
                 if (!localIds.has(cp.id)) {
                     mergedPls.push(cp);
+                    changed = true;
                 }
             }
+            if (changed) setPlaylists(mergedPls);
         } catch (e) {
             console.warn("[Library] Cloud playlist pull failed:", e);
         }
 
-        setPlaylists(mergedPls);
         const liked = await getAllLikedTrackIds();
         setLikedIds(new Set(liked));
 
