@@ -318,9 +318,10 @@ export default function Home() {
   const handlePlay = (e: React.MouseEvent, track: ItunesTrack, contextTracks?: ItunesTrack[]) => {
     e.stopPropagation();
 
+    const RAILWAY_API = "https://caleta-music-production.up.railway.app";
     const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
-      ? `/api/deezer?id=${t.trackId}`
-      : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+      ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
+      : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
 
     let queueTracks: any[] | undefined;
 

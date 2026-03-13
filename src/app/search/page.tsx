@@ -59,6 +59,8 @@ export default function SearchPage() {
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
     const [isInputFocused, setIsInputFocused] = useState(false);
     const [listening, setListening] = useState(false);
+    const [interimTranscript, setInterimTranscript] = useState("");
+    const recognitionRef = useRef<any>(null);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -88,8 +90,10 @@ export default function SearchPage() {
     };
 
     const toggleListen = () => {
-        if (listening) {
+        if (listening && recognitionRef.current) {
+            recognitionRef.current.stop();
             setListening(false);
+            setInterimTranscript("");
             return;
         }
 
@@ -100,18 +104,36 @@ export default function SearchPage() {
         }
 
         const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
         recognition.lang = "es-ES";
-        recognition.interimResults = false;
+        recognition.interimResults = true; // Habilitamos resultados intermedios
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
             setListening(true);
+            setInterimTranscript("");
         };
 
         recognition.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript;
-            setQuery(transcript);
-            handleDirectSearch(transcript);
+            let finalStr = "";
+            let interimStr = "";
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalStr += event.results[i][0].transcript;
+                } else {
+                    interimStr += event.results[i][0].transcript;
+                }
+            }
+
+            setInterimTranscript(interimStr || finalStr);
+
+            if (finalStr) {
+                setQuery(finalStr);
+                setListening(false);
+                setInterimTranscript("");
+                handleDirectSearch(finalStr);
+            }
         };
 
         recognition.onerror = (event: any) => {
@@ -125,17 +147,17 @@ export default function SearchPage() {
             } else if (event.error === 'not-allowed') {
                 errorMessage = "Permiso de micrófono denegado.";
             } else if (event.error === 'network') {
-                errorMessage = "Error de red. Esta función requiere conexión a internet en tu navegador.";
-            } else if (event.error === 'aborted') {
-                errorMessage = "Se canceló la escucha emergente de voz.";
+                errorMessage = "Error de red.";
             }
 
-            toast.error(errorMessage, { icon: '🔇' });
+            if (event.error !== 'aborted') toast.error(errorMessage, { icon: '🔇' });
             setListening(false);
+            setInterimTranscript("");
         };
 
         recognition.onend = () => {
             setListening(false);
+            setInterimTranscript("");
         };
 
         recognition.start();
@@ -155,9 +177,10 @@ export default function SearchPage() {
     const { playTrack } = usePlayer();
 
     const handlePlay = (track: ItunesTrack) => {
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
         const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
-            ? `/api/deezer?id=${t.trackId}`
-            : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+            ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
+            : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
 
         const queueTracks = results.map(t => ({
             id: `stream-${t.trackId}`,
@@ -442,38 +465,63 @@ export default function SearchPage() {
                         {/* SongCatcher Card */}
                         <div
                             onClick={toggleListen}
-                            className={`relative overflow-hidden cursor-pointer group rounded-2xl p-5 mb-8 flex items-center justify-between transition-all duration-300 ${listening ? 'bg-[#7c3aed] shadow-[0_4px_30px_rgba(124,58,237,0.5)]' : 'bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] hover:from-[#6d28d9] hover:to-[#8b5cf6] shadow-[0_8px_25px_-5px_rgba(124,58,237,0.4)] hover:shadow-[0_8px_30px_rgba(124,58,237,0.5)]'}`}
+                            className={`relative overflow-hidden cursor-pointer group rounded-3xl p-6 mb-10 flex items-center justify-between transition-all duration-300 bg-gradient-to-r from-brand-600 via-purple-600 to-pink-600 shadow-[0_8px_30px_rgba(124,58,237,0.4)] hover:shadow-[0_15px_40px_rgba(124,58,237,0.6)] hover:-translate-y-1`}
                         >
                             <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay pointer-events-none" />
-                            {listening && (
-                                <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />
-                            )}
+
+                            {/* Decorative background waves */}
+                            <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-[40px] group-hover:bg-white/20 transition-colors" />
+                            <div className="absolute -left-10 -top-10 w-40 h-40 bg-black/20 rounded-full blur-[40px]" />
 
                             <div className="relative z-10 flex-1">
-                                <h3 className="text-white font-bold text-lg leading-tight md:text-xl drop-shadow-sm mb-1">
-                                    {listening ? "Escuchando..." : "SongCatcher"}
+                                <h3 className="text-white font-black text-2xl uppercase tracking-wider drop-shadow-md mb-1.5 flex items-center gap-2">
+                                    <Sparkles size={20} className="text-pink-300" /> SongCatcher
                                 </h3>
-                                <p className="text-purple-100/90 text-sm font-medium pr-4">
-                                    {listening ? "Canta, tararea o di el nombre..." : "Toca para identificar una canción o cantar/tararear"}
+                                <p className="text-white/80 font-medium text-sm md:text-base pr-4 max-w-[80%] leading-snug">
+                                    Toca para usar tu voz y buscar una canción, o tararea el ritmo
                                 </p>
                             </div>
 
                             <div className="relative z-10">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 ${listening ? 'bg-white text-purple-600 scale-110 shadow-lg' : 'bg-white/20 text-white backdrop-blur-sm group-hover:scale-105'}`}>
-                                    {listening ? (
-                                        <Mic className="animate-pulse" size={24} />
-                                    ) : (
-                                        <Mic2 size={24} />
-                                    )}
+                                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 group-hover:scale-110 transition-transform duration-500 shadow-xl">
+                                    <Mic2 size={30} className="drop-shadow-md" />
                                 </div>
-                                {listening && (
-                                    <>
-                                        <div className="absolute inset-0 border-[3px] border-white rounded-full animate-ping opacity-50" />
-                                        <div className="absolute -inset-2 border-[2px] border-white/50 rounded-full animate-ping opacity-30" style={{ animationDelay: '0.2s' }} />
-                                    </>
-                                )}
                             </div>
                         </div>
+
+                        {/* SongCatcher Full-Screen Active Overlay */}
+                        {listening && (
+                            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300">
+                                <button
+                                    onClick={toggleListen}
+                                    className="absolute top-8 right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                >
+                                    <X size={28} />
+                                </button>
+
+                                <div className="relative flex items-center justify-center mb-12">
+                                    {/* Pulsating Waves */}
+                                    <div className="absolute animate-ping w-40 h-40 rounded-full bg-brand-500/40" style={{ animationDuration: '2s' }} />
+                                    <div className="absolute animate-ping w-64 h-64 rounded-full bg-purple-500/20" style={{ animationDuration: '2.5s', animationDelay: '0.2s' }} />
+                                    <div className="absolute animate-ping w-96 h-96 rounded-full bg-pink-500/10" style={{ animationDuration: '3s', animationDelay: '0.4s' }} />
+
+                                    {/* Center Mic */}
+                                    <div className="relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 flex items-center justify-center text-white shadow-[0_0_60px_rgba(236,72,153,0.5)]">
+                                        <Mic className="animate-pulse drop-shadow-lg" size={48} />
+                                    </div>
+                                </div>
+
+                                <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight mb-4 drop-shadow-lg text-center px-6">
+                                    Escuchando...
+                                </h2>
+
+                                <div className="h-20 flex items-center justify-center px-8 w-full max-w-2xl text-center">
+                                    <p className="text-xl md:text-2xl text-white/80 font-medium italic">
+                                        {interimTranscript ? `"${interimTranscript}"` : "Canta, tararea o di el nombre..."}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3 ml-1">Búsquedas populares</p>
                         <div className="flex flex-wrap gap-2">

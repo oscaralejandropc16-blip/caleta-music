@@ -132,9 +132,10 @@ function ArtistProfileContent() {
             return;
         }
 
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
         const downloadUrl = (track as any)._source === 'deezer'
-            ? `/api/deezer?id=${track.trackId}`
-            : `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+            ? `${RAILWAY_API}/api/deezer?id=${track.trackId}`
+            : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
 
         playTrack({
             id: `stream-${strId}`,

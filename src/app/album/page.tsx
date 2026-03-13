@@ -51,8 +51,9 @@ export default function AlbumPage() {
             setAlbumMeta(null);
             try {
                 // Step 1: Search for the album to get collectionId (via Deezer)
+                const RAILWAY_API = "https://caleta-music-production.up.railway.app";
                 const searchRes = await fetch(
-                    `/api/deezer-proxy?endpoint=${encodeURIComponent(`/search/album?q=${albumName + " " + artistName}&limit=10`)}`
+                    `${RAILWAY_API}/api/deezer-proxy?endpoint=${encodeURIComponent(`/search/album?q=${albumName + " " + artistName}&limit=10`)}`
                 );
                 const searchData = await searchRes.json();
 
@@ -82,7 +83,7 @@ export default function AlbumPage() {
 
                 if (matchedAlbum && matchedAlbum.id) {
                     // Step 2: Extract ALL tracks via Deezer Album API
-                    const albumRes = await fetch(`/api/deezer-proxy?endpoint=${encodeURIComponent(`/album/${matchedAlbum.id}`)}`);
+                    const albumRes = await fetch(`${RAILWAY_API}/api/deezer-proxy?endpoint=${encodeURIComponent(`/album/${matchedAlbum.id}`)}`);
                     const albumData = await albumRes.json();
 
                     setAlbumMeta({
@@ -190,7 +191,7 @@ export default function AlbumPage() {
         artist: t.artistName,
         album: t.collectionName || "",
         coverUrl: t.artworkUrl100?.replace("100x100", "500x500") || "",
-        streamUrl: `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`,
+        streamUrl: `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`,
         downloadedAt: Date.now(),
     });
 

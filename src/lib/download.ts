@@ -1,6 +1,9 @@
 import { saveTrackToDB, SavedTrack } from "./db";
 import { addSongToLibrary } from "./syncLibrary";
 
+// Base URL del servidor con las API routes (Railway production)
+const API_BASE = "https://caleta-music-production.up.railway.app";
+
 export interface ItunesTrack {
     trackId: number;
     artistName: string;
@@ -138,12 +141,12 @@ export const downloadAndSaveTrack = async (
 
         if (track) {
             if ((track as any)._source === 'deezer' && track.trackId) {
-                downloadUrl = `/api/deezer?id=${track.trackId}`;
+                downloadUrl = `${API_BASE}/api/deezer?id=${track.trackId}`;
             } else {
-                downloadUrl = `/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                downloadUrl = `${API_BASE}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
         } else if (url) {
-            downloadUrl = `/api/download?url=${encodeURIComponent(url)}`;
+            downloadUrl = `${API_BASE}/api/download?url=${encodeURIComponent(url)}`;
         } else {
             return { success: false, error: "No se proporcionó canción ni URL" };
         }
@@ -184,7 +187,7 @@ export const downloadAndSaveTrack = async (
                 if (onProgress) onProgress(30);
 
                 try {
-                    const fallbackUrl = `/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const fallbackUrl = `${API_BASE}/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
                     const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
 
                     await processResolvedBlob(blob, headers, track, url, id);
