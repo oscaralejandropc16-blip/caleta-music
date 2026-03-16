@@ -296,6 +296,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onPlay = () => {
             setIsPlaying(true);
             updateMediaSessionPlaybackState(true);
+
+            // Safari PWA Background fix: Ensure volume is up when track starts
+            if (audioRef.current && (isMutedForPauseRef.current || audioRef.current.volume === 0)) {
+                audioRef.current.volume = userVolumeRef.current || 1;
+                isMutedForPauseRef.current = false;
+            }
+
             // Keep Safari PWA alive during playback
             if (!Capacitor.isNativePlatform()) {
                 startKeepAwake();
@@ -305,6 +312,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             setIsPlaying(true);
             setIsLoading(false);
             updateMediaSessionPlaybackState(true);
+
+            // Re-force volume on playing event for background track changes
+            if (audioRef.current && (isMutedForPauseRef.current || audioRef.current.volume === 0)) {
+                audioRef.current.volume = userVolumeRef.current || 1;
+                isMutedForPauseRef.current = false;
+            }
         };
         const onCanPlay = () => setIsLoading(false);
         const onLoadStart = () => {
@@ -569,6 +582,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setProgress(0);
         setDuration(0);
 
+        // Reset mute state for new track to ensure sound is heard on Safari background skip
+        isMutedForPauseRef.current = false;
+        if (audioRef.current) {
+            audioRef.current.volume = userVolumeRef.current || 1;
+            // Also ensure it's not actually paused if we're coming from a muted-pause
+            if (audioRef.current.paused && isReadyToPlayRef.current) {
+                audioRef.current.play().catch(() => { });
+            }
+        }
+
         const resolvedTrack = await resolveLocalTrack(track);
 
         setCurrentTrack(resolvedTrack);
@@ -619,6 +642,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const playNext = (autoAdvance = false) => {
         isReadyToPlayRef.current = true; // El usuario quiere pasar la pista (o auto avance)
         if (queue.length === 0) return;
+
+        // Reset mute state for new track
+        isMutedForPauseRef.current = false;
+        if (audioRef.current) audioRef.current.volume = userVolumeRef.current || 1;
 
         // Si es avance automático y está en 'one', repetir la canción
         if (autoAdvance && repeatMode === 'one' && audioRef.current) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Search, Download, Check, CheckCircle, XCircle, Loader, SearchX, Plus,
     Music, RefreshCw, Disc3, Play, Link2, Sparkles, TrendingUp, Headphones,
-    Mic, Mic2, History, X
+    History, X
 } from "lucide-react";
 import { getAllTracksFromDB, Playlist, addTrackToPlaylist, SavedTrack, saveTrackToDB } from "@/lib/db";
 import { downloadAndSaveTrack, ItunesTrack } from "@/lib/download";
@@ -58,9 +58,6 @@ export default function SearchPage() {
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
     const [isInputFocused, setIsInputFocused] = useState(false);
-    const [listening, setListening] = useState(false);
-    const [interimTranscript, setInterimTranscript] = useState("");
-    const recognitionRef = useRef<any>(null);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -86,96 +83,6 @@ export default function SearchPage() {
         setRecentSearches([]);
         if (typeof window !== "undefined") {
             localStorage.removeItem("caletaSearchHistory");
-        }
-    };
-
-    const stopListening = () => {
-        try {
-            if (recognitionRef.current) {
-                recognitionRef.current.abort(); // Use abort instead of stop to immediately terminate on mobile without waiting for final result
-            }
-        } catch (e) {
-            console.warn("Error stopping SpeechRecognition", e);
-        } finally {
-            setListening(false);
-            setInterimTranscript("");
-        }
-    };
-
-    const toggleListen = () => {
-        if (listening) {
-            stopListening();
-            return;
-        }
-
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            toast.error("Tu dispositivo o navegador no soporta búsqueda por voz nativa", { icon: '🎤' });
-            return;
-        }
-
-        try {
-            const recognition = new SpeechRecognition();
-            recognitionRef.current = recognition;
-            recognition.lang = "es-ES";
-            recognition.interimResults = true;
-            recognition.maxAlternatives = 1;
-
-            recognition.onstart = () => {
-                setListening(true);
-                setInterimTranscript("");
-            };
-
-            recognition.onresult = (event: any) => {
-                let finalStr = "";
-                let interimStr = "";
-
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalStr += event.results[i][0].transcript;
-                    } else {
-                        interimStr += event.results[i][0].transcript;
-                    }
-                }
-
-                setInterimTranscript(interimStr || finalStr);
-
-                if (finalStr) {
-                    const searchStr = finalStr;
-                    stopListening();
-                    setQuery(searchStr);
-                    handleDirectSearch(searchStr);
-                }
-            };
-
-            recognition.onerror = (event: any) => {
-                console.error("SpeechRecognition error:", event.error);
-                let errorMessage = "No se pudo reconocer tu voz";
-
-                if (event.error === 'no-speech') {
-                    errorMessage = "No escuché nada. Intenta hablar más cerca del micrófono.";
-                } else if (event.error === 'audio-capture') {
-                    errorMessage = "No se detectó un micrófono en tu dispositivo.";
-                } else if (event.error === 'not-allowed') {
-                    errorMessage = "Permiso de micrófono denegado.";
-                } else if (event.error === 'network') {
-                    errorMessage = "Error de red.";
-                }
-
-                if (event.error !== 'aborted') toast.error(errorMessage, { icon: '🔇' });
-                stopListening();
-            };
-
-            recognition.onend = () => {
-                stopListening();
-            };
-
-            setListening(true); // Force UI update instantly
-            recognition.start();
-        } catch (err) {
-            console.error("Failed to start speech recognition:", err);
-            toast.error("Error al iniciar el micrófono", { icon: '🔇' });
-            stopListening();
         }
     };
 
@@ -480,90 +387,6 @@ export default function SearchPage() {
                 {/* Quick suggestion chips (show when no search done yet) */}
                 {!hasSearched && !loading && (
                     <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-
-                        {/* SongCatcher Card */}
-                        <div
-                            onClick={toggleListen}
-                            className={`relative overflow-hidden cursor-pointer group rounded-3xl p-6 mb-10 flex items-center justify-between transition-all duration-300 bg-gradient-to-r from-brand-600 via-purple-600 to-pink-600 shadow-[0_8px_30px_rgba(124,58,237,0.4)] hover:shadow-[0_15px_40px_rgba(124,58,237,0.6)] hover:-translate-y-1`}
-                        >
-                            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay pointer-events-none" />
-
-                            {/* Decorative background waves */}
-                            <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-[40px] group-hover:bg-white/20 transition-colors" />
-                            <div className="absolute -left-10 -top-10 w-40 h-40 bg-black/20 rounded-full blur-[40px]" />
-
-                            <div className="relative z-10 flex-1">
-                                <h3 className="text-white font-black text-2xl uppercase tracking-wider drop-shadow-md mb-1.5 flex items-center gap-2">
-                                    <Sparkles size={20} className="text-pink-300" /> SongCatcher
-                                </h3>
-                                <p className="text-white/80 font-medium text-sm md:text-base pr-4 max-w-[80%] leading-snug">
-                                    Toca para usar tu voz y buscar una canción, o tararea el ritmo
-                                </p>
-                            </div>
-
-                            <div className="relative z-10">
-                                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 group-hover:scale-110 transition-transform duration-500 shadow-xl">
-                                    <Mic2 size={30} className="drop-shadow-md" />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* SongCatcher Full-Screen Active Overlay */}
-                        {listening && (
-                            <div
-                                className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300"
-                                onPointerDown={(e) => {
-                                    // Tapping anywhere on the background closes the overlay
-                                    if (e.target === e.currentTarget) {
-                                        e.preventDefault();
-                                        stopListening();
-                                    }
-                                }}
-                            >
-                                {/* Close button - large touch target */}
-                                <div
-                                    role="button"
-                                    tabIndex={0}
-                                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); stopListening(); }}
-                                    className="absolute top-4 right-4 z-[120] flex items-center justify-center"
-                                    style={{ minWidth: 56, minHeight: 56 }}
-                                >
-                                    <div className="w-14 h-14 flex items-center justify-center bg-white/15 active:bg-white/30 rounded-full text-white shadow-lg">
-                                        <X size={30} />
-                                    </div>
-                                </div>
-
-                                <div className="relative flex items-center justify-center mb-12">
-                                    {/* Pulsating Waves */}
-                                    <div className="absolute animate-ping w-40 h-40 rounded-full bg-brand-500/40 pointer-events-none" style={{ animationDuration: '2s' }} />
-                                    <div className="absolute animate-ping w-64 h-64 rounded-full bg-purple-500/20 pointer-events-none" style={{ animationDuration: '2.5s', animationDelay: '0.2s' }} />
-                                    <div className="absolute animate-ping w-96 h-96 rounded-full bg-pink-500/10 pointer-events-none" style={{ animationDuration: '3s', animationDelay: '0.4s' }} />
-
-                                    {/* Center Mic */}
-                                    <div className="relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 flex items-center justify-center text-white shadow-[0_0_60px_rgba(236,72,153,0.5)]">
-                                        <Mic className="animate-pulse drop-shadow-lg" size={48} />
-                                    </div>
-                                </div>
-
-                                <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight mb-4 drop-shadow-lg text-center px-6">
-                                    Escuchando...
-                                </h2>
-
-                                <div className="h-20 flex items-center justify-center px-8 w-full max-w-2xl text-center">
-                                    <p className="text-xl md:text-2xl text-white/80 font-medium italic">
-                                        {interimTranscript ? `"${interimTranscript}"` : "Canta, tararea o di el nombre..."}
-                                    </p>
-                                </div>
-
-                                {/* Cancel text at the bottom for extra discoverability */}
-                                <button
-                                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); stopListening(); }}
-                                    className="mt-8 px-8 py-3 text-white/60 text-base font-semibold tracking-wide active:text-white transition-colors"
-                                >
-                                    Toca para cancelar
-                                </button>
-                            </div>
-                        )}
 
                         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-3 ml-1">Búsquedas populares</p>
                         <div className="flex flex-wrap gap-2">
