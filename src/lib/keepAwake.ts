@@ -4,8 +4,6 @@
  * 
  * Uses the Web Audio API to maintain a near-silent oscillator running,
  * which tricks Safari into keeping the audio thread (and JS execution) alive.
- * Also periodically "tickles" the audio context to prevent iOS from
- * garbage-collecting it.
  */
 
 let audioCtx: AudioContext | null = null;
@@ -23,40 +21,43 @@ export function startKeepAwake() {
     isActive = true;
 
     try {
-        // Create or resume AudioContext
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
         if (!AudioContextClass) return;
 
         if (!audioCtx || audioCtx.state === 'closed') {
-            audioCtx = new AudioContextClass();
+            audioCtx = new AudioContextClass() as AudioContext;
         }
+
+        const ctx = audioCtx;
+        if (!ctx) return;
 
         // Resume if suspended (Safari requires user gesture to start)
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume().catch(() => { });
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => { /* ignore */ });
         }
 
-        // Create a gain node with near-zero volume (not exactly 0, Safari optimizes 0 away)
-        gainNode = audioCtx.createGain();
-        gainNode.gain.value = 0.001; // Inaudible but keeps the session alive
+        // Create a gain node with near-zero volume
+        gainNode = ctx.createGain();
+        gainNode.gain.value = 0.001;
 
-        // Create oscillator at a frequency humans can barely hear
-        oscillator = audioCtx.createOscillator();
+        // Create oscillator at inaudible frequency
+        oscillator = ctx.createOscillator();
         oscillator.type = 'sine';
-        oscillator.frequency.value = 1; // 1 Hz - completely inaudible even at volume
+        oscillator.frequency.value = 1;
 
         // Connect: oscillator -> gain -> destination
         oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        gainNode.connect(ctx.destination);
         oscillator.start();
 
-        // Periodically "tickle" the audio context to prevent Safari from killing it
+        // Periodically tickle the audio context to prevent Safari from killing it
         keepAliveInterval = setInterval(() => {
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(() => { });
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => { /* ignore */ });
             }
-            // Create and immediately destroy a tiny buffer to keep the context active
-            if (audioCtx && audioCtx.state === 'running') {
+            if (audioCtx.state === 'running') {
                 try {
                     const buffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
                     const source = audioCtx.createBufferSource();
@@ -64,9 +65,11 @@ export function startKeepAwake() {
                     source.connect(audioCtx.destination);
                     source.start();
                     source.stop(audioCtx.currentTime + 0.001);
-                } catch { /* ignore */ }
+                } catch {
+                    // ignore
+                }
             }
-        }, 10000); // Every 10 seconds
+        }, 10000);
 
         console.log('[KeepAwake] Silent oscillator started');
     } catch (e) {
@@ -76,7 +79,6 @@ export function startKeepAwake() {
 
 /**
  * Stop the keep-alive audio loop.
- * Call this when all audio playback stops completely (not on pause).
  */
 export function stopKeepAwake() {
     if (!isActive) return;
@@ -96,7 +98,6 @@ export function stopKeepAwake() {
             gainNode.disconnect();
             gainNode = null;
         }
-        // Don't close the AudioContext - we may need it again soon
         console.log('[KeepAwake] Silent oscillator stopped');
     } catch (e) {
         console.warn('[KeepAwake] Failed to stop:', e);
