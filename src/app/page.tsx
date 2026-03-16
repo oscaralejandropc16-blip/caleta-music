@@ -230,6 +230,7 @@ export default function Home() {
   }, [user, authLoading]);
 
   useEffect(() => {
+    // Load local data (IndexedDB) immediately — this should be fast
     Promise.all([
       getAllTracksFromDB(),
       getAllLikedTrackIds(),
@@ -261,15 +262,20 @@ export default function Home() {
         return pl;
       });
       setPlaylists(playlistsWithCovers);
-
-      // Stop blocking the UI since main app data is loaded
+    }).catch(err => {
+      console.warn("Error loading local data:", err);
+    }).finally(() => {
+      // Always stop loading, even if there's an error
       setLoading(false);
     });
+  }, []);
+
+  // Fetch recommendations from API separately — doesn't block the page
+  useEffect(() => {
+    if (!favoriteArtists) return; // Wait until favorite artists are loaded from onboarding
 
     const fetchData = async () => {
       try {
-        if (!favoriteArtists) return; // Wait until favorite artists are loaded from onboarding
-
         const POPULAR_LATIN_HITS = ["Bad Bunny", "Feid", "Karol G", "Peso Pluma", "Rauw Alejandro", "Myke Towers", "Mora", "Eladio Carrion", "Young Miko", "Bizarrap", "Quevedo", "Rosalía"];
 
         let recTerm = POPULAR_LATIN_HITS[Math.floor(Math.random() * POPULAR_LATIN_HITS.length)];
@@ -279,23 +285,17 @@ export default function Home() {
           recTerm = favoriteArtists[Math.floor(Math.random() * favoriteArtists.length)];
         }
 
-        const [recRes] = await Promise.all([
-          fetch(`/api/search?term=${encodeURIComponent(recTerm)}`)
-        ]);
-
-        const [recData] = await Promise.all([
-          recRes.json()
-        ]);
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+        const recRes = await fetch(`${RAILWAY_API}/api/search?term=${encodeURIComponent(recTerm)}`);
+        const recData = await recRes.json();
 
         // Shuffle the results to make it feel fresh every time
         const shuffled = (recData.results || []).sort(() => 0.5 - Math.random());
         setRecommendations(shuffled.slice(0, 15));
-      } catch (error) { console.error("Error fetching data", error); }
+      } catch (error) { console.error("Error fetching recommendations:", error); }
     };
 
-    if (favoriteArtists) {
-      fetchData();
-    }
+    fetchData();
   }, [favoriteArtists]);
 
   const handleDownload = async (track: ItunesTrack) => {
@@ -372,8 +372,9 @@ export default function Home() {
     setSelectedGenre(genre.term);
     setGenreLoading(true);
     try {
+      const RAILWAY_API = "https://caleta-music-production.up.railway.app";
       const topArtist = genre.artists[Math.floor(Math.random() * genre.artists.length)];
-      const res = await fetch(`/api/search?term=${encodeURIComponent(topArtist)}`);
+      const res = await fetch(`${RAILWAY_API}/api/search?term=${encodeURIComponent(topArtist)}`);
       const data = await res.json();
       setGenreTracks(data.results?.slice(0, 12) || []);
     } catch { setGenreTracks([]); }

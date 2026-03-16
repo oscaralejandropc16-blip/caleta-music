@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { SavedTrack } from "@/lib/db";
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
+import { MediaSession } from '@capgo/capacitor-media-session';
 
 const RAILWAY_API = "https://caleta-music-production.up.railway.app";
 
@@ -49,6 +50,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const currentTrackRef = useRef<SavedTrack | null>(null);
     const hasRetriedRef = useRef(false);
     const isReadyToPlayRef = useRef(false); // Prevents auto-play on initial load
+    const mediaSessionHandlersRegistered = useRef(false); // Only register once
 
     // New states for shuffle, repeat and queue
     const [isShuffle, setIsShuffle] = useState(false);
@@ -136,6 +138,87 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     }, [queue, isShuffle]);
 
+    // Helper to sync playback state with MediaSession (lock screen)
+    const updateMediaSessionPlaybackState = (playing: boolean) => {
+        if (Capacitor.isNativePlatform()) {
+            try {
+                MediaSession.setPlaybackState({
+                    playbackState: playing ? 'playing' : 'paused'
+                });
+                MediaSession.setPositionState({
+                    position: audioRef.current?.currentTime || 0,
+                    duration: audioRef.current?.duration || 0,
+                    playbackRate: 1
+                });
+            } catch (e) {
+                console.warn("MediaSession setPlaybackState error:", e);
+            }
+        } else if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: audioRef.current?.duration || 0,
+                    playbackRate: 1,
+                    position: Math.min(audioRef.current?.currentTime || 0, audioRef.current?.duration || 0)
+                });
+            } catch { /* ignore if duration not ready */ }
+        }
+    };
+
+    // Register MediaSession handlers ONCE on mount (not every track change)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (mediaSessionHandlersRegistered.current) return;
+        mediaSessionHandlersRegistered.current = true;
+
+        if (Capacitor.isNativePlatform()) {
+            try {
+                MediaSession.setActionHandler({ action: 'play' }, () => {
+                    if (audioRef.current && audioRef.current.paused) {
+                        audioRef.current.play().catch(console.warn);
+                    }
+                });
+                MediaSession.setActionHandler({ action: 'pause' }, () => {
+                    if (audioRef.current && !audioRef.current.paused) {
+                        audioRef.current.pause();
+                    }
+                });
+                MediaSession.setActionHandler({ action: 'previoustrack' }, () => playPrev());
+                MediaSession.setActionHandler({ action: 'nexttrack' }, () => playNext());
+                MediaSession.setActionHandler({ action: 'seekto' }, (details) => {
+                    if (audioRef.current && details.seekTime != null) {
+                        audioRef.current.currentTime = details.seekTime;
+                        setProgress(details.seekTime);
+                    }
+                });
+            } catch (e) {
+                console.warn("Capacitor MediaSession listener error:", e);
+            }
+        } else if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => {
+                if (audioRef.current && audioRef.current.paused) {
+                    audioRef.current.play().catch(console.warn);
+                }
+            });
+            navigator.mediaSession.setActionHandler('pause', () => {
+                if (audioRef.current && !audioRef.current.paused) {
+                    audioRef.current.pause();
+                }
+            });
+            navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+            navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (audioRef.current) {
+                    if (details.fastSeek && 'fastSeek' in audioRef.current) {
+                        (audioRef.current as any).fastSeek(details.seekTime || 0);
+                    } else {
+                        seekTo(details.seekTime || 0);
+                    }
+                }
+            });
+        }
+    }, []);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!audioRef.current) {
@@ -173,11 +256,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         };
 
         const onWaiting = () => setIsLoading(true);
-        const onPause = () => setIsPlaying(false);
-        const onPlay = () => setIsPlaying(true);
+        const onPause = () => {
+            setIsPlaying(false);
+            updateMediaSessionPlaybackState(false);
+        };
+        const onPlay = () => {
+            setIsPlaying(true);
+            updateMediaSessionPlaybackState(true);
+        };
         const onPlaying = () => {
             setIsPlaying(true);
             setIsLoading(false);
+            updateMediaSessionPlaybackState(true);
         };
         const onCanPlay = () => setIsLoading(false);
         const onLoadStart = () => {
@@ -341,9 +431,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
             attemptPlay(blobUrl || srcUrl);
 
-            // Configurar Media Session para pantallas bloqueadas (Android/iOS)
-            if ("mediaSession" in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
+            // Only update metadata here — handlers are registered once on mount
+            const updateMediaSession = async () => {
+                const metadata = {
                     title: currentTrack.title || "Unknown Track",
                     artist: currentTrack.artist || "Unknown Artist",
                     album: currentTrack.album || "Caleta Music",
@@ -352,20 +442,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         { src: currentTrack.coverUrl?.replace('100x100', '300x300') || "/logo.png", sizes: "300x300", type: "image/jpeg" },
                         { src: currentTrack.coverUrl?.replace('100x100', '600x600') || "/logo.png", sizes: "600x600", type: "image/jpeg" }
                     ]
-                });
+                };
 
-                navigator.mediaSession.setActionHandler("play", () => togglePlay());
-                navigator.mediaSession.setActionHandler("pause", () => togglePlay());
-                navigator.mediaSession.setActionHandler("previoustrack", () => playPrev());
-                navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
-                navigator.mediaSession.setActionHandler("seekto", (details) => {
-                    if (details.fastSeek && 'fastSeek' in audioRef.current!) {
-                        (audioRef.current as any).fastSeek(details.seekTime || 0);
-                    } else {
-                        seekTo(details.seekTime || 0);
+                if (Capacitor.isNativePlatform()) {
+                    try {
+                        await MediaSession.setMetadata({
+                            title: metadata.title,
+                            artist: metadata.artist,
+                            album: metadata.album,
+                            artwork: metadata.artwork
+                        });
+
+                        await MediaSession.setPlaybackState({
+                            playbackState: 'playing'
+                        });
+
+                        await MediaSession.setPositionState({
+                            position: audioRef.current?.currentTime || 0,
+                            duration: (currentTrack as any).duration || audioRef.current?.duration || 0,
+                            playbackRate: 1
+                        });
+                    } catch (e) {
+                        console.warn("Capacitor MediaSession error:", e);
                     }
-                });
-            }
+                } else if ("mediaSession" in navigator) {
+                    navigator.mediaSession.metadata = new MediaMetadata(metadata);
+                }
+            };
+
+            updateMediaSession();
 
             return () => {
                 cancelled = true;

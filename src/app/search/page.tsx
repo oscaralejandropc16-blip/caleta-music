@@ -496,7 +496,7 @@ export default function SearchPage() {
                         {listening && (
                             <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300">
                                 <button
-                                    onClick={toggleListen}
+                                    onClick={(e) => { e.stopPropagation(); toggleListen(); }}
                                     className="absolute top-8 right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
                                 >
                                     <X size={28} />
