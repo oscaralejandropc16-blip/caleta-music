@@ -510,20 +510,34 @@ export default function SearchPage() {
 
                         {/* SongCatcher Full-Screen Active Overlay */}
                         {listening && (
-                            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300">
-                                <button
-                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleListen(); }}
-                                    onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); toggleListen(); }}
-                                    className="absolute top-8 md:top-12 right-8 md:right-12 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-[110]"
+                            <div
+                                className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300"
+                                onPointerDown={(e) => {
+                                    // Tapping anywhere on the background closes the overlay
+                                    if (e.target === e.currentTarget) {
+                                        e.preventDefault();
+                                        stopListening();
+                                    }
+                                }}
+                            >
+                                {/* Close button - large touch target */}
+                                <div
+                                    role="button"
+                                    tabIndex={0}
+                                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); stopListening(); }}
+                                    className="absolute top-4 right-4 z-[120] flex items-center justify-center"
+                                    style={{ minWidth: 56, minHeight: 56 }}
                                 >
-                                    <X size={32} />
-                                </button>
+                                    <div className="w-14 h-14 flex items-center justify-center bg-white/15 active:bg-white/30 rounded-full text-white shadow-lg">
+                                        <X size={30} />
+                                    </div>
+                                </div>
 
                                 <div className="relative flex items-center justify-center mb-12">
                                     {/* Pulsating Waves */}
-                                    <div className="absolute animate-ping w-40 h-40 rounded-full bg-brand-500/40" style={{ animationDuration: '2s' }} />
-                                    <div className="absolute animate-ping w-64 h-64 rounded-full bg-purple-500/20" style={{ animationDuration: '2.5s', animationDelay: '0.2s' }} />
-                                    <div className="absolute animate-ping w-96 h-96 rounded-full bg-pink-500/10" style={{ animationDuration: '3s', animationDelay: '0.4s' }} />
+                                    <div className="absolute animate-ping w-40 h-40 rounded-full bg-brand-500/40 pointer-events-none" style={{ animationDuration: '2s' }} />
+                                    <div className="absolute animate-ping w-64 h-64 rounded-full bg-purple-500/20 pointer-events-none" style={{ animationDuration: '2.5s', animationDelay: '0.2s' }} />
+                                    <div className="absolute animate-ping w-96 h-96 rounded-full bg-pink-500/10 pointer-events-none" style={{ animationDuration: '3s', animationDelay: '0.4s' }} />
 
                                     {/* Center Mic */}
                                     <div className="relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-brand-500 to-pink-500 flex items-center justify-center text-white shadow-[0_0_60px_rgba(236,72,153,0.5)]">
@@ -540,6 +554,14 @@ export default function SearchPage() {
                                         {interimTranscript ? `"${interimTranscript}"` : "Canta, tararea o di el nombre..."}
                                     </p>
                                 </div>
+
+                                {/* Cancel text at the bottom for extra discoverability */}
+                                <button
+                                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); stopListening(); }}
+                                    className="mt-8 px-8 py-3 text-white/60 text-base font-semibold tracking-wide active:text-white transition-colors"
+                                >
+                                    Toca para cancelar
+                                </button>
                             </div>
                         )}
 
