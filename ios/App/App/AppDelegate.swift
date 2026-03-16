@@ -11,13 +11,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Configure AVAudioSession for background audio and lockscreen playback
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try audioSession.setActive(true)
         } catch {
             print("Failed to set AVAudioSession category: \(error)")
         }
         
-        // Override point for customization after application launch.
+        // Start silent audio loop to prevent iOS from suspending the WKWebView in background
+        BackgroundAudioHelper.shared.start()
+        
         return true
     }
 
@@ -27,12 +29,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        // Ensure the silent audio helper is running to keep the WebView alive
+        BackgroundAudioHelper.shared.start()
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
+        // Re-activate audio session when coming back to foreground
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Failed to re-activate AVAudioSession: \(error)")
+        }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
