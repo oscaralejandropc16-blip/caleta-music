@@ -89,78 +89,94 @@ export default function SearchPage() {
         }
     };
 
-    const toggleListen = () => {
-        if (listening && recognitionRef.current) {
-            recognitionRef.current.stop();
+    const stopListening = () => {
+        try {
+            if (recognitionRef.current) {
+                recognitionRef.current.abort(); // Use abort instead of stop to immediately terminate on mobile without waiting for final result
+            }
+        } catch (e) {
+            console.warn("Error stopping SpeechRecognition", e);
+        } finally {
             setListening(false);
             setInterimTranscript("");
+        }
+    };
+
+    const toggleListen = () => {
+        if (listening) {
+            stopListening();
             return;
         }
 
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            toast.error("Tu navegador no soporta búsqueda por voz", { icon: '🎤' });
+            toast.error("Tu dispositivo o navegador no soporta búsqueda por voz nativa", { icon: '🎤' });
             return;
         }
 
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
-        recognition.lang = "es-ES";
-        recognition.interimResults = true; // Habilitamos resultados intermedios
-        recognition.maxAlternatives = 1;
+        try {
+            const recognition = new SpeechRecognition();
+            recognitionRef.current = recognition;
+            recognition.lang = "es-ES";
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
 
-        recognition.onstart = () => {
-            setListening(true);
-            setInterimTranscript("");
-        };
-
-        recognition.onresult = (event: any) => {
-            let finalStr = "";
-            let interimStr = "";
-
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalStr += event.results[i][0].transcript;
-                } else {
-                    interimStr += event.results[i][0].transcript;
-                }
-            }
-
-            setInterimTranscript(interimStr || finalStr);
-
-            if (finalStr) {
-                setQuery(finalStr);
-                setListening(false);
+            recognition.onstart = () => {
+                setListening(true);
                 setInterimTranscript("");
-                handleDirectSearch(finalStr);
-            }
-        };
+            };
 
-        recognition.onerror = (event: any) => {
-            console.error("SpeechRecognition error:", event.error);
-            let errorMessage = "No se pudo reconocer tu voz";
+            recognition.onresult = (event: any) => {
+                let finalStr = "";
+                let interimStr = "";
 
-            if (event.error === 'no-speech') {
-                errorMessage = "No escuché nada. Intenta hablar más cerca del micrófono.";
-            } else if (event.error === 'audio-capture') {
-                errorMessage = "No se detectó un micrófono en tu dispositivo.";
-            } else if (event.error === 'not-allowed') {
-                errorMessage = "Permiso de micrófono denegado.";
-            } else if (event.error === 'network') {
-                errorMessage = "Error de red.";
-            }
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalStr += event.results[i][0].transcript;
+                    } else {
+                        interimStr += event.results[i][0].transcript;
+                    }
+                }
 
-            if (event.error !== 'aborted') toast.error(errorMessage, { icon: '🔇' });
-            setListening(false);
-            setInterimTranscript("");
-        };
+                setInterimTranscript(interimStr || finalStr);
 
-        recognition.onend = () => {
-            setListening(false);
-            setInterimTranscript("");
-        };
+                if (finalStr) {
+                    const searchStr = finalStr;
+                    stopListening();
+                    setQuery(searchStr);
+                    handleDirectSearch(searchStr);
+                }
+            };
 
-        recognition.start();
+            recognition.onerror = (event: any) => {
+                console.error("SpeechRecognition error:", event.error);
+                let errorMessage = "No se pudo reconocer tu voz";
+
+                if (event.error === 'no-speech') {
+                    errorMessage = "No escuché nada. Intenta hablar más cerca del micrófono.";
+                } else if (event.error === 'audio-capture') {
+                    errorMessage = "No se detectó un micrófono en tu dispositivo.";
+                } else if (event.error === 'not-allowed') {
+                    errorMessage = "Permiso de micrófono denegado.";
+                } else if (event.error === 'network') {
+                    errorMessage = "Error de red.";
+                }
+
+                if (event.error !== 'aborted') toast.error(errorMessage, { icon: '🔇' });
+                stopListening();
+            };
+
+            recognition.onend = () => {
+                stopListening();
+            };
+
+            setListening(true); // Force UI update instantly
+            recognition.start();
+        } catch (err) {
+            console.error("Failed to start speech recognition:", err);
+            toast.error("Error al iniciar el micrófono", { icon: '🔇' });
+            stopListening();
+        }
     };
 
     useEffect(() => {
@@ -496,10 +512,11 @@ export default function SearchPage() {
                         {listening && (
                             <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0f1e]/95 backdrop-blur-3xl animate-in fade-in duration-300">
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); toggleListen(); }}
-                                    className="absolute top-8 right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleListen(); }}
+                                    onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); toggleListen(); }}
+                                    className="absolute top-8 md:top-12 right-8 md:right-12 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-[110]"
                                 >
-                                    <X size={28} />
+                                    <X size={32} />
                                 </button>
 
                                 <div className="relative flex items-center justify-center mb-12">
