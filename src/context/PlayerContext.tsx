@@ -222,8 +222,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             });
             navigator.mediaSession.setActionHandler('pause', () => {
                 if (!audioRef.current || audioRef.current.paused) return;
-                if (isSafari) {
-                    // Safari PWA: mute instead of pause to keep audio session alive
+                if (isSafari && document.hidden) {
+                    // Safari PWA + screen locked: mute instead of pause to keep audio session alive
                     userVolumeRef.current = audioRef.current.volume || 1;
                     audioRef.current.volume = 0;
                     isMutedForPauseRef.current = true;
@@ -540,13 +540,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const togglePlay = () => {
         if (audioRef.current) {
-            const isSafari = typeof navigator !== 'undefined' && (
-                /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-                /iPad|iPhone|iPod/.test(navigator.userAgent)
-            );
-
             if (isMutedForPauseRef.current) {
-                // Restore from muted-pause state
+                // Restore from muted-pause state (was muted from lock screen)
                 audioRef.current.volume = userVolumeRef.current;
                 isMutedForPauseRef.current = false;
                 setIsPlaying(true);
@@ -561,16 +556,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     });
                 }
             } else {
-                if (isSafari && !Capacitor.isNativePlatform()) {
-                    // Safari PWA: mute instead of pause
-                    userVolumeRef.current = audioRef.current.volume || 1;
-                    audioRef.current.volume = 0;
-                    isMutedForPauseRef.current = true;
-                    setIsPlaying(false);
-                    updateMediaSessionPlaybackState(false);
-                } else {
-                    audioRef.current.pause();
-                }
+                // User is in the app — always do a real pause
+                audioRef.current.pause();
             }
         }
     };
