@@ -165,11 +165,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    // Register MediaSession handlers ONCE on mount (not every track change)
+    // Register MediaSession handlers keeping track of correct closures
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        if (mediaSessionHandlersRegistered.current) return;
-        mediaSessionHandlersRegistered.current = true;
 
         if (Capacitor.isNativePlatform()) {
             try {
@@ -185,6 +183,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 });
                 MediaSession.setActionHandler({ action: 'previoustrack' }, () => playPrev());
                 MediaSession.setActionHandler({ action: 'nexttrack' }, () => playNext());
+                MediaSession.setActionHandler({ action: 'seekforward' }, null); // Disable to force prev/next icons on iOS
+                MediaSession.setActionHandler({ action: 'seekbackward' }, null); // Disable to force prev/next icons on iOS
                 MediaSession.setActionHandler({ action: 'seekto' }, (details) => {
                     if (audioRef.current && details.seekTime != null) {
                         audioRef.current.currentTime = details.seekTime;
@@ -207,17 +207,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             });
             navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
             navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            try {
+                navigator.mediaSession.setActionHandler('seekforward', null);
+                navigator.mediaSession.setActionHandler('seekbackward', null);
+            } catch { /* Ignore if browser doesn't support setting to null */ }
             navigator.mediaSession.setActionHandler('seekto', (details) => {
                 if (audioRef.current) {
                     if (details.fastSeek && 'fastSeek' in audioRef.current) {
                         (audioRef.current as any).fastSeek(details.seekTime || 0);
                     } else {
-                        seekTo(details.seekTime || 0);
+                        audioRef.current.currentTime = details.seekTime || 0;
+                        setProgress(details.seekTime || 0);
                     }
                 }
             });
         }
-    }, []);
+    }, [queue, currentIndex, isShuffle, repeatMode]); // Updating these ensures playNext/playPrev closures never go stale
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
