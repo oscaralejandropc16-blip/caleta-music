@@ -146,7 +146,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     playbackState: playing ? 'playing' : 'paused'
                 });
                 MediaSession.setPositionState({
-                    position: audioRef.current?.currentTime || 0,
+                    position: Math.min(audioRef.current?.currentTime || 0, audioRef.current?.duration || 0),
                     duration: audioRef.current?.duration || 0,
                     playbackRate: 1
                 });
@@ -154,13 +154,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 console.warn("MediaSession setPlaybackState error:", e);
             }
         } else if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
             try {
-                navigator.mediaSession.setPositionState({
-                    duration: audioRef.current?.duration || 0,
-                    playbackRate: 1,
-                    position: Math.min(audioRef.current?.currentTime || 0, audioRef.current?.duration || 0)
-                });
+                navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+            } catch { /* Safari might not support this setter */ }
+            try {
+                const dur = audioRef.current?.duration;
+                const pos = audioRef.current?.currentTime;
+                if (dur && isFinite(dur) && dur > 0) {
+                    navigator.mediaSession.setPositionState({
+                        duration: dur,
+                        playbackRate: 1,
+                        position: Math.min(pos || 0, dur)
+                    });
+                }
             } catch { /* ignore if duration not ready */ }
         }
     };
@@ -472,6 +478,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     }
                 } else if ("mediaSession" in navigator) {
                     navigator.mediaSession.metadata = new MediaMetadata(metadata);
+                    try {
+                        navigator.mediaSession.playbackState = 'playing';
+                    } catch { /* ignore */ }
+                    // Wait for duration to be available, then set position
+                    const setPositionWhenReady = () => {
+                        try {
+                            const dur = audioRef.current?.duration;
+                            if (dur && isFinite(dur) && dur > 0) {
+                                navigator.mediaSession.setPositionState({
+                                    duration: dur,
+                                    playbackRate: 1,
+                                    position: audioRef.current?.currentTime || 0
+                                });
+                            }
+                        } catch { /* ignore */ }
+                    };
+                    // Try now and also after metadata loads
+                    setPositionWhenReady();
+                    if (audioRef.current) {
+                        audioRef.current.addEventListener('loadedmetadata', setPositionWhenReady, { once: true });
+                    }
                 }
             };
 
