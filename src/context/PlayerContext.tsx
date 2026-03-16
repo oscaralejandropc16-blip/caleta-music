@@ -52,6 +52,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const hasRetriedRef = useRef(false);
     const isReadyToPlayRef = useRef(false); // Prevents auto-play on initial load
     const mediaSessionHandlersRegistered = useRef(false); // Only register once
+    const userVolumeRef = useRef(1); // Track the user's desired volume for Safari mute/unmute trick
+    const isMutedForPauseRef = useRef(false); // Whether we're using the mute-instead-of-pause trick
 
     // New states for shuffle, repeat and queue
     const [isShuffle, setIsShuffle] = useState(false);
@@ -202,13 +204,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 console.warn("Capacitor MediaSession listener error:", e);
             }
         } else if ('mediaSession' in navigator) {
+            // Detect Safari for mute-instead-of-pause trick
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+                /iPad|iPhone|iPod/.test(navigator.userAgent);
+
             navigator.mediaSession.setActionHandler('play', () => {
-                if (audioRef.current && audioRef.current.paused) {
+                if (!audioRef.current) return;
+                if (isMutedForPauseRef.current) {
+                    // We muted instead of pausing — restore volume
+                    audioRef.current.volume = userVolumeRef.current;
+                    isMutedForPauseRef.current = false;
+                    setIsPlaying(true);
+                    updateMediaSessionPlaybackState(true);
+                } else if (audioRef.current.paused) {
                     audioRef.current.play().catch(console.warn);
                 }
             });
             navigator.mediaSession.setActionHandler('pause', () => {
-                if (audioRef.current && !audioRef.current.paused) {
+                if (!audioRef.current || audioRef.current.paused) return;
+                if (isSafari) {
+                    // Safari PWA: mute instead of pause to keep audio session alive
+                    userVolumeRef.current = audioRef.current.volume || 1;
+                    audioRef.current.volume = 0;
+                    isMutedForPauseRef.current = true;
+                    setIsPlaying(false);
+                    updateMediaSessionPlaybackState(false);
+                } else {
                     audioRef.current.pause();
                 }
             });
@@ -519,7 +540,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const togglePlay = () => {
         if (audioRef.current) {
-            if (audioRef.current.paused) {
+            const isSafari = typeof navigator !== 'undefined' && (
+                /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+                /iPad|iPhone|iPod/.test(navigator.userAgent)
+            );
+
+            if (isMutedForPauseRef.current) {
+                // Restore from muted-pause state
+                audioRef.current.volume = userVolumeRef.current;
+                isMutedForPauseRef.current = false;
+                setIsPlaying(true);
+                updateMediaSessionPlaybackState(true);
+            } else if (audioRef.current.paused) {
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(err => {
@@ -529,7 +561,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     });
                 }
             } else {
-                audioRef.current.pause();
+                if (isSafari && !Capacitor.isNativePlatform()) {
+                    // Safari PWA: mute instead of pause
+                    userVolumeRef.current = audioRef.current.volume || 1;
+                    audioRef.current.volume = 0;
+                    isMutedForPauseRef.current = true;
+                    setIsPlaying(false);
+                    updateMediaSessionPlaybackState(false);
+                } else {
+                    audioRef.current.pause();
+                }
             }
         }
     };
