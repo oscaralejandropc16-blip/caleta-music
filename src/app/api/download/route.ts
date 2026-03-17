@@ -36,6 +36,47 @@ const INVIDIOUS_INSTANCES = [
     "https://invidious.protokolla.fi"
 ];
 
+// ============== COBALT API (High Reliability YouTube Proxy) ==============
+async function resolveWithCobalt(url: string): Promise<{ audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }> {
+    console.log(`[Cobalt] Trying to resolve: ${url}`);
+    try {
+        const res = await fetch("https://api.cobalt.tools/api/json", {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                url: url,
+                isAudioOnly: true,
+                aFormat: "mp3",
+                filenamePattern: "pretty"
+            }),
+            signal: AbortSignal.timeout(15000)
+        });
+
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
+
+        if (data.status === "error") throw new Error(data.text || "Cobalt error");
+
+        if (data.status === "redirect" || data.status === "stream") {
+            const videoId = extractYouTubeVideoId(url) || "";
+            return {
+                audioUrl: data.url,
+                contentType: "audio/mpeg",
+                title: data.filename || "YouTube Audio",
+                artist: "YouTube",
+                coverUrl: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : ""
+            };
+        }
+        throw new Error(`Unexpected status: ${data.status}`);
+    } catch (err: any) {
+        console.warn(`[Cobalt] Error: ${err.message}`);
+        throw err;
+    }
+}
+
 /**
  * Usa Invidious API como fallback para buscar y resolver audio de YouTube.
  */
@@ -114,9 +155,6 @@ async function resolveAudioUrlWithInvidious(query: string): Promise<{
 
 /**
  * Usa Piped API para buscar un video y resolver la URL directa de audio.
- * Solo devuelve la URL, no descarga el audio completo.
- * Esto es RÁPIDO (~2-4 seg) y no tiene problemas de timeout en Vercel.
- * Si Piped falla, usa Invidious como fallback.
  */
 async function resolveAudioUrlWithPiped(query: string): Promise<{
     audioUrl: string;
@@ -221,7 +259,15 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
     artist: string;
     coverUrl: string;
 }> {
-    // Intentar Piped primero
+    // Intentar Cobalt PRIMERO (más fiable para links directos)
+    try {
+        const urlForCobalt = `https://www.youtube.com/watch?v=${videoId}`;
+        return await resolveWithCobalt(urlForCobalt);
+    } catch (err) {
+        console.warn("[Download] Cobalt fallback activated due to:", err);
+    }
+
+    // Intentar Piped
     for (const instance of PIPED_INSTANCES) {
         try {
             const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(8000) });
@@ -272,7 +318,7 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    throw new Error("Failed to resolve audio URL from Piped and Invidious");
+    throw new Error("Failed to resolve audio URL from all available proxies");
 }
 
 // ============== YT-DLP (LOCAL/WINDOWS) ==============
@@ -321,16 +367,68 @@ async function downloadWithYtDlp(videoUrl: string): Promise<{ filePath: string; 
 // ============== UTILITIES ==============
 
 function isYouTubeUrl(url: string): boolean {
-    try { const h = new URL(url).hostname; return h.includes("youtube.com") || h.includes("youtu.be") || h.includes("music.youtube.com"); }
-    catch { return false; }
+    try {
+        const h = new URL(url).hostname;
+        return h.includes("youtube.com") || h.includes("youtu.be") || h.includes("music.youtube.com");
+    } catch {
+        return false;
+    }
 }
 
 function extractYouTubeVideoId(url: string): string | null {
     try {
         const parsed = new URL(url);
-        if (parsed.hostname.includes("youtu.be")) return parsed.pathname.slice(1);
-        return parsed.searchParams.get("v");
-    } catch { return null; }
+        // youtu.be/VIDEO_ID
+        if (parsed.hostname.includes("youtu.be")) return parsed.pathname.slice(1).split(/[?#]/)[0];
+        // youtube.com/watch?v=VIDEO_ID
+        const v = parsed.searchParams.get("v");
+        if (v) return v;
+        // Shorts: youtube.com/shorts/VIDEO_ID
+        if (parsed.pathname.includes("/shorts/")) return parsed.pathname.split("/shorts/")[1].split(/[?#]/)[0];
+        // Live: youtube.com/live/VIDEO_ID
+        if (parsed.pathname.includes("/live/")) return parsed.pathname.split("/live/")[1].split(/[?#]/)[0];
+        // v/VIDEO_ID
+        if (parsed.pathname.includes("/v/")) return parsed.pathname.split("/v/")[1].split(/[?#]/)[0];
+        // embed/VIDEO_ID
+        if (parsed.pathname.includes("/embed/")) return parsed.pathname.split("/embed/")[1].split(/[?#]/)[0];
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+// ============== PROXY AUDIO STREAM ==============
+
+async function proxyAudioStream(result: { audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }) {
+    console.log(`[Download] Proxying audio stream from: ${result.audioUrl}`);
+    try {
+        const streamRes = await fetch(result.audioUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+        });
+
+        if (!streamRes.ok) {
+            console.error(`[Download] Failed to proxy stream. Status: ${streamRes.status}`);
+            return NextResponse.json({ error: `Stream fetch failed with status ${streamRes.status}` }, { status: 500 });
+        }
+
+        return new NextResponse(streamRes.body, {
+            status: 200,
+            headers: {
+                "Content-Type": result.contentType || streamRes.headers.get("Content-Type") || "audio/mpeg",
+                "Content-Length": streamRes.headers.get("Content-Length") || "",
+                "X-Video-Title": encodeURIComponent(result.title),
+                "X-Video-Artist": encodeURIComponent(result.artist),
+                "X-Video-Cover": result.coverUrl,
+                "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
+            }
+        });
+    } catch (err: any) {
+        console.error(`[Download] Proxy stream error: ${err.message}`);
+        return NextResponse.json({ error: err.message || "Failed to proxy stream" }, { status: 500 });
+    }
 }
 
 // ============== MAIN HANDLER ==============
@@ -342,89 +440,107 @@ export async function GET(request: NextRequest) {
     const directUrl = searchParams.get("url");
 
     if (!title && !artist && !directUrl) {
-        return NextResponse.json({ error: "No params" }, { status: 400 });
+        return NextResponse.json({ error: "No params provided" }, { status: 400 });
     }
 
     try {
-        // ======= NATIVE: usar yt-dlp (Windows local o Railway Linux) =======
-        const hasYtDlp = fs.existsSync(YT_DLP_PATH);
-        console.log(`[Download] yt-dlp available: ${hasYtDlp} (${YT_DLP_PATH})`);
-        if (hasYtDlp) {
-            if (!directUrl && title && artist) {
-                // Buscar con yt-dlp y descargar con yt-dlp
-                const query = `${artist} - ${title}`;
-                const ytDlpRes = await new Promise<NextResponse | null>(async (resolve) => {
+        // CASE: Direct YouTube Link
+        if (directUrl && isYouTubeUrl(directUrl)) {
+            const videoId = extractYouTubeVideoId(directUrl);
+            console.log(`[Download] YouTube URL detected: ${directUrl}, videoId: ${videoId}`);
+
+            if (videoId) {
+                // Try Cobalt first as it's often the fastest and most reliable for links
+                try {
+                    const result = await resolveWithCobalt(directUrl);
+                    console.log(`[Download] Cobalt success for videoId: ${videoId}`);
+                    return await proxyAudioStream(result);
+                } catch (cobaltErr: any) {
+                    console.warn(`[Download] Cobalt failed, falling back: ${cobaltErr.message}`);
+                }
+
+                // Try native yt-dlp if available
+                const hasYtDlp = fs.existsSync(YT_DLP_PATH);
+                if (hasYtDlp) {
                     try {
-                        const searchResult = await new Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }>((res, rej) => {
-                            execFile(YT_DLP_PATH, [
-                                "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
-                                "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
-                                `ytsearch1:${query}`
-                            ], { timeout: 20000 }, (err, stdout) => {
-                                if (err) { rej(err); return; }
-                                const lines = stdout.trim().split("\n").map(l => l.trim());
-                                if (lines.length < 4) { rej(new Error("no output")); return; }
-                                res({ streamUrl: lines[0], title: lines[1], uploader: lines[2], videoId: lines[3] });
-                            });
-                        });
-
-                        const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
-                        const coverUrl = `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`;
-
                         const isPlay = searchParams.get("play") === "true";
                         if (isPlay) {
-                            resolve(NextResponse.redirect(searchResult.streamUrl));
-                            return;
+                            const streamUrlRes = await new Promise<string>((res, rej) => {
+                                execFile(YT_DLP_PATH, [
+                                    "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
+                                    "--print", "url", directUrl
+                                ], { timeout: 15000 }, (err, stdout) => {
+                                    if (err) { rej(err); return; }
+                                    const url = stdout.trim().split("\n")[0];
+                                    if (url && url.startsWith("http")) res(url);
+                                    else rej(new Error("no stream url"));
+                                });
+                            });
+                            return NextResponse.redirect(streamUrlRes);
                         }
 
-                        const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
+                        const [{ filePath, contentType }, metadata] = await Promise.all([
+                            downloadWithYtDlp(directUrl),
+                            getVideoMetadata(directUrl)
+                        ]);
                         const fileBuffer = fs.readFileSync(filePath);
                         try { fs.unlinkSync(filePath); } catch { }
 
-                        resolve(new NextResponse(fileBuffer, {
+                        return new NextResponse(fileBuffer, {
                             status: 200,
                             headers: {
                                 "Content-Type": contentType,
                                 "Content-Length": fileBuffer.length.toString(),
-                                "X-Video-Title": encodeURIComponent(searchResult.title),
-                                "X-Video-Artist": encodeURIComponent(searchResult.uploader),
-                                "X-Video-Cover": coverUrl,
+                                "X-Video-Title": encodeURIComponent(metadata.title),
+                                "X-Video-Artist": encodeURIComponent(metadata.uploader),
+                                "X-Video-Cover": `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                                 "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
                             },
-                        }));
-                    } catch (err: any) {
-                        console.warn("[Download] yt-dlp natively failed:", err.message);
-                        resolve(null);
+                        });
+                    } catch (ytdlpErr: any) {
+                        console.warn(`[Download] yt-dlp failed: ${ytdlpErr.message}`);
                     }
-                });
-                if (ytDlpRes) return ytDlpRes;
-            }
+                }
 
-            if (directUrl && isYouTubeUrl(directUrl)) {
+                // Fallback to Piped/Invidious
                 try {
-                    const videoId = extractYouTubeVideoId(directUrl);
-                    const coverUrl = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "";
+                    const result = await resolveVideoAudioUrl(videoId);
+                    return await proxyAudioStream(result);
+                } catch (fallbackErr: any) {
+                    console.error(`[Download] All YouTube methods failed: ${fallbackErr.message}`);
+                }
+            } else {
+                console.warn(`[Download] Could not extract video ID from YouTube URL: ${directUrl}`);
+            }
+        }
+
+        // CASE: Search & Download (Title + Artist)
+        if (!directUrl && title && artist) {
+            const query = `${artist} - ${title}`;
+            console.log(`[Download] Resolving by query: ${query}`);
+
+            // Try local yt-dlp first
+            const hasYtDlp = fs.existsSync(YT_DLP_PATH);
+            if (hasYtDlp) {
+                try {
+                    const searchResult = await new Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }>((res, rej) => {
+                        execFile(YT_DLP_PATH, [
+                            "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
+                            "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
+                            `ytsearch1:${query}`
+                        ], { timeout: 20000 }, (err, stdout) => {
+                            if (err) { rej(err); return; }
+                            const lines = stdout.trim().split("\n").map(l => l.trim());
+                            if (lines.length < 4) { rej(new Error("no output")); return; }
+                            res({ streamUrl: lines[0], title: lines[1], uploader: lines[2], videoId: lines[3] });
+                        });
+                    });
 
                     const isPlay = searchParams.get("play") === "true";
-                    if (isPlay) {
-                        const streamUrlRes = await new Promise<string>((res, rej) => {
-                            execFile(YT_DLP_PATH, [
-                                "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
-                                "--print", "url", directUrl
-                            ], { timeout: 15000 }, (err, stdout) => {
-                                if (err) { rej(err); return; }
-                                const url = stdout.trim().split("\n")[0];
-                                if (url && url.startsWith("http")) res(url);
-                                else rej(new Error("no stream url"));
-                            });
-                        });
-                        return NextResponse.redirect(streamUrlRes);
-                    }
+                    if (isPlay) return NextResponse.redirect(searchResult.streamUrl);
 
-                    const [{ filePath, contentType }, metadata] = await Promise.all([
-                        downloadWithYtDlp(directUrl),
-                        getVideoMetadata(directUrl)
-                    ]);
+                    const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
+                    const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
                     const fileBuffer = fs.readFileSync(filePath);
                     try { fs.unlinkSync(filePath); } catch { }
 
@@ -433,73 +549,45 @@ export async function GET(request: NextRequest) {
                         headers: {
                             "Content-Type": contentType,
                             "Content-Length": fileBuffer.length.toString(),
-                            "X-Video-Title": encodeURIComponent(metadata.title),
-                            "X-Video-Artist": encodeURIComponent(metadata.uploader),
-                            "X-Video-Cover": coverUrl,
+                            "X-Video-Title": encodeURIComponent(searchResult.title),
+                            "X-Video-Artist": encodeURIComponent(searchResult.uploader),
+                            "X-Video-Cover": `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`,
                             "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
                         },
                     });
                 } catch (err: any) {
-                    console.warn("[Download] direct yt-dlp failed:", err.message);
+                    console.warn(`[Download] Search query with yt-dlp failed: ${err.message}`);
                 }
             }
-        }
 
-        // ======= FALLBACK (Vercel/sin yt-dlp): usar Piped API → devolver URL directa =======
-        // En vez de descargar el audio completo (timeout!), solo resolvemos
-        // la URL y la devolvemos al cliente como JSON o redirect
-
-        if (!directUrl && title && artist) {
-            const query = `${artist} - ${title}`;
-            console.log("[Vercel] Resolving audio URL for:", query);
-
-            const result = await resolveAudioUrlWithPiped(query);
-
-            const isPlay = searchParams.get("play") === "true";
-            if (isPlay) return NextResponse.redirect(result.audioUrl);
-
-            // Devolver JSON con la URL directa del audio
-            // El cliente descargará directamente desde Piped CDN
-            return NextResponse.json({
-                audioUrl: result.audioUrl,
-                contentType: result.contentType,
-                title: result.title,
-                artist: result.artist,
-                coverUrl: result.coverUrl,
-            });
-        }
-
-        if (directUrl && isYouTubeUrl(directUrl)) {
-            const videoId = extractYouTubeVideoId(directUrl);
-            if (videoId) {
-                const result = await resolveVideoAudioUrl(videoId);
-                const isPlay = searchParams.get("play") === "true";
-                if (isPlay) return NextResponse.redirect(result.audioUrl);
-
-                return NextResponse.json({
-                    audioUrl: result.audioUrl,
-                    contentType: result.contentType,
-                    title: result.title,
-                    artist: result.artist,
-                    coverUrl: result.coverUrl,
-                });
+            // Fallback: Piped
+            try {
+                const result = await resolveAudioUrlWithPiped(query);
+                return await proxyAudioStream(result);
+            } catch (err: any) {
+                console.error(`[Download] Search query fallback failed: ${err.message}`);
             }
         }
 
-        // Enlace directo (no YouTube)
+        // Generic direct link download (non-YouTube)
         if (directUrl) {
-            const response = await fetch(directUrl);
-            if (!response.ok) return NextResponse.json({ error: "Fetch failed" }, { status: response.status });
-            return new NextResponse(response.body, {
-                status: 200,
-                headers: { "Content-Type": response.headers.get("Content-Type") || "audio/mpeg" },
-            });
+            console.log(`[Download] Fetching non-YouTube direct URL: ${directUrl}`);
+            try {
+                const response = await fetch(directUrl);
+                if (!response.ok) return NextResponse.json({ error: "Fetch failed" }, { status: response.status });
+                return new NextResponse(response.body, {
+                    status: 200,
+                    headers: { "Content-Type": response.headers.get("Content-Type") || "audio/mpeg" },
+                });
+            } catch (err: any) {
+                console.error(`[Download] Direct link fetch failed: ${err.message}`);
+            }
         }
 
-        return NextResponse.json({ error: "No valid params" }, { status: 400 });
+        return NextResponse.json({ error: "No valid parameters or all download methods failed" }, { status: 400 });
 
     } catch (error: any) {
-        console.error("[Download] Error:", error);
+        console.error("[Download] Critical Error:", error);
         return NextResponse.json({ error: error.message || "Failed to download" }, { status: 500 });
     }
 }

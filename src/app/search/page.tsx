@@ -186,16 +186,39 @@ export default function SearchPage() {
         // Limpiar la barra de busqueda principal para que no se quede con el link largo
         setQuery("");
 
-        const result = await downloadAndSaveTrack(null, url, directId, (progress) => {
-            setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
-        });
+        let isNative = false;
+        try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
-        if (result.success) {
-            setSavedTrackIds((prev) => new Set(prev).add(directId));
-            toast.success("¡Descarga completada y guardada!");
+        if (isNative) {
+            const trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/download?url=${encodeURIComponent(url)}&play=true`;
+
+            const result = await downloadSong({
+                id: directId,
+                title: "Enlace Descargado",
+                artist: "YouTube",
+                coverUrl: "https://i.ytimg.com/vi/default/hqdefault.jpg",
+                downloadUrl: trackDownloadUrl
+            });
+
+            if (result.success) {
+                setSavedTrackIds((prev) => new Set(prev).add(directId));
+                toast.success("¡Descarga completada y guardada!");
+            } else {
+                toast.error(`Error: ${result.error || "Verifica el enlace"}`);
+            }
         } else {
-            toast.error(`Error: ${result.error || "Verifica el enlace"}`);
+            const result = await downloadAndSaveTrack(null, url, directId, (progress) => {
+                setDownloadProgresses(prev => ({ ...prev, [directId]: progress }));
+            });
+
+            if (result.success) {
+                setSavedTrackIds((prev) => new Set(prev).add(directId));
+                toast.success("¡Descarga completada y guardada!");
+            } else {
+                toast.error(`Error: ${result.error || "Verifica el enlace"}`);
+            }
         }
+
         setLinkDownloading(false);
         setActiveLinkId(null);
     };
@@ -338,10 +361,10 @@ export default function SearchPage() {
                     <div className="mb-4 animate-fade-in-up">
                         <div className="flex items-center gap-3 text-sm text-brand-400 mb-2">
                             <Loader size={16} className="animate-spin" />
-                            <span className="font-medium">Descargando enlace... {downloadProgress[activeLinkId] || 0}%</span>
+                            <span className="font-medium">Descargando enlace... {downloadProgresses[activeLinkId] || downloadProgress[activeLinkId] || 0}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300" style={{ width: `${downloadProgress[activeLinkId] || 0}%` }} />
+                            <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-300" style={{ width: `${downloadProgresses[activeLinkId] || downloadProgress[activeLinkId] || 0}%` }} />
                         </div>
                     </div>
                 )}
@@ -500,7 +523,7 @@ export default function SearchPage() {
                                 const strId = track.trackId.toString();
                                 const isDownloaded = savedTrackIds.has(strId);
                                 const isDownloading = downloadingIds[strId];
-                                const progress = downloadProgress[strId] || 0;
+                                const progress = downloadProgresses[strId] || downloadProgress[strId] || 0;
 
                                 return (
                                     <div

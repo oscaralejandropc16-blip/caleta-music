@@ -285,8 +285,7 @@ export default function Home() {
           recTerm = favoriteArtists[Math.floor(Math.random() * favoriteArtists.length)];
         }
 
-        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
-        const recRes = await fetch(`${RAILWAY_API}/api/search?term=${encodeURIComponent(recTerm)}`);
+        const recRes = await fetch(`/api/search?term=${encodeURIComponent(recTerm)}`);
         const recData = await recRes.json();
 
         // Shuffle the results to make it feel fresh every time
@@ -312,10 +311,9 @@ export default function Home() {
     e.stopPropagation();
     const strId = itunesTrack.trackId.toString();
 
-    const RAILWAY_API = "https://caleta-music-production.up.railway.app";
     const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
-      ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
-      : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+      ? `/api/deezer?id=${t.trackId}`
+      : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
 
     const trackObj = {
       id: strId,
@@ -335,10 +333,9 @@ export default function Home() {
   const handlePlay = (e: React.MouseEvent, track: ItunesTrack, contextTracks?: ItunesTrack[]) => {
     e.stopPropagation();
 
-    const RAILWAY_API = "https://caleta-music-production.up.railway.app";
     const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
-      ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
-      : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
+      ? `/api/deezer?id=${t.trackId}`
+      : `/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
 
     let queueTracks: any[] | undefined;
 
@@ -372,9 +369,8 @@ export default function Home() {
     setSelectedGenre(genre.term);
     setGenreLoading(true);
     try {
-      const RAILWAY_API = "https://caleta-music-production.up.railway.app";
       const topArtist = genre.artists[Math.floor(Math.random() * genre.artists.length)];
-      const res = await fetch(`${RAILWAY_API}/api/search?term=${encodeURIComponent(topArtist)}`);
+      const res = await fetch(`/api/search?term=${encodeURIComponent(topArtist)}`);
       const data = await res.json();
       setGenreTracks(data.results?.slice(0, 12) || []);
     } catch { setGenreTracks([]); }
