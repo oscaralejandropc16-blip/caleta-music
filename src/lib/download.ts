@@ -1,8 +1,10 @@
 import { saveTrackToDB, SavedTrack } from "./db";
 import { addSongToLibrary } from "./syncLibrary";
 
-// Base URL del servidor con las API routes (Railway production)
-const API_BASE = "https://caleta-music-production.up.railway.app";
+// Base URL del servidor con las API routes (Railway production o Localhost)
+const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? ""
+    : "https://caleta-music-production.up.railway.app";
 
 export interface ItunesTrack {
     trackId: number;
