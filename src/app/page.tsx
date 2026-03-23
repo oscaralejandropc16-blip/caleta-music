@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Play, Download, Check, Heart, Disc3,
   ChevronLeft, ChevronRight, TrendingUp,
@@ -47,7 +47,7 @@ interface TrackCardProps {
   onArtistClick: (artist: string) => void;
 }
 
-function TrackCard({
+const TrackCard = React.memo(function TrackCard({
   track,
   size = "normal",
   savedTrackIds,
@@ -69,7 +69,7 @@ function TrackCard({
   return (
     <div className={`${w} flex-shrink-0 p-3.5 md:p-4 rounded-[20px] md:rounded-[24px] bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col`}>
       <div className="relative w-full aspect-square rounded-[14px] md:rounded-[16px] overflow-hidden shadow-2xl mb-4 bg-[#0a0f1e] border border-white/[0.05]">
-        <img src={track.artworkUrl100.replace("100x100", "400x400")} alt={track.trackName}
+        <img src={track.artworkUrl100.replace("100x100", "400x400")} alt={track.trackName} loading="lazy"
           className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 md:via-black/20 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-2 md:p-3 pb-2 md:pb-3 rounded-xl pointer-events-none">
           <div className="flex gap-1.5 md:gap-2 relative z-10 w-full justify-between items-center pointer-events-auto">
@@ -121,7 +121,16 @@ function TrackCard({
       )}
     </div>
   );
-}
+}, (prev, next) => {
+  const id = next.track.trackId.toString();
+  return (
+    prev.track.trackId === next.track.trackId &&
+    prev.downloadingId === next.downloadingId &&
+    prev.downloadProgress === next.downloadProgress &&
+    prev.savedTrackIds.has(id) === next.savedTrackIds.has(id) &&
+    prev.likedIds.has(id) === next.likedIds.has(id)
+  );
+});
 
 function HorizontalScroller({ children, title, icon }: { children: React.ReactNode; title: string; icon: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -455,7 +464,7 @@ export default function Home() {
                     className="min-w-[160px] md:min-w-[200px] w-[160px] md:w-[200px] flex-shrink-0 p-3.5 md:p-4 rounded-[24px] bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col text-left"
                   >
                     <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-2xl mb-4 bg-[#0a0f1e] border border-white/[0.05]">
-                      <img src={album.coverUrl || '/placeholder.png'} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                      <img src={album.coverUrl || '/placeholder.png'} alt={album.name} loading="lazy" className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
                     </div>
                     <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight mb-1 group-hover:text-emerald-400 transition-colors">{album.name}</h3>
                     <p className="text-[12px] font-medium text-slate-400 truncate">{album.artist}</p>
@@ -474,7 +483,7 @@ export default function Home() {
                       className="min-w-[160px] md:min-w-[200px] w-[160px] md:w-[200px] flex-shrink-0 p-3.5 md:p-4 rounded-[24px] bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.02] hover:border-white/[0.08] transition-all duration-500 ease-out group hover:-translate-y-1.5 hover:shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col text-left"
                     >
                       <div className="w-full aspect-square rounded-[16px] overflow-hidden shadow-2xl mb-4 bg-[#0a0f1e] border border-white/[0.05]">
-                        <img src={album.cover || '/placeholder.png'} alt={album.name} className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
+                        <img src={album.cover || '/placeholder.png'} alt={album.name} loading="lazy" className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-110" />
                       </div>
                       <h3 className="font-bold text-white text-[15px] truncate drop-shadow-sm leading-tight mb-1 group-hover:text-emerald-400 transition-colors">{album.name}</h3>
                       <p className="text-[12px] font-medium text-slate-400 truncate">{album.artist}</p>
