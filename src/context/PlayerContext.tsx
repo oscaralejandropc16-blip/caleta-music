@@ -477,9 +477,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             console.warn("[Player] Play promise error:", err?.message);
                             // No usar un ref estricto que bloquee los siguientes niveles de fallback.
                             // Evaluamos directamente usando el fallbackLevel.
+                            // Evaluamos directamente usando el fallbackLevel.
+                            const isYouTubeId = (isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11) || String(currentTrack.id).startsWith("link-");
+
+                            // Nivel 0: Falló el origin, probar el primer proxy alternativo
                             if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
-                                console.log("[Player] Audio error -> Searching alternative flow via Deezer API...");
-                                const isYouTubeId = isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11;
+                                console.log(`[Player] Audio error -> Searching alternative flow via ${isYouTubeId ? 'YouTube API' : 'Deezer API'}...`);
                                 if (isYouTubeId) {
                                     const ytFallbackUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(ytFallbackUrl, 1);
@@ -487,12 +490,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                                     const deezerUrl = `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(deezerUrl, 1);
                                 }
-                            } else if (fallbackLevel === 1 && currentTrack.title && currentTrack.artist) {
-                                console.log("[Player] Audio error in Deezer Fallback -> Trying Youtube Fallback...");
-                                const ytFallbackUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
-                                attemptPlay(ytFallbackUrl, 2);
-                            } else if (fallbackLevel === 2 && currentTrack.previewUrl) {
-                                console.log("[Player] Audio error in Youtube Fallback -> Trying Preview URL...");
+                            }
+                            // Nivel 1: Falló el primer proxy, intentar el invertido
+                            else if (fallbackLevel === 1 && currentTrack.title && currentTrack.artist) {
+                                console.log(`[Player] Audio error -> Trying secondary Fallback via ${isYouTubeId ? 'Deezer API' : 'YouTube API'}...`);
+                                if (isYouTubeId) {
+                                    // Si el primero fue YouTube, ahora toca Deezer
+                                    const deezerFallbackUrl = `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    attemptPlay(deezerFallbackUrl, 2);
+                                } else {
+                                    // Si el primero fue Deezer, ahora toca YouTube
+                                    const ytFallbackUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    attemptPlay(ytFallbackUrl, 2);
+                                }
+                            }
+                            // Nivel 2: Agotados los proxies de nombres, probamos Pista Corta
+                            else if (fallbackLevel === 2 && currentTrack.previewUrl) {
+                                console.log("[Player] Audio error in all fallbacks -> Trying Preview URL...");
                                 attemptPlay(currentTrack.previewUrl, 3);
                             } else {
                                 console.error("[Player] All fallbacks exhausted. Cannot play track.");

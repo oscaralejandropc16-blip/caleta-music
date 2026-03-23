@@ -185,7 +185,7 @@ export const downloadAndSaveTrack = async (
             if (fakeProgressInterval) clearInterval(fakeProgressInterval);
             deezerError = downloadErr?.message || "Error desconocido";
 
-            // Si Deezer falló intentar fallback con YouTube solo si hay track
+            // 1. Si era Deezer el primer intento, vamos a YouTube
             if (downloadUrl.includes('/api/deezer') && track) {
                 console.warn(`[Download] Deezer failed (${deezerError}), trying YouTube...`);
                 if (onProgress) onProgress(30);
@@ -203,6 +203,27 @@ export const downloadAndSaveTrack = async (
                     return {
                         success: false,
                         error: `Deezer: ${deezerError} | YouTube: ${ytError}`
+                    };
+                }
+            }
+            // 2. Si era YouTube el primer intento, vamos a Deezer 
+            else if (downloadUrl.includes('/api/download') && track) {
+                console.warn(`[Download] YouTube failed (${deezerError}), trying Deezer...`);
+                if (onProgress) onProgress(30);
+
+                try {
+                    const dzFallbackUrl = `${API_BASE}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
+
+                    await processResolvedBlob(blob, headers, track, url, id);
+                    if (onComplete) onComplete();
+                    return { success: true };
+                } catch (dzErr: any) {
+                    const dzError = dzErr?.message || "Error desconocido";
+                    console.error(`[Download] Deezer also failed: ${dzError}`);
+                    return {
+                        success: false,
+                        error: `YouTube: ${deezerError} | Deezer: ${dzError}`
                     };
                 }
             } else {

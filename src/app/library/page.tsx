@@ -221,9 +221,9 @@ function LibraryContent() {
     const handleDownloadCloud = async (e: React.MouseEvent, track: UnifiedTrack) => {
         e.stopPropagation();
 
-        const isYouTube = isNaN(Number(track.id)) && track.id.length === 11;
+        const isYouTube = (isNaN(Number(track.id)) && track.id.length === 11) || String(track.id).startsWith("link-");
         const resolvedSource = isYouTube ? 'youtube' : 'deezer';
-        const explicitYoutubeUrl = isYouTube ? `https://youtube.com/watch?v=${track.id}` : null;
+        const explicitYoutubeUrl = (track.id && track.id.length === 11 && isNaN(Number(track.id))) ? `https://youtube.com/watch?v=${track.id}` : null;
 
         const mockTrack = {
             trackId: isYouTube ? 0 : track.id,
