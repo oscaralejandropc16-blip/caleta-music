@@ -400,13 +400,19 @@ function extractYouTubeVideoId(url: string): string | null {
 
 // ============== PROXY AUDIO STREAM ==============
 
-async function proxyAudioStream(result: { audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }) {
+async function proxyAudioStream(request: NextRequest, result: { audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }) {
     console.log(`[Download] Proxying audio stream from: ${result.audioUrl}`);
     try {
+        const fetchHeaders: Record<string, string> = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        };
+        const rangeHeader = request.headers.get("range");
+        if (rangeHeader) {
+            fetchHeaders["Range"] = rangeHeader;
+        }
+
         const streamRes = await fetch(result.audioUrl, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
+            headers: fetchHeaders
         });
 
         if (!streamRes.ok) {
@@ -414,16 +420,24 @@ async function proxyAudioStream(result: { audioUrl: string; contentType: string;
             return NextResponse.json({ error: `Stream fetch failed with status ${streamRes.status}` }, { status: 500 });
         }
 
+        const responseHeaders: Record<string, string> = {
+            "Content-Type": result.contentType || streamRes.headers.get("Content-Type") || "audio/mpeg",
+            "Accept-Ranges": "bytes",
+            "X-Video-Title": encodeURIComponent(result.title),
+            "X-Video-Artist": encodeURIComponent(result.artist),
+            "X-Video-Cover": result.coverUrl,
+            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length, Content-Range",
+        };
+
+        const contentLength = streamRes.headers.get("Content-Length");
+        if (contentLength) responseHeaders["Content-Length"] = contentLength;
+
+        const contentRange = streamRes.headers.get("Content-Range");
+        if (contentRange) responseHeaders["Content-Range"] = contentRange;
+
         return new NextResponse(streamRes.body, {
-            status: 200,
-            headers: {
-                "Content-Type": result.contentType || streamRes.headers.get("Content-Type") || "audio/mpeg",
-                "Content-Length": streamRes.headers.get("Content-Length") || "",
-                "X-Video-Title": encodeURIComponent(result.title),
-                "X-Video-Artist": encodeURIComponent(result.artist),
-                "X-Video-Cover": result.coverUrl,
-                "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
-            }
+            status: streamRes.status === 206 ? 206 : 200,
+            headers: responseHeaders
         });
     } catch (err: any) {
         console.error(`[Download] Proxy stream error: ${err.message}`);
@@ -454,7 +468,7 @@ export async function GET(request: NextRequest) {
                 try {
                     const result = await resolveWithCobalt(directUrl);
                     console.log(`[Download] Cobalt success for videoId: ${videoId}`);
-                    return await proxyAudioStream(result);
+                    return await proxyAudioStream(request, result);
                 } catch (cobaltErr: any) {
                     console.warn(`[Download] Cobalt failed, falling back: ${cobaltErr.message}`);
                 }
@@ -505,7 +519,7 @@ export async function GET(request: NextRequest) {
                 // Fallback to Piped/Invidious
                 try {
                     const result = await resolveVideoAudioUrl(videoId);
-                    return await proxyAudioStream(result);
+                    return await proxyAudioStream(request, result);
                 } catch (fallbackErr: any) {
                     console.error(`[Download] All YouTube methods failed: ${fallbackErr.message}`);
                 }
@@ -563,7 +577,7 @@ export async function GET(request: NextRequest) {
             // Fallback: Piped
             try {
                 const result = await resolveAudioUrlWithPiped(query);
-                return await proxyAudioStream(result);
+                return await proxyAudioStream(request, result);
             } catch (err: any) {
                 console.error(`[Download] Search query fallback failed: ${err.message}`);
             }

@@ -329,25 +329,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         };
         const onError = () => {
             const errCode = audioRef.current?.error?.code;
-            const track = currentTrackRef.current;
-            console.warn(`[AudioPlayer] Audio error (code: ${errCode})`);
+            const errName = audioRef.current?.error?.message;
+            console.warn(`[AudioPlayer] Audio error (code: ${errCode}, msg: ${errName})`);
             setIsLoading(false);
-            setIsPlaying(false);
 
-            if (errCode === 4 && track && !hasRetriedRef.current) {
-                hasRetriedRef.current = true;
-
-                if (track.title && track.artist) {
-                    console.log("[Player] Audio error → Searching alternative flow via Deezer API...");
-                    const retryUrl = `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&play=true`;
-                    if (audioRef.current) {
-                        audioRef.current.src = retryUrl;
-                        audioRef.current.play().catch(() => { });
-                    }
-                } else if (track.previewUrl && audioRef.current) {
-                    audioRef.current.src = track.previewUrl;
-                    audioRef.current.play().catch(() => { });
-                }
+            // Si el error ocurre muy rápido (currentTime = 0), playPromise.catch manejará los fallbacks.
+            // Si ocurre a mitad de canción, el estado se quedará en pausa.
+            if (audioRef.current?.currentTime !== 0) {
+                setIsPlaying(false);
             }
         };
 
@@ -383,11 +372,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (!isReadyToPlayRef.current) {
                 isReadyToPlayRef.current = true;
 
-                // Solo asignar la fuente pero no reproducir
-                let initialUrl = currentTrack.streamUrl || "";
+                let initialUrl = "";
+                const sUrl = currentTrack.streamUrl || (currentTrack as any).sourceAudioUrl || "";
+                const isYouTubeId = isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11;
+
                 if (currentTrack.blob) {
                     initialUrl = URL.createObjectURL(currentTrack.blob);
-                } else if (!initialUrl && currentTrack.previewUrl) {
+                } else if (sUrl) {
+                    if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
+                        initialUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(sUrl)}`;
+                    } else {
+                        initialUrl = sUrl;
+                    }
+                } else if (isYouTubeId) {
+                    initialUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
+                } else if (currentTrack.previewUrl) {
                     initialUrl = currentTrack.previewUrl;
                 }
 
@@ -417,8 +416,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (!srcUrl) {
-                if ((currentTrack as any).sourceAudioUrl) {
-                    srcUrl = (currentTrack as any).sourceAudioUrl;
+                const sUrl = (currentTrack as any).sourceAudioUrl || currentTrack.streamUrl || "";
+                const isYouTubeId = isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11;
+
+                if (sUrl) {
+                    if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
+                        srcUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(sUrl)}`;
+                    } else {
+                        srcUrl = sUrl;
+                    }
+                } else if (isYouTubeId) {
+                    srcUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
                 } else if (currentTrack.id) {
                     srcUrl = `${RAILWAY_API}/api/deezer?id=${currentTrack.id}&title=${encodeURIComponent(currentTrack.title || "")}&artist=${encodeURIComponent(currentTrack.artist || "")}`;
                 } else if (currentTrack.title && currentTrack.artist) {
@@ -467,14 +475,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             if (err.name === 'AbortError') return;
 
                             console.warn("[Player] Play promise error:", err?.message);
-                            if (!hasRetriedRef.current) {
-                                hasRetriedRef.current = true;
-                                if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
+                            // No usar un ref estricto que bloquee los siguientes niveles de fallback.
+                            // Evaluamos directamente usando el fallbackLevel.
+                            if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
+                                console.log("[Player] Audio error -> Searching alternative flow via Deezer API...");
+                                const isYouTubeId = isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11;
+                                if (isYouTubeId) {
+                                    const ytFallbackUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    attemptPlay(ytFallbackUrl, 1);
+                                } else {
                                     const deezerUrl = `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(deezerUrl, 1);
-                                } else if (fallbackLevel === 1 && currentTrack.previewUrl) {
-                                    attemptPlay(currentTrack.previewUrl, 2);
                                 }
+                            } else if (fallbackLevel === 1 && currentTrack.title && currentTrack.artist) {
+                                console.log("[Player] Audio error in Deezer Fallback -> Trying Youtube Fallback...");
+                                const ytFallbackUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                attemptPlay(ytFallbackUrl, 2);
+                            } else if (fallbackLevel === 2 && currentTrack.previewUrl) {
+                                console.log("[Player] Audio error in Youtube Fallback -> Trying Preview URL...");
+                                attemptPlay(currentTrack.previewUrl, 3);
+                            } else {
+                                console.error("[Player] All fallbacks exhausted. Cannot play track.");
+                                setIsLoading(false);
                             }
                         });
                     }

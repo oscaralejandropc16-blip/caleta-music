@@ -221,14 +221,18 @@ function LibraryContent() {
     const handleDownloadCloud = async (e: React.MouseEvent, track: UnifiedTrack) => {
         e.stopPropagation();
 
+        const isYouTube = isNaN(Number(track.id)) && track.id.length === 11;
+        const resolvedSource = isYouTube ? 'youtube' : 'deezer';
+        const explicitYoutubeUrl = isYouTube ? `https://youtube.com/watch?v=${track.id}` : null;
+
         const mockTrack = {
-            trackId: 0,
+            trackId: isYouTube ? 0 : track.id,
             trackName: track.title,
             artistName: track.artist,
             collectionName: track.album || "",
             artworkUrl100: track.coverUrl || "",
-            previewUrl: track.sourceAudioUrl || "",
-            _source: 'deezer'
+            previewUrl: track.sourceAudioUrl || explicitYoutubeUrl || "",
+            _source: resolvedSource
         } as any;
 
         let isNative = false;
@@ -709,12 +713,12 @@ function LibraryContent() {
                             ) : (
                                 <>
                                     {/* Table Header */}
-                                    <div className="hidden md:grid grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_40px] gap-4 px-5 py-3 text-xs text-slate-400 font-bold uppercase tracking-widest border-b border-white/[0.05] mb-4">
+                                    <div className="hidden md:grid grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_70px] gap-4 px-5 py-3 text-xs text-slate-400 font-bold uppercase tracking-widest border-b border-white/[0.05] mb-4">
                                         <div className="w-8 text-center text-slate-500">#</div>
                                         <div>Título</div>
                                         <div className="hidden md:block w-48 lg:w-64 truncate">Álbum</div>
                                         <div className="w-10"></div>
-                                        <div className="w-10"></div>
+                                        <div className="w-16"></div>
                                     </div>
 
                                     {/* Track Rows */}
@@ -726,7 +730,7 @@ function LibraryContent() {
                                             <div
                                                 key={track.id}
                                                 onClick={() => handlePlay(track)}
-                                                className={`group grid grid-cols-[32px_1fr_40px_40px] md:grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_40px] items-center gap-3 md:gap-4 px-3 md:px-5 py-3 rounded-[16px] transition-all duration-300 ease-out cursor-pointer ${isCurrent
+                                                className={`group grid grid-cols-[32px_1fr_40px_70px] md:grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_70px] items-center gap-3 md:gap-4 px-3 md:px-5 py-3 rounded-[16px] transition-all duration-300 ease-out cursor-pointer ${isCurrent
                                                     ? "bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20"
                                                     : "bg-transparent hover:bg-white/[0.04] border border-transparent hover:border-white/[0.03] hover:shadow-lg"
                                                     }`}
@@ -821,10 +825,10 @@ function LibraryContent() {
                                                     </button>
                                                 </div>
 
-                                                <div className="w-10 flex-shrink-0 flex justify-end items-center">
-                                                    {track.isCloudOnly ? (
+                                                <div className="flex-shrink-0 flex justify-end items-center">
+                                                    {track.isCloudOnly && (
                                                         (downloadingCloudIds.has(track.id) || downloadingIds[track.id]) ? (
-                                                            <div className="relative flex items-center justify-center w-8 h-8" title={`${downloadProgress[track.id] || nativeDownloadProgress[track.id] || 0}%`}>
+                                                            <div className="relative flex items-center justify-center w-8 h-8 mr-1" title={`${downloadProgress[track.id] || nativeDownloadProgress[track.id] || 0}%`}>
                                                                 <Loader size={18} className="animate-spin text-brand-500" />
                                                                 <span className="absolute text-[8px] font-bold text-white">
                                                                     {downloadProgress[track.id] || nativeDownloadProgress[track.id] || 0}
@@ -833,21 +837,20 @@ function LibraryContent() {
                                                         ) : (
                                                             <button
                                                                 onClick={e => handleDownloadCloud(e, track)}
-                                                                className="text-slate-400 hover:text-brand-400 p-2 rounded-full hover:bg-brand-500/10 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                                                                className="text-slate-400 hover:text-brand-400 p-2 rounded-full hover:bg-brand-500/10 transition-colors md:opacity-0 md:group-hover:opacity-100 mr-1"
                                                                 title="Descargar desde la nube para escuchar offline"
                                                             >
                                                                 <CloudDownload size={18} />
                                                             </button>
                                                         )
-                                                    ) : (
-                                                        <button
-                                                            onClick={e => openContextMenu(e, track.id)}
-                                                            className="text-slate-500 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors md:opacity-0 md:group-hover:opacity-100"
-                                                            title="Más opciones"
-                                                        >
-                                                            <MoreHorizontal size={18} />
-                                                        </button>
                                                     )}
+                                                    <button
+                                                        onClick={e => openContextMenu(e, track.id)}
+                                                        className="text-slate-500 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors md:opacity-0 md:group-hover:opacity-100"
+                                                        title="Más opciones"
+                                                    >
+                                                        <MoreHorizontal size={18} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         );
@@ -901,7 +904,7 @@ function LibraryContent() {
                             className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
                         >
                             <Trash2 size={14} />
-                            Eliminar descarga
+                            Eliminar de la biblioteca
                         </button>
                     </div>
                 )
