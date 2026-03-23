@@ -81,12 +81,19 @@ export async function removeSongFromLibrary(songId: string) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return;
 
-        await supabase
+        const { error } = await supabase
             .from('user_library')
             .delete()
-            .match({ user_id: session.user.id, track_id: songId });
-    } catch {
-        // Ignore
+            .eq('user_id', session.user.id)
+            .eq('track_id', songId);
+
+        if (error) {
+            console.error('[Sync] Failed to delete from cloud db:', error.message);
+            throw new Error(error.message);
+        }
+    } catch (err) {
+        console.error('[Sync] Failed to delete from cloud:', err);
+        throw err;
     }
 }
 

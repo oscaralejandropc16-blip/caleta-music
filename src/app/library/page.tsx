@@ -292,6 +292,7 @@ function LibraryContent() {
 
             // Remove visually immediately for snappiness
             setTracks(prev => prev.filter(t => t.id !== trackIdToDelete));
+            setCloudTracks(prev => prev.filter(t => t.id !== trackIdToDelete));
 
             // Eliminar de Capacitor Preferences (Lógica offline)
             try {
