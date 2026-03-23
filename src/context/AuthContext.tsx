@@ -77,14 +77,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (!isMounted) return;
                 setSession(s);
                 setUser(s?.user ?? null);
+
+                // Free the loading screen instantly so the app starts right away
+                setLoading(false);
+
                 if (s?.user) {
-                    await loadProfile(s.user.id, s.user.user_metadata);
+                    loadProfile(s.user.id, s.user.user_metadata).catch(e => console.error(e));
                     // Sync library from cloud
                     fullSync(s.user.id).catch(e => console.warn("[Sync] initial sync error:", e));
                 }
             } catch (err) {
                 console.error("Auth init error:", err);
-            } finally {
                 if (isMounted) setLoading(false);
             }
         };
@@ -92,18 +95,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         init();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, s) => {
+            (_event, s) => {
                 if (!isMounted) return;
                 setSession(s);
                 setUser(s?.user ?? null);
+
+                setLoading(false);
+
                 if (s?.user) {
-                    await loadProfile(s.user.id, s.user.user_metadata);
+                    loadProfile(s.user.id, s.user.user_metadata).catch(e => console.error(e));
                     // Sync library on auth change (login)
                     fullSync(s.user.id).catch(e => console.warn("[Sync] auth change sync error:", e));
                 } else {
                     setProfile(null);
                 }
-                setLoading(false);
             }
         );
 
