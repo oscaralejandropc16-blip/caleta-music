@@ -328,7 +328,7 @@ async function getVideoMetadata(videoUrl: string): Promise<{ title: string; uplo
     return new Promise((resolve) => {
         execFile(YT_DLP_PATH, [
             "--encoding", "utf8", "--no-playlist", "--no-warnings",
-            "--print", "%(title)s\n%(uploader)s", "--skip-download", videoUrl
+            "--print", "%(title)s", "--print", "%(uploader)s", "--skip-download", videoUrl
         ], { timeout: 15000 }, (error, stdout) => {
             if (error || !stdout.trim()) { resolve({ title: "Enlace Descargado", uploader: "Desconocido" }); return; }
             const lines = stdout.trim().split("\n");

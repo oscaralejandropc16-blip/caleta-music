@@ -102,12 +102,14 @@ async function processResolvedBlob(
     let resolvedCover = track?.artworkUrl100?.replace("100x100", "500x500") || "";
 
     if (!track) {
-        const headerTitle = headers.get("X-Video-Title");
-        const headerArtist = headers.get("X-Video-Artist");
-        const headerCover = headers.get("X-Video-Cover");
+        console.log("[Download] Processing blob headers:", Array.from(headers.entries()));
+        const headerTitle = headers.get("x-video-title");
+        const headerArtist = headers.get("x-video-artist");
+        const headerCover = headers.get("x-video-cover");
         if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
         if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
         if (headerCover) resolvedCover = headerCover;
+        console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
     }
 
     const trackData = {

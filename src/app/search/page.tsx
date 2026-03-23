@@ -190,13 +190,30 @@ export default function SearchPage() {
         try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
         if (isNative) {
+            let realTitle = "Enlace Descargado";
+            let realArtist = "Desconocido";
+            let realCoverUrl = "https://i.ytimg.com/vi/default/hqdefault.jpg";
+
+            try {
+                // Fetch header only to extract actual metadata before executing download
+                const API_URL = "https://caleta-music-production.up.railway.app";
+                const metaRes = await fetch(`${API_URL}/api/download?url=${encodeURIComponent(url)}`, { method: "HEAD" });
+                if (metaRes.headers.has("X-Video-Title")) {
+                    realTitle = decodeURIComponent(metaRes.headers.get("X-Video-Title") || "") || realTitle;
+                    realArtist = decodeURIComponent(metaRes.headers.get("X-Video-Artist") || "") || realArtist;
+                    realCoverUrl = metaRes.headers.get("X-Video-Cover") || realCoverUrl;
+                }
+            } catch (e) {
+                console.warn("Could not pre-fetch metadata for Native Link Download", e);
+            }
+
             const trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/download?url=${encodeURIComponent(url)}&play=true`;
 
             const result = await downloadSong({
                 id: directId,
-                title: "Enlace Descargado",
-                artist: "YouTube",
-                coverUrl: "https://i.ytimg.com/vi/default/hqdefault.jpg",
+                title: realTitle,
+                artist: realArtist,
+                coverUrl: realCoverUrl,
                 downloadUrl: trackDownloadUrl
             });
 
