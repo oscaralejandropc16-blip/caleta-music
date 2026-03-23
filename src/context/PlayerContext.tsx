@@ -303,10 +303,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 isMutedForPauseRef.current = false;
             }
 
-            // Keep Safari PWA and Android native alive during playback
-            if (Capacitor.getPlatform() !== 'ios') {
-                startKeepAwake();
-            }
+            // Keep Webview alive and prevent iOS WKWebView audio routing bugs in background
+            startKeepAwake();
         };
         const onPlaying = () => {
             setIsPlaying(true);
@@ -447,6 +445,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     audio.src = url;
                 }
 
+                // Call load() explicitly. This is crucial for iOS WKWebView 
+                // to correctly prepare the AVPlayerItem for the new src while in background.
+                audio.load();
                 setIsLoading(false);
 
                 try {
