@@ -57,6 +57,7 @@ export async function pullLibraryFromCloud(userId: string): Promise<SavedTrack[]
         if (!data || data.length === 0) return [];
 
         const cloudTracks: SavedTrack[] = [];
+        const { getTrackFromDB } = await import("./db");
 
         for (const row of data) {
             const track: SavedTrack = {
@@ -71,7 +72,6 @@ export async function pullLibraryFromCloud(userId: string): Promise<SavedTrack[]
             };
 
             // Save to local DB if it doesn't exist locally, or preserve blob if it does
-            const { getTrackFromDB } = await import("./db");
             const existing = await getTrackFromDB(track.id);
             if (!existing) {
                 await saveTrackToDB(track);

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePlayer } from "@/context/PlayerContext";
+import { usePlayer, usePlayerTime } from "@/context/PlayerContext";
 import { Play, Pause, SkipForward, SkipBack, Volume2, Volume1, VolumeX, Maximize2, Heart, Loader, Shuffle, Repeat, Mic2, ListMusic, MonitorSpeaker, Plus } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import toast from "react-hot-toast";
@@ -12,7 +12,8 @@ import Link from "next/link";
 import AddToPlaylistModal from "./AddToPlaylistModal";
 
 export default function AudioPlayer() {
-    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, audioRef, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices, isLyricsVisible, toggleLyrics } = usePlayer();
+    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, queue, currentIndex, audioRef, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices, isLyricsVisible, toggleLyrics } = usePlayer();
+    const { progress, duration, seekTo } = usePlayerTime();
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
     const [liked, setLiked] = useState(false);

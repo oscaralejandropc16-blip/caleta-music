@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { usePlayer } from "@/context/PlayerContext";
+import { usePlayer, usePlayerTime } from "@/context/PlayerContext";
 import { X, Mic2, AlertCircle, ChevronDown } from "lucide-react";
 
 export default function LyricsPanel() {
     const {
         currentTrack,
         isLyricsVisible,
-        toggleLyrics,
-        progress,
-        seekTo
+        toggleLyrics
     } = usePlayer();
+
+    const { progress, seekTo } = usePlayerTime();
 
     const [lyrics, setLyrics] = useState<{ time: number; text: string }[] | null>(null);
     const [loading, setLoading] = useState(false);

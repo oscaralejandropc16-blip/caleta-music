@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { usePlayer } from "@/context/PlayerContext";
+import { usePlayer, usePlayerTime } from "@/context/PlayerContext";
 import { Play, Pause, SkipForward, SkipBack, X, Heart, Repeat, Shuffle, ChevronDown, Mic2, ListMusic, MonitorSpeaker } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import { useRouter } from "next/navigation";
@@ -14,7 +14,8 @@ interface FullScreenPlayerProps {
 }
 
 export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerProps) {
-    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, progress, duration, seekTo, queue, currentIndex, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isLyricsVisible, toggleLyrics, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices } = usePlayer();
+    const { currentTrack, isPlaying, isLoading, togglePlay, playNext, playPrev, queue, currentIndex, isShuffle, toggleShuffle, repeatMode, toggleRepeat, isLyricsVisible, toggleLyrics, isQueueVisible, toggleQueue, isDevicesVisible, toggleDevices } = usePlayer();
+    const { progress, duration, seekTo } = usePlayerTime();
     const router = useRouter();
     const [liked, setLiked] = useState(false);
     const [isClient, setIsClient] = useState(false);

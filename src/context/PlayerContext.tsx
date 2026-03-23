@@ -20,9 +20,6 @@ interface PlayerContextType {
     playNext: () => void;
     playPrev: () => void;
     audioRef: React.RefObject<HTMLAudioElement | null>;
-    progress: number;
-    duration: number;
-    seekTo: (time: number) => void;
     isShuffle: boolean;
     repeatMode: 'none' | 'all' | 'one';
     toggleShuffle: () => void;
@@ -38,6 +35,13 @@ interface PlayerContextType {
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
+
+export interface PlayerTimeContextType {
+    progress: number;
+    duration: number;
+    seekTo: (time: number) => void;
+}
+export const PlayerTimeContext = createContext<PlayerTimeContextType | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const [currentTrack, setCurrentTrack] = useState<SavedTrack | null>(null);
@@ -812,37 +816,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <PlayerContext.Provider
-            value={{
-                currentTrack,
-                isPlaying,
-                isLoading,
-                queue,
-                currentIndex,
-                playTrack,
-                togglePlay,
-                playNext,
-                playPrev,
-                audioRef,
-                progress,
-                duration,
-                seekTo,
-                isShuffle,
-                repeatMode,
-                toggleShuffle,
-                toggleRepeat,
-                isQueueVisible,
-                toggleQueue,
-                playQueueIndex,
-                removeFromQueue,
-                isDevicesVisible,
-                toggleDevices,
-                isLyricsVisible,
-                toggleLyrics
-            }}
-        >
-            {children}
-        </PlayerContext.Provider>
+        <PlayerTimeContext.Provider value={{ progress, duration, seekTo }}>
+            <PlayerContext.Provider
+                value={{
+                    currentTrack,
+                    isPlaying,
+                    isLoading,
+                    queue,
+                    currentIndex,
+                    playTrack,
+                    togglePlay,
+                    playNext,
+                    playPrev,
+                    audioRef,
+                    isShuffle,
+                    repeatMode,
+                    toggleShuffle,
+                    toggleRepeat,
+                    isQueueVisible,
+                    toggleQueue,
+                    playQueueIndex,
+                    removeFromQueue,
+                    isDevicesVisible,
+                    toggleDevices,
+                    isLyricsVisible,
+                    toggleLyrics
+                }}
+            >
+                {children}
+            </PlayerContext.Provider>
+        </PlayerTimeContext.Provider>
     );
 }
 
@@ -850,6 +853,14 @@ export function usePlayer() {
     const context = useContext(PlayerContext);
     if (!context) {
         throw new Error("usePlayer must be used within PlayerProvider");
+    }
+    return context;
+}
+
+export function usePlayerTime() {
+    const context = useContext(PlayerTimeContext);
+    if (!context) {
+        throw new Error("usePlayerTime must be used within PlayerProvider");
     }
     return context;
 }
