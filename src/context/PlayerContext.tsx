@@ -303,8 +303,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 isMutedForPauseRef.current = false;
             }
 
-            // Keep Safari PWA alive during playback
-            if (!Capacitor.isNativePlatform()) {
+            // Keep Safari PWA and Android native alive during playback
+            if (Capacitor.getPlatform() !== 'ios') {
                 startKeepAwake();
             }
         };
