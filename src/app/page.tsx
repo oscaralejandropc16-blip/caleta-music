@@ -13,6 +13,8 @@ import Logo from "@/components/Logo";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import OnboardingModal from "@/components/OnboardingModal";
+import { MusicApiService } from "@/lib/nativeHttp";
+import { Capacitor } from "@capacitor/core";
 
 const GENRES = [
   { name: "Pop", color: "from-pink-500 to-rose-600", term: "pop", artists: ["Taylor Swift", "Ariana Grande", "Dua Lipa", "Justin Bieber", "Bruno Mars", "The Weeknd"] },
@@ -294,8 +296,12 @@ export default function Home() {
           recTerm = favoriteArtists[Math.floor(Math.random() * favoriteArtists.length)];
         }
 
-        const recRes = await fetch(`/api/search?term=${encodeURIComponent(recTerm)}`);
-        const recData = await recRes.json();
+        // Usar servidor remoto de Railway si corre en Android APK (Capacitor)
+        let baseUrl = "";
+        try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music-production.up.railway.app"; } catch { }
+
+        // MusicApiService maneja problemas de CORS y peticiones HTTP nativas
+        const recData = await MusicApiService.get(`${baseUrl}/api/search?term=${encodeURIComponent(recTerm)}`);
 
         // Shuffle the results to make it feel fresh every time
         const shuffled = (recData.results || []).sort(() => 0.5 - Math.random());
@@ -379,8 +385,11 @@ export default function Home() {
     setGenreLoading(true);
     try {
       const topArtist = genre.artists[Math.floor(Math.random() * genre.artists.length)];
-      const res = await fetch(`/api/search?term=${encodeURIComponent(topArtist)}`);
-      const data = await res.json();
+
+      let baseUrl = "";
+      try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music-production.up.railway.app"; } catch { }
+
+      const data = await MusicApiService.get(`${baseUrl}/api/search?term=${encodeURIComponent(topArtist)}`);
       setGenreTracks(data.results?.slice(0, 12) || []);
     } catch { setGenreTracks([]); }
     setGenreLoading(false);
