@@ -13,7 +13,7 @@ export default function SettingsPage() {
     const { audioRef } = usePlayer();
 
     const [clearing, setClearing] = useState(false);
-    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState<"local" | "cloud" | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [darkMode, setDarkMode] = useState(true);
     const [notificationsOn, setNotificationsOn] = useState(false);
@@ -32,25 +32,36 @@ export default function SettingsPage() {
         }
     }, []);
 
-    const handleClearStorage = async () => {
+    const handleClearStorage = async (type: "local" | "cloud") => {
         if (clearing) return; // Prevent double click
 
         setClearing(true);
         try {
-            const dbs = await window.indexedDB.databases();
-            dbs.forEach(db => {
-                if (db.name) window.indexedDB.deleteDatabase(db.name);
-            });
-            // También borrar la biblioteca de la nube para que no reaparezcan
-            await clearEntireLibrary();
-            toast.success("Biblioteca limpiada correctamente");
-            setShowClearConfirm(false);
+            const { clearAllLocalData } = await import('@/lib/db');
+            await clearAllLocalData();
+
+            // Delete Capacitor offline preferences if active
+            const { Capacitor } = await import('@capacitor/core');
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+                const { Preferences } = await import('@capacitor/preferences');
+                await Preferences.remove({ key: 'caleta_downloaded_tracks' });
+            }
+
+            if (type === "cloud") {
+                const { clearEntireLibrary } = await import('@/lib/syncLibrary');
+                await clearEntireLibrary();
+                toast.success("Biblioteca completa borrada de la nube", { icon: "🧹" });
+            } else {
+                toast.success("Música local liberada con éxito", { icon: "🧹" });
+            }
+
+            setShowClearConfirm(null);
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
         } catch (err) {
             console.error(err);
-            toast.error("Error al borrar datos locales");
+            toast.error("Error al borrar datos");
         }
         setClearing(false);
     };
@@ -201,12 +212,22 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        <div className={`flex items-center justify-between p-3 rounded-xl transition-colors ${clearing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-500/10 cursor-pointer'} text-brand-400`} onClick={() => !clearing && setShowClearConfirm(true)}>
+                        <div className={`flex items-center justify-between p-3 rounded-xl transition-colors ${clearing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-500/10 cursor-pointer'} text-brand-400`} onClick={() => !clearing && setShowClearConfirm("local")}>
                             <div className="flex items-center gap-4">
-                                <div className="p-2 bg-brand-500/20 rounded-lg"><AlertCircle size={18} /></div>
+                                <div className="p-2 bg-brand-500/20 rounded-lg"><HardDrive size={18} /></div>
                                 <div>
-                                    <p className="font-semibold">{clearing ? "Liberando espacio..." : "Liberar espacio de almacenamiento"}</p>
-                                    <p className="text-xs opacity-70">Elimina las descargas locales (mantendrás tus canciones en la nube)</p>
+                                    <p className="font-semibold text-white">{clearing ? "Liberando espacio..." : "Liberar descargas locales"}</p>
+                                    <p className="text-xs opacity-70">Elimina la música almacenada en este dispositivo (mantiene tu nube intacta)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`flex items-center justify-between p-3 rounded-xl transition-colors ${clearing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500/10 cursor-pointer'} text-red-400`} onClick={() => !clearing && setShowClearConfirm("cloud")}>
+                            <div className="flex items-center gap-4">
+                                <div className="p-2 bg-red-500/20 rounded-lg"><AlertCircle size={18} /></div>
+                                <div>
+                                    <p className="font-semibold">{clearing ? "Eliminando biblioteca..." : "Limpiar biblioteca completa (Nube + Local)"}</p>
+                                    <p className="text-xs opacity-70">Vacía totalmente el almacenamiento local y borra los registros de la nube de tu cuenta</p>
                                 </div>
                             </div>
                         </div>
@@ -235,31 +256,34 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            {/* Custom Confirm Modal */}
-            {showClearConfirm && (
+            {showClearConfirm !== null && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-up">
-                    <div className="bg-slate-900 border border-slate-700/50 rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className={`bg-[#121216] border ${showClearConfirm === "cloud" ? "border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.2)]" : "border-brand-500/30 shadow-[0_0_40px_rgba(99,102,241,0.15)]"} rounded-3xl p-6 md:p-8 max-w-sm w-full relative overflow-hidden`}>
+                        <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${showClearConfirm === "cloud" ? "from-red-600 to-rose-500" : "from-brand-600 to-purple-500"}`}></div>
                         <div className="relative z-10 text-center">
-                            <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-red-500/20">
-                                <AlertCircle size={32} />
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg ${showClearConfirm === "cloud" ? "bg-red-500/20 text-red-500 shadow-red-500/20" : "bg-brand-500/20 text-brand-400 shadow-brand-500/20"}`}>
+                                {showClearConfirm === "cloud" ? <AlertCircle size={32} /> : <HardDrive size={32} />}
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2">¿Liberar espacio?</h3>
+                            <h3 className="text-xl font-bold text-white mb-2">
+                                {showClearConfirm === "cloud" ? "¿Eliminar toda la biblioteca?" : "¿Liberar almacenamiento local?"}
+                            </h3>
                             <p className="text-sm text-slate-400 mb-8">
-                                Las canciones volverán a la nube. Podrás volver a descargarlas o reproducirlas por streaming desde Tu Biblioteca en cualquier momento.
+                                {showClearConfirm === "cloud"
+                                    ? "Esta acción borrará absolutamente todas tus canciones guardadas en este dispositivo Y también de los servidores en la nube de forma permanente."
+                                    : "Las canciones se eliminarán solo de este dispositivo para liberar espacio. Podrás volver a descargarlas gratis desde Tu Biblioteca ya que siguen en la nube."}
                             </p>
                             <div className="flex flex-col gap-3">
                                 <button
-                                    onClick={handleClearStorage}
+                                    onClick={() => handleClearStorage(showClearConfirm)}
                                     disabled={clearing}
-                                    className="w-full py-3.5 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-bold transition-all shadow-[0_0_20px_rgba(239,68,68,0.3)] disabled:opacity-50"
+                                    className={`w-full py-3.5 rounded-xl text-white font-bold transition-all shadow-[0_4px_15px_rgba(0,0,0,0.3)] active:scale-95 disabled:opacity-50 ${showClearConfirm === "cloud" ? "bg-red-500 hover:bg-red-600 shadow-red-500/30" : "bg-brand-500 hover:bg-brand-400 shadow-brand-500/30"}`}
                                 >
-                                    {clearing ? "Borrando..." : "Sí, borrar todo"}
+                                    {clearing ? "Borrando..." : "Sí, borrar ahora"}
                                 </button>
                                 <button
-                                    onClick={() => setShowClearConfirm(false)}
+                                    onClick={() => setShowClearConfirm(null)}
                                     disabled={clearing}
-                                    className="w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-bold transition-all disabled:opacity-50"
+                                    className="w-full py-3.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/5 text-white font-bold transition-all disabled:opacity-50"
                                 >
                                     Cancelar
                                 </button>
