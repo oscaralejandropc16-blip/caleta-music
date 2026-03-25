@@ -21,6 +21,69 @@ export const TOP_ARTISTS = [
     { name: "Travis Scott", image: "https://cdn-images.dzcdn.net/images/artist/8d8316146026d7e6ce377e314536df62/500x500-000000-80-0-0.jpg" },
 ];
 
+export const RELATED_ARTISTS: Record<string, { name: string, image: string }[]> = {
+    "Bad Bunny": [
+        { name: "Jhayco", image: "https://cdns-images.dzcdn.net/images/artist/f19ccfccf2ca98dcebe1ba5e022f4705/500x500.jpg" },
+        { name: "Mora", image: "https://cdns-images.dzcdn.net/images/artist/f19f6a7d6ab6f8e759fc01dc07f0f62d/500x500.jpg" },
+        { name: "Eladio Carrion", image: "https://cdns-images.dzcdn.net/images/artist/3ba74872fdbbf930eb2fd35ed8ae9b70/500x500.jpg" }
+    ],
+    "Taylor Swift": [
+        { name: "Olivia Rodrigo", image: "https://cdns-images.dzcdn.net/images/artist/c6e398d57d54d9c490a618dc2c10b7b1/500x500.jpg" },
+        { name: "Sabrina Carpenter", image: "https://cdns-images.dzcdn.net/images/artist/73397bd3e573a46fb310da725cf9a96e/500x500.jpg" }
+    ],
+    "The Weeknd": [
+        { name: "Bruno Mars", image: "https://cdns-images.dzcdn.net/images/artist/81861ffbf77209ce39fc17294bb81fbe/500x500.jpg" },
+        { name: "Post Malone", image: "https://cdns-images.dzcdn.net/images/artist/fa6e9273c5baea93ebbc29d74f2ac44d/500x500.jpg" }
+    ],
+    "Drake": [
+        { name: "Kendrick Lamar", image: "https://cdns-images.dzcdn.net/images/artist/4dcc98ebf95a32b904fc4fdc088af298/500x500.jpg" },
+        { name: "21 Savage", image: "https://cdns-images.dzcdn.net/images/artist/eab902ebdc16db73d579c8d10b77e8a9/500x500.jpg" }
+    ],
+    "Karol G": [
+        { name: "Becky G", image: "https://cdns-images.dzcdn.net/images/artist/dcb4054a323db014cd7f2b91b92c4cd7/500x500.jpg" },
+        { name: "Natti Natasha", image: "https://cdns-images.dzcdn.net/images/artist/30948c58229bd8dca531dbbb059a41ab/500x500.jpg" }
+    ],
+    "Feid": [
+        { name: "Young Miko", image: "https://cdns-images.dzcdn.net/images/artist/3ff94db3aee57db0b5336e4f4dc1e809/500x500.jpg" },
+        { name: "Blessd", image: "https://cdns-images.dzcdn.net/images/artist/fc6fedfc5cf32df73fac82570d5eeb2c/500x500.jpg" },
+        { name: "Ryan Castro", image: "https://cdns-images.dzcdn.net/images/artist/db8591dd8a49ba4da7d6fabb58e5f22e/500x500.jpg" }
+    ],
+    "Peso Pluma": [
+        { name: "Natanael Cano", image: "https://cdns-images.dzcdn.net/images/artist/6b176ba4e2f8eff94e1fd538805f7ee9/500x500.jpg" },
+        { name: "Fuerza Regida", image: "https://cdns-images.dzcdn.net/images/artist/9e8b7468132d20ddec7f0e34c38d384c/500x500.jpg" },
+        { name: "Junior H", image: "https://cdns-images.dzcdn.net/images/artist/ed018d99815ad700949de48adea24c25/500x500.jpg" }
+    ],
+    "Dua Lipa": [
+        { name: "Miley Cyrus", image: "https://cdns-images.dzcdn.net/images/artist/05aa2e8fa6b8cb738c823acc47f8ba16/500x500.jpg" },
+        { name: "Doja Cat", image: "https://cdns-images.dzcdn.net/images/artist/d88049ad03de80b7c7b700f7457bd751/500x500.jpg" }
+    ],
+    "Shakira": [
+        { name: "Rosalía", image: "https://cdns-images.dzcdn.net/images/artist/1e7e72d216d56df935d88f62f0bafeff/500x500.jpg" },
+        { name: "Manuel Turizo", image: "https://cdns-images.dzcdn.net/images/artist/e5025a1e26deab97f3747cb90b795213/500x500.jpg" }
+    ],
+    "Rauw Alejandro": [
+        { name: "Myke Towers", image: "https://cdns-images.dzcdn.net/images/artist/e0d16be9cebb9fc3eb5086d3ad925916/500x500.jpg" },
+        { name: "Sech", image: "https://cdns-images.dzcdn.net/images/artist/5f9df259ed8ac0dffdc99fde23a2cc7a/500x500.jpg" }
+    ],
+    "J Balvin": [
+        { name: "Maluma", image: "https://cdns-images.dzcdn.net/images/artist/23cbfecb4764b88ba0b8ccbca5f134ee/500x500.jpg" },
+        { name: "Ozuna", image: "https://cdns-images.dzcdn.net/images/artist/5b48bc29d91f8fe738096f9a0c7c3b99/500x500.jpg" },
+        { name: "Daddy Yankee", image: "https://cdns-images.dzcdn.net/images/artist/5610e7b8da46cfed1b3ef25dc8eb66b5/500x500.jpg" }
+    ],
+    "Billie Eilish": [
+        { name: "Lana Del Rey", image: "https://cdns-images.dzcdn.net/images/artist/31ad34df223a5cfc5c7de334d2847fb8/500x500.jpg" },
+        { name: "Conan Gray", image: "https://cdns-images.dzcdn.net/images/artist/80a22fffd03bcff4b2450302bded462e/500x500.jpg" }
+    ],
+    "Ed Sheeran": [
+        { name: "Shawn Mendes", image: "https://cdns-images.dzcdn.net/images/artist/77b85cdd6a4b2bb7dccfb06bb3933c04/500x500.jpg" },
+        { name: "Justin Bieber", image: "https://cdns-images.dzcdn.net/images/artist/b62145e69e061ddbcda7c20c02741541/500x500.jpg" }
+    ],
+    "Aventura": [
+        { name: "Romeo Santos", image: "https://cdns-images.dzcdn.net/images/artist/e0338ddf59bd6acfa450dbeb11ceaa84/500x500.jpg" },
+        { name: "Prince Royce", image: "https://cdns-images.dzcdn.net/images/artist/2aa5de5076135ddc8a14ec8d0672e816/500x500.jpg" }
+    ]
+};
+
 export default function OnboardingModal({
     userId,
     onComplete
@@ -29,13 +92,31 @@ export default function OnboardingModal({
     onComplete: (selectedArtists: string[]) => void
 }) {
     const [selected, setSelected] = useState<string[]>([]);
+    const [availableArtists, setAvailableArtists] = useState<{ name: string, image: string }[]>(TOP_ARTISTS);
 
     const toggleArtist = (name: string) => {
-        setSelected(prev =>
-            prev.includes(name)
-                ? prev.filter(n => n !== name)
-                : [...prev, name]
-        );
+        setSelected(prev => {
+            const isNowSelected = !prev.includes(name);
+            const newSelected = isNowSelected ? [...prev, name] : prev.filter(n => n !== name);
+
+            // Dinámica al estilo Spotify: Mostrar artistas similares inmediatamente tras seleccionar
+            if (isNowSelected && RELATED_ARTISTS[name]) {
+                setAvailableArtists(currentArtists => {
+                    const existingNames = new Set(currentArtists.map(a => a.name));
+                    const toAdd = RELATED_ARTISTS[name].filter(r => !existingNames.has(r.name));
+
+                    if (toAdd.length === 0) return currentArtists;
+
+                    // Insertarlas justo después del artista clickeado
+                    const clickedIndex = currentArtists.findIndex(a => a.name === name);
+                    const newArr = [...currentArtists];
+                    newArr.splice(clickedIndex + 1, 0, ...toAdd);
+                    return newArr;
+                });
+            }
+
+            return newSelected;
+        });
     };
 
     const handleSave = () => {
@@ -70,13 +151,13 @@ export default function OnboardingModal({
                 {/* Body / Grid */}
                 <div className="p-6 md:p-8 overflow-y-auto flex-1 z-10 custom-scrollbar">
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 md:gap-6">
-                        {TOP_ARTISTS.map(artist => {
+                        {availableArtists.map((artist, idx) => {
                             const isSelected = selected.includes(artist.name);
                             return (
                                 <button
-                                    key={artist.name}
+                                    key={`${artist.name}-${idx}`}
                                     onClick={() => toggleArtist(artist.name)}
-                                    className={`group flex flex-col items-center gap-3 transition-all duration-300 outline-none active:scale-95 ${isSelected ? "opacity-100 scale-105" : "opacity-70 hover:opacity-100"
+                                    className={`group flex flex-col items-center gap-3 transition-all duration-300 outline-none active:scale-95 animate-scale-up ${isSelected ? "opacity-100 scale-105" : "opacity-70 hover:opacity-100"
                                         }`}
                                 >
                                     <div className="relative w-full aspect-square">
