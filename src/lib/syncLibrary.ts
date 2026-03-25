@@ -102,12 +102,22 @@ export async function clearEntireLibrary() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return;
 
-        await supabase
+        const { error: err1 } = await supabase
             .from('user_library')
             .delete()
             .eq('user_id', session.user.id);
-    } catch {
-        // Ignore
+
+        if (err1) console.error("Error wiping user_library:", err1);
+
+        const { error: err2 } = await supabase
+            .from('user_playlists')
+            .delete()
+            .eq('user_id', session.user.id);
+
+        if (err2) console.error("Error wiping user_playlists:", err2);
+    } catch (err) {
+        console.error("Critical error wiping library:", err);
+        throw err;
     }
 }
 

@@ -40,11 +40,12 @@ export default function SettingsPage() {
             const { clearAllLocalData } = await import('@/lib/db');
             await clearAllLocalData();
 
-            // Delete Capacitor offline preferences if active
-            const { Capacitor } = await import('@capacitor/core');
-            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+            // Delete Capacitor offline preferences always (it falls back to localStorage on Web)
+            try {
                 const { Preferences } = await import('@capacitor/preferences');
                 await Preferences.remove({ key: 'caleta_downloaded_tracks' });
+            } catch (prefErr) {
+                console.warn("Could not clear Preferences:", prefErr);
             }
 
             if (type === "cloud") {
