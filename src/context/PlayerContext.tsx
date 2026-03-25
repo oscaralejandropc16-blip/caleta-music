@@ -280,6 +280,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onPause = () => {
             setIsPlaying(false);
             updateMediaSessionPlaybackState(false);
+            stopKeepAwake(); // Dually important to release the lock on background audio so MediaSession routing behaves!
         };
         const onPlay = () => {
             setIsPlaying(true);
