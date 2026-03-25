@@ -214,34 +214,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 console.warn("Capacitor MediaSession listener error:", e);
             }
         } else if ('mediaSession' in navigator) {
-            // Detect Safari for mute-instead-of-pause trick
-            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
-                /iPad|iPhone|iPod/.test(navigator.userAgent);
-
             navigator.mediaSession.setActionHandler('play', () => {
                 if (!audioRef.current) return;
-                if (isMutedForPauseRef.current) {
-                    // We muted instead of pausing — restore volume
-                    audioRef.current.volume = userVolumeRef.current;
-                    isMutedForPauseRef.current = false;
-                    setIsPlaying(true);
-                    updateMediaSessionPlaybackState(true);
-                } else if (audioRef.current.paused) {
+                if (audioRef.current.paused) {
                     audioRef.current.play().catch(console.warn);
                 }
             });
             navigator.mediaSession.setActionHandler('pause', () => {
                 if (!audioRef.current || audioRef.current.paused) return;
-                if (isSafari && document.hidden) {
-                    // Safari PWA + screen locked: mute instead of pause to keep audio session alive
-                    userVolumeRef.current = audioRef.current.volume || 1;
-                    audioRef.current.volume = 0;
-                    isMutedForPauseRef.current = true;
-                    setIsPlaying(false);
-                    updateMediaSessionPlaybackState(false);
-                } else {
-                    audioRef.current.pause();
-                }
+                audioRef.current.pause();
             });
             navigator.mediaSession.setActionHandler('previoustrack', () => {
                 if (audioRef.current) audioRef.current.play().catch(() => { });
