@@ -196,7 +196,7 @@ export default function Home() {
   const { playTrack } = usePlayer();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [favoriteArtists, setFavoriteArtists] = useState<string[] | null>(null);
+  const [favoriteArtists, setFavoriteArtists] = useState<string[] | null | undefined>(undefined);
 
   useEffect(() => {
     if (authLoading) return;

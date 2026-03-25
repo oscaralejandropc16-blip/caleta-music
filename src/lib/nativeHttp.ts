@@ -34,7 +34,7 @@ export const MusicApiService = {
             return response.data;
         } else {
             // Navegador web: fetch estándar
-            const urlObj = new URL(url);
+            const urlObj = new URL(url, window.location.origin);
             if (params) {
                 Object.entries(params).forEach(([k, v]) => urlObj.searchParams.set(k, v));
             }
