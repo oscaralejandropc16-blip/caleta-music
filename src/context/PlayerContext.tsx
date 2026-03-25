@@ -194,8 +194,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         audioRef.current.pause();
                     }
                 });
-                MediaSession.setActionHandler({ action: 'previoustrack' }, () => playPrev());
-                MediaSession.setActionHandler({ action: 'nexttrack' }, () => playNext());
+                MediaSession.setActionHandler({ action: 'previoustrack' }, () => {
+                    if (audioRef.current) audioRef.current.play().catch(() => { });
+                    playPrev();
+                });
+                MediaSession.setActionHandler({ action: 'nexttrack' }, () => {
+                    if (audioRef.current) audioRef.current.play().catch(() => { });
+                    playNext();
+                });
                 MediaSession.setActionHandler({ action: 'seekforward' }, null); // Disable to force prev/next icons on iOS
                 MediaSession.setActionHandler({ action: 'seekbackward' }, null); // Disable to force prev/next icons on iOS
                 MediaSession.setActionHandler({ action: 'seekto' }, (details) => {
@@ -237,8 +243,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     audioRef.current.pause();
                 }
             });
-            navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
-            navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                if (audioRef.current) audioRef.current.play().catch(() => { });
+                playPrev();
+            });
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                if (audioRef.current) audioRef.current.play().catch(() => { });
+                playNext();
+            });
             try {
                 navigator.mediaSession.setActionHandler('seekforward', null);
                 navigator.mediaSession.setActionHandler('seekbackward', null);
@@ -397,8 +409,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            // Detener el track anterior inmediatamente al cambiar de canción
-            audioRef.current.pause();
+            // Evitamos llamar a audioRef.current.pause() explícitamente!
+            // En iOS Safari/WKWebView, pausar el audio en segundo plano puede
+            // suspender inmediatamente el hilo de JS, cortando la siguiente canción.
             setIsPlaying(false);
 
             // Actualizar ref y resetear retry FLAG cuando cambia el track
@@ -619,19 +632,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const playTrack = async (track: SavedTrack, newQueue?: SavedTrack[]) => {
         isReadyToPlayRef.current = true; // Activar reproducción si es accion del usuario
 
-        // Reset progress visually immediately to prevent old track's progress bleeding
-        setProgress(0);
-        setDuration(0);
-
         // Reset mute state for new track to ensure sound is heard on Safari background skip
         isMutedForPauseRef.current = false;
         if (audioRef.current) {
             audioRef.current.volume = userVolumeRef.current || 1;
-            // Also ensure it's not actually paused if we're coming from a muted-pause
-            if (audioRef.current.paused && isReadyToPlayRef.current) {
+            // Mantener el elemento en estado "playing" para evadir límites de background
+            if (audioRef.current.paused) {
                 audioRef.current.play().catch(() => { });
             }
         }
+
+        // Reset progress visually immediately to prevent old track's progress bleeding
+        setProgress(0);
+        setDuration(0);
 
         const resolvedTrack = await resolveLocalTrack(track);
 
@@ -684,9 +697,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         isReadyToPlayRef.current = true; // El usuario quiere pasar la pista (o auto avance)
         if (queue.length === 0) return;
 
-        // Reset mute state for new track
+        // Reset mute state for new track y forzar play síncrono para mantener vivo JS en background
         isMutedForPauseRef.current = false;
-        if (audioRef.current) audioRef.current.volume = userVolumeRef.current || 1;
+        if (audioRef.current) {
+            audioRef.current.volume = userVolumeRef.current || 1;
+            if (audioRef.current.paused) audioRef.current.play().catch(() => { });
+        }
 
         // Si es avance automático y está en 'one', repetir la canción
         if (autoAdvance && repeatMode === 'one' && audioRef.current) {
@@ -742,6 +758,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const playPrev = () => {
         isReadyToPlayRef.current = true;
         if (queue.length === 0) return;
+
+        // Forzar play síncrono para mantener vivo JS en background
+        if (audioRef.current) {
+            audioRef.current.volume = userVolumeRef.current || 1;
+            if (audioRef.current.paused) audioRef.current.play().catch(() => { });
+        }
 
         // Si la canción ha avanzado más de 3 segundos, reiniciar la actual
         if (audioRef.current && audioRef.current.currentTime > 3) {
