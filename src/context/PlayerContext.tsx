@@ -56,8 +56,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const hasRetriedRef = useRef(false);
     const isReadyToPlayRef = useRef(false); // Prevents auto-play on initial load
     const mediaSessionHandlersRegistered = useRef(false); // Only register once
-    const userVolumeRef = useRef(1); // Track the user's desired volume for Safari mute/unmute trick
-    const isMutedForPauseRef = useRef(false); // Whether we're using the mute-instead-of-pause trick
+
+    // Background PWA Suspend Hack references
+    const isMutedForPauseRef = useRef(false);
+    const userVolumeRef = useRef(1);
+    const fakePauseTimeRef = useRef<number | null>(null);
 
     // New states for shuffle, repeat and queue
     const [isShuffle, setIsShuffle] = useState(false);
@@ -216,13 +219,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         } else if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => {
                 if (!audioRef.current) return;
-                if (audioRef.current.paused) {
+
+                if (isMutedForPauseRef.current) {
+                    // Background Pseudo-pause resume
+                    audioRef.current.muted = false;
+                    audioRef.current.loop = (repeatMode === 'one');
+                    isMutedForPauseRef.current = false;
+
+                    if (fakePauseTimeRef.current !== null) {
+                        audioRef.current.currentTime = fakePauseTimeRef.current;
+                        setProgress(fakePauseTimeRef.current);
+                        fakePauseTimeRef.current = null;
+                    }
+                    setIsPlaying(true);
+                    updateMediaSessionPlaybackState(true);
+                } else if (audioRef.current.paused) {
                     audioRef.current.play().catch(console.warn);
                 }
             });
             navigator.mediaSession.setActionHandler('pause', () => {
                 if (!audioRef.current || audioRef.current.paused) return;
-                audioRef.current.pause();
+
+                if (document.hidden) {
+                    // Mobile PWA Suspend Prevention Hack
+                    // Pausing physically kills JS context. Instead, we mute and loop it endlessly,
+                    // tracking the timestamp to rewind it silently when the user hits 'play'.
+                    fakePauseTimeRef.current = audioRef.current.currentTime;
+                    audioRef.current.muted = true;
+                    audioRef.current.loop = true;
+                    isMutedForPauseRef.current = true;
+
+                    setIsPlaying(false);
+                    updateMediaSessionPlaybackState(false);
+                } else {
+                    audioRef.current.pause();
+                }
             });
             navigator.mediaSession.setActionHandler('previoustrack', () => {
                 if (audioRef.current) audioRef.current.play().catch(() => { });
@@ -257,13 +288,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
         const audio = audioRef.current;
 
-        const onTimeUpdate = () => setProgress(audio.currentTime);
+        const onTimeUpdate = () => {
+            if (isMutedForPauseRef.current) return; // Freeze UI progress while pseudo-paused
+            setProgress(audio.currentTime);
+        };
         const onLoadedMetadata = () => setDuration(audio.duration);
 
         // Detección de corte prematuro: si el track termina a <50% de la duración
         // reportada, significa que el archivo descargado está incompleto.
         // En ese caso, re-streamear desde la API automáticamente.
         const onEnded = () => {
+            if (isMutedForPauseRef.current) return; // Ignore ended events while aggressively looping in background hack
+
             const track = currentTrackRef.current;
             const actualTime = audio.currentTime;
             const reportedDuration = audio.duration;
@@ -294,9 +330,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             setIsPlaying(true);
             updateMediaSessionPlaybackState(true);
 
-            // Safari PWA Background fix: Ensure volume is up when track starts
-            if (audioRef.current && (isMutedForPauseRef.current || audioRef.current.volume === 0)) {
-                audioRef.current.volume = userVolumeRef.current || 1;
+            // Safari PWA Background restore: In case physical pause bypassed our hack
+            if (audioRef.current && isMutedForPauseRef.current) {
+                audioRef.current.muted = false;
+                audioRef.current.loop = (repeatMode === 'one');
                 isMutedForPauseRef.current = false;
             }
 
@@ -308,9 +345,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(false);
             updateMediaSessionPlaybackState(true);
 
-            // Re-force volume on playing event for background track changes
-            if (audioRef.current && (isMutedForPauseRef.current || audioRef.current.volume === 0)) {
-                audioRef.current.volume = userVolumeRef.current || 1;
+            if (audioRef.current && isMutedForPauseRef.current) {
+                audioRef.current.muted = false;
+                audioRef.current.loop = (repeatMode === 'one');
                 isMutedForPauseRef.current = false;
             }
         };
