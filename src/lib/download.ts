@@ -1,10 +1,7 @@
 import { saveTrackToDB, SavedTrack } from "./db";
 import { addSongToLibrary } from "./syncLibrary";
 
-// Base URL del servidor con las API routes (Railway production o Localhost)
-const API_BASE = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? ""
-    : "https://caleta-music-production.up.railway.app";
+
 
 export interface ItunesTrack {
     trackId: number;
@@ -141,16 +138,22 @@ export const downloadAndSaveTrack = async (
     onComplete?: () => void
 ): Promise<DownloadResult> => {
     try {
+        // Use absolute URL for Native Capacitor (Android) since it cannot resolve relative paths,
+        // otherwise use relative "" to hit the same server (works on localhost, Wi-Fi PWA, and Prod).
+        let isNative = false;
+        try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
+
+        const runtimeApiBase = isNative ? "https://caleta-music-production.up.railway.app" : "";
         let downloadUrl = "";
 
         if (track) {
             if ((track as any)._source === 'deezer' && track.trackId) {
-                downloadUrl = `${API_BASE}/api/deezer?id=${track.trackId}`;
+                downloadUrl = `${runtimeApiBase}/api/deezer?id=${track.trackId}`;
             } else {
-                downloadUrl = `${API_BASE}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                downloadUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
         } else if (url) {
-            downloadUrl = `${API_BASE}/api/download?url=${encodeURIComponent(url)}`;
+            downloadUrl = `${runtimeApiBase}/api/download?url=${encodeURIComponent(url)}`;
         } else {
             return { success: false, error: "No se proporcionó canción ni URL" };
         }
@@ -191,7 +194,7 @@ export const downloadAndSaveTrack = async (
                 if (onProgress) onProgress(30);
 
                 try {
-                    const fallbackUrl = `${API_BASE}/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const fallbackUrl = `${runtimeApiBase}/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
                     const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
 
                     await processResolvedBlob(blob, headers, track, url, id);
@@ -212,7 +215,7 @@ export const downloadAndSaveTrack = async (
                 if (onProgress) onProgress(30);
 
                 try {
-                    const dzFallbackUrl = `${API_BASE}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
                     const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
 
                     await processResolvedBlob(blob, headers, track, url, id);
