@@ -7,6 +7,17 @@ import { execFile } from "child_process";
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 204,
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Range",
+        }
+    });
+}
+
 const md5 = (data: string | number) => crypto.createHash('md5').update(data.toString()).digest('hex');
 
 const getBlowfishKey = (trackId: string | number) => {
@@ -57,7 +68,7 @@ async function initializeDeezer(forceReinit = false) {
             console.warn(`[Deezer] ARL length is ${arlToUse.length}, truncating to 192 characters to satisfy d-fi-core limits.`);
             arlToUse = arlToUse.substring(0, 192);
         }
-        
+
         console.log("[Deezer] Initializing with ARL prefix:", arlToUse.substring(0, 15) + "...");
         try {
             await dfi.initDeezerApi(arlToUse);

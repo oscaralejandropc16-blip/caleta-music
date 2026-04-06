@@ -8,6 +8,25 @@ import ytdl from "@distube/ytdl-core";
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+// CORS headers for cross-origin requests (Netlify → Railway)
+const CORS_HEADERS: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Range",
+    "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length, Content-Range",
+};
+
+function withCors(response: NextResponse | Response): NextResponse {
+    const res = response instanceof NextResponse ? response : new NextResponse(response.body, response);
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.headers.set(k, v));
+    return res;
+}
+
+// Handle CORS preflight
+export async function OPTIONS() {
+    return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 // Detectar yt-dlp: Windows local (.exe) o Linux/Railway (/usr/local/bin/yt-dlp)
 const YT_DLP_PATH = os.platform() === "win32"
     ? path.join(process.cwd(), "yt-dlp.exe")
@@ -455,10 +474,11 @@ async function proxyAudioStream(request: NextRequest, result: { audioUrl: string
         const contentRange = streamRes.headers.get("Content-Range");
         if (contentRange) responseHeaders["Content-Range"] = contentRange;
 
-        return new NextResponse(streamRes.body, {
+        const streamResponse = new NextResponse(streamRes.body, {
             status: streamRes.status === 206 ? 206 : 200,
             headers: responseHeaders
         });
+        return withCors(streamResponse);
     } catch (err: any) {
         console.error(`[Download] Proxy stream error: ${err.message}`);
         return NextResponse.json({ error: err.message || "Failed to proxy stream" }, { status: 500 });
@@ -474,7 +494,7 @@ export async function GET(request: NextRequest) {
     const directUrl = searchParams.get("url");
 
     if (!title && !artist && !directUrl) {
-        return NextResponse.json({ error: "No params provided" }, { status: 400 });
+        return withCors(NextResponse.json({ error: "No params provided" }, { status: 400 }));
     }
 
     try {
@@ -510,7 +530,7 @@ export async function GET(request: NextRequest) {
                                     else rej(new Error("no stream url"));
                                 });
                             });
-                            return NextResponse.redirect(streamUrlRes);
+                            return withCors(NextResponse.redirect(streamUrlRes));
                         }
 
                         const [{ filePath, contentType }, metadata] = await Promise.all([
@@ -520,7 +540,7 @@ export async function GET(request: NextRequest) {
                         const fileBuffer = fs.readFileSync(filePath);
                         try { fs.unlinkSync(filePath); } catch { }
 
-                        return new NextResponse(fileBuffer, {
+                        return withCors(new NextResponse(fileBuffer, {
                             status: 200,
                             headers: {
                                 "Content-Type": contentType,
@@ -528,9 +548,8 @@ export async function GET(request: NextRequest) {
                                 "X-Video-Title": encodeURIComponent(metadata.title),
                                 "X-Video-Artist": encodeURIComponent(metadata.uploader),
                                 "X-Video-Cover": `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                                "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
                             },
-                        });
+                        }));
                     } catch (ytdlpErr: any) {
                         console.warn(`[Download] yt-dlp failed: ${ytdlpErr.message}`);
                     }
@@ -571,14 +590,14 @@ export async function GET(request: NextRequest) {
                     });
 
                     const isPlay = searchParams.get("play") === "true";
-                    if (isPlay) return NextResponse.redirect(searchResult.streamUrl);
+                    if (isPlay) return withCors(NextResponse.redirect(searchResult.streamUrl));
 
                     const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
                     const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
                     const fileBuffer = fs.readFileSync(filePath);
                     try { fs.unlinkSync(filePath); } catch { }
 
-                    return new NextResponse(fileBuffer, {
+                    return withCors(new NextResponse(fileBuffer, {
                         status: 200,
                         headers: {
                             "Content-Type": contentType,
@@ -586,9 +605,8 @@ export async function GET(request: NextRequest) {
                             "X-Video-Title": encodeURIComponent(searchResult.title),
                             "X-Video-Artist": encodeURIComponent(searchResult.uploader),
                             "X-Video-Cover": `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`,
-                            "Access-Control-Expose-Headers": "X-Video-Title, X-Video-Artist, X-Video-Cover",
                         },
-                    });
+                    }));
                 } catch (err: any) {
                     console.warn(`[Download] Search query with yt-dlp failed: ${err.message}`);
                 }
@@ -623,19 +641,19 @@ export async function GET(request: NextRequest) {
             try {
                 const response = await fetch(directUrl);
                 if (!response.ok) return NextResponse.json({ error: "Fetch failed" }, { status: response.status });
-                return new NextResponse(response.body, {
+                return withCors(new NextResponse(response.body, {
                     status: 200,
                     headers: { "Content-Type": response.headers.get("Content-Type") || "audio/mpeg" },
-                });
+                }));
             } catch (err: any) {
                 console.error(`[Download] Direct link fetch failed: ${err.message}`);
             }
         }
 
-        return NextResponse.json({ error: "No valid parameters or all download methods failed" }, { status: 400 });
+        return withCors(NextResponse.json({ error: "No valid parameters or all download methods failed" }, { status: 400 }));
 
     } catch (error: any) {
         console.error("[Download] Critical Error:", error);
-        return NextResponse.json({ error: error.message || "Failed to download" }, { status: 500 });
+        return withCors(NextResponse.json({ error: error.message || "Failed to download" }, { status: 500 }));
     }
 }

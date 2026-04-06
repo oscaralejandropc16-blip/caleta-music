@@ -15,6 +15,19 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  async headers() {
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Range, Authorization" },
+          { key: "Access-Control-Expose-Headers", value: "X-Video-Title, X-Video-Artist, X-Video-Cover, Content-Length, Content-Range" }
+        ]
+      }
+    ];
+  }
 };
 
 export default nextConfig;
