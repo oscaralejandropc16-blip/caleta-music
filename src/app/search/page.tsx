@@ -195,13 +195,20 @@ export default function SearchPage() {
             let realCoverUrl = "https://i.ytimg.com/vi/default/hqdefault.jpg";
 
             try {
-                // Fetch header only to extract actual metadata before executing download
+                // Fetch with minimal Range to extract actual metadata headers before download
                 const API_URL = "https://caleta-music-production.up.railway.app";
-                const metaRes = await fetch(`${API_URL}/api/download?url=${encodeURIComponent(url)}`, { method: "HEAD" });
-                if (metaRes.headers.has("X-Video-Title")) {
-                    realTitle = decodeURIComponent(metaRes.headers.get("X-Video-Title") || "") || realTitle;
-                    realArtist = decodeURIComponent(metaRes.headers.get("X-Video-Artist") || "") || realArtist;
-                    realCoverUrl = metaRes.headers.get("X-Video-Cover") || realCoverUrl;
+                const metaRes = await fetch(`${API_URL}/api/download?url=${encodeURIComponent(url)}`, {
+                    method: "GET",
+                    headers: { "Range": "bytes=0-0" },
+                    signal: AbortSignal.timeout(20000)
+                });
+                const hTitle = metaRes.headers.get("x-video-title");
+                const hArtist = metaRes.headers.get("x-video-artist");
+                const hCover = metaRes.headers.get("x-video-cover");
+                if (hTitle) {
+                    realTitle = decodeURIComponent(hTitle) || realTitle;
+                    realArtist = hArtist ? decodeURIComponent(hArtist) : realArtist;
+                    realCoverUrl = hCover || realCoverUrl;
                 }
             } catch (e) {
                 console.warn("Could not pre-fetch metadata for Native Link Download", e);

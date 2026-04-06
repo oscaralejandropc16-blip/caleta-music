@@ -155,12 +155,14 @@ export const downloadAndSaveTrack = async (
     onComplete?: () => void
 ): Promise<DownloadResult> => {
     try {
-        // Use absolute URL for Native Capacitor (Android) since it cannot resolve relative paths,
-        // otherwise use relative "" to hit the same server (works on localhost, Wi-Fi PWA, and Prod).
+        // Use absolute URL for Native Capacitor (Android) since it cannot resolve relative paths.
+        // For YouTube downloads, ALWAYS use Railway since it has yt-dlp installed.
+        // Netlify serverless functions lack yt-dlp and rely on unreliable third-party proxies.
         let isNative = false;
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
-        const runtimeApiBase = isNative ? "https://caleta-music-production.up.railway.app" : "";
+        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+        const runtimeApiBase = isNative ? RAILWAY_API : "";
         let downloadUrl = "";
 
         if (track) {
@@ -170,7 +172,8 @@ export const downloadAndSaveTrack = async (
                 downloadUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
         } else if (url) {
-            downloadUrl = `${runtimeApiBase}/api/download?url=${encodeURIComponent(url)}`;
+            // YouTube downloads ALWAYS go through Railway (has yt-dlp)
+            downloadUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(url)}`;
         } else {
             return { success: false, error: "No se proporcionó canción ni URL" };
         }
@@ -192,33 +195,10 @@ export const downloadAndSaveTrack = async (
 
         let deezerError = "";
 
-        // Pre-fetch metadata via a quick request before chunked download
-        // This is important because Range-based chunked downloads on Netlify/CDN
-        // may strip custom X-Video-* headers from subsequent responses
+        // Note: No pre-fetch needed since YouTube downloads now go through Railway 
+        // which has yt-dlp and reliably includes X-Video-* headers in the response.
+        // fetchWithChunks captures firstHeaders from the first response.
         let prefetchedMeta: { title?: string; artist?: string; cover?: string } | undefined;
-        if (!track && url) {
-            try {
-                console.log("[Download] Pre-fetching metadata via quick request...");
-                const metaRes = await fetch(downloadUrl, {
-                    method: "GET",
-                    headers: { "Range": "bytes=0-0" },
-                    signal: AbortSignal.timeout(12000)
-                });
-                const hTitle = metaRes.headers.get("x-video-title");
-                const hArtist = metaRes.headers.get("x-video-artist");
-                const hCover = metaRes.headers.get("x-video-cover");
-                if (hTitle) {
-                    prefetchedMeta = {
-                        title: decodeURIComponent(hTitle),
-                        artist: hArtist ? decodeURIComponent(hArtist) : undefined,
-                        cover: hCover || undefined
-                    };
-                    console.log(`[Download] Pre-fetched: ${prefetchedMeta.title} - ${prefetchedMeta.artist}`);
-                }
-            } catch (e) {
-                console.warn("[Download] Pre-fetch metadata failed (non-critical):", e);
-            }
-        }
 
         try {
             const { blob, headers } = await fetchWithChunks(downloadUrl, controller, onProgress);
