@@ -50,7 +50,14 @@ async function initializeDeezer(forceReinit = false) {
     const dfi = await import("d-fi-core");
     const now = Date.now();
     if (!isDeezerInitialized || forceReinit || (now - lastInitTime > REINIT_INTERVAL_MS)) {
-        const arlToUse = (process.env.DEEZER_ARL || DEEZER_ARL).trim();
+        let arlToUse = (process.env.DEEZER_ARL || DEEZER_ARL).trim();
+        // Fallback: If ARL is mysteriously longer than 192 chars (e.g. 233 chars), we truncate it.
+        // Some browsers add extra cookie padding or users copy extra text by mistake.
+        if (arlToUse.length > 192) {
+            console.warn(`[Deezer] ARL length is ${arlToUse.length}, truncating to 192 characters to satisfy d-fi-core limits.`);
+            arlToUse = arlToUse.substring(0, 192);
+        }
+        
         console.log("[Deezer] Initializing with ARL prefix:", arlToUse.substring(0, 15) + "...");
         try {
             await dfi.initDeezerApi(arlToUse);

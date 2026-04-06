@@ -3,6 +3,7 @@ import { execFile } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import ytdl from "@distube/ytdl-core";
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -318,7 +319,26 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    throw new Error("Failed to resolve audio URL from all available proxies");
+    // ULTÍMO FALLBACK: Usar @distube/ytdl-core (Nativo de Node, ideal para Netlify)
+    try {
+        console.log(`[Download] Try ytdl-core fallback for videoId: ${videoId}`);
+        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const info = await ytdl.getInfo(ytUrl);
+        const format = ytdl.chooseFormat(info.formats, { quality: "highestaudio", filter: "audioonly" });
+        if (format && format.url) {
+            return {
+                audioUrl: format.url,
+                contentType: format.mimeType?.split(";")[0] || "audio/mp4",
+                title: info.videoDetails?.title || "Enlace Descargado",
+                artist: info.videoDetails?.author?.name || "Desconocido",
+                coverUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+            };
+        }
+    } catch (ytdlErr: any) {
+        console.error(`[Download] ytdl-core failed: ${ytdlErr.message}`);
+    }
+
+    throw new Error("Failed to resolve audio URL from all available proxies and ytdl-core");
 }
 
 // ============== YT-DLP (LOCAL/WINDOWS) ==============
@@ -580,6 +600,20 @@ export async function GET(request: NextRequest) {
                 return await proxyAudioStream(request, result);
             } catch (err: any) {
                 console.error(`[Download] Search query fallback failed: ${err.message}`);
+            }
+
+            // Last Fallback: yt-search + ytdl-core (Netlify safe)
+            try {
+                console.log(`[Download] Try yt-search fallback for query: ${query}`);
+                const yts = (await import("yt-search")).default;
+                const r = await yts(query);
+                const firstVideo = r?.videos?.[0];
+                if (firstVideo && firstVideo.videoId) {
+                    const result = await resolveVideoAudioUrl(firstVideo.videoId);
+                    return await proxyAudioStream(request, result);
+                }
+            } catch (err: any) {
+                console.error(`[Download] yt-search fallback failed: ${err.message}`);
             }
         }
 
