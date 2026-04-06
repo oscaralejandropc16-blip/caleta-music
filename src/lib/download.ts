@@ -92,21 +92,41 @@ async function processResolvedBlob(
     headers: Headers,
     track: ItunesTrack | null,
     url: string | null,
-    id: string
+    id: string,
+    prefetchedMeta?: { title?: string; artist?: string; cover?: string }
 ): Promise<boolean> {
     let resolvedTitle = track?.trackName || "Enlace Descargado";
     let resolvedArtist = track?.artistName || "Desconocido";
     let resolvedCover = track?.artworkUrl100?.replace("100x100", "500x500") || "";
 
     if (!track) {
-        console.log("[Download] Processing blob headers:", Array.from(headers.entries()));
-        const headerTitle = headers.get("x-video-title");
-        const headerArtist = headers.get("x-video-artist");
-        const headerCover = headers.get("x-video-cover");
-        if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
-        if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
-        if (headerCover) resolvedCover = headerCover;
-        console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
+        // 1. Try pre-fetched metadata first (from HEAD request)
+        if (prefetchedMeta?.title && prefetchedMeta.title !== "Enlace Descargado") {
+            resolvedTitle = prefetchedMeta.title;
+            resolvedArtist = prefetchedMeta.artist || resolvedArtist;
+            resolvedCover = prefetchedMeta.cover || resolvedCover;
+            console.log(`[Download] Using pre-fetched metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}`);
+        } else {
+            // 2. Fallback to response headers from the download stream
+            console.log("[Download] Processing blob headers:", Array.from(headers.entries()));
+            const headerTitle = headers.get("x-video-title");
+            const headerArtist = headers.get("x-video-artist");
+            const headerCover = headers.get("x-video-cover");
+            if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
+            if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
+            if (headerCover) resolvedCover = headerCover;
+            console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
+        }
+    }
+
+    // Build a functional streamUrl that can be used to re-stream this track later
+    let streamUrl = "";
+    if (track) {
+        // For iTunes/Deezer tracks, point to the Deezer API
+        streamUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
+    } else if (url) {
+        // For YouTube/direct links, point to the download API with the original URL
+        streamUrl = `https://caleta-music-production.up.railway.app/api/download?url=${encodeURIComponent(url)}`;
     }
 
     const trackData = {
@@ -115,13 +135,10 @@ async function processResolvedBlob(
         artist: resolvedArtist,
         album: track?.collectionName || "",
         coverUrl: resolvedCover,
+        streamUrl,
     };
 
-    const sourceUrlToSave = url || (track
-        ? `https://itunes.apple.com/search?term=${encodeURIComponent(track.trackName + " " + track.artistName)}`
-        : "");
-
-    await addSongToLibrary(trackData, sourceUrlToSave, blob);
+    await addSongToLibrary(trackData, streamUrl, blob);
     return true;
 }
 
@@ -175,12 +192,40 @@ export const downloadAndSaveTrack = async (
 
         let deezerError = "";
 
+        // Pre-fetch metadata via a quick request before chunked download
+        // This is important because Range-based chunked downloads on Netlify/CDN
+        // may strip custom X-Video-* headers from subsequent responses
+        let prefetchedMeta: { title?: string; artist?: string; cover?: string } | undefined;
+        if (!track && url) {
+            try {
+                console.log("[Download] Pre-fetching metadata via quick request...");
+                const metaRes = await fetch(downloadUrl, {
+                    method: "GET",
+                    headers: { "Range": "bytes=0-0" },
+                    signal: AbortSignal.timeout(12000)
+                });
+                const hTitle = metaRes.headers.get("x-video-title");
+                const hArtist = metaRes.headers.get("x-video-artist");
+                const hCover = metaRes.headers.get("x-video-cover");
+                if (hTitle) {
+                    prefetchedMeta = {
+                        title: decodeURIComponent(hTitle),
+                        artist: hArtist ? decodeURIComponent(hArtist) : undefined,
+                        cover: hCover || undefined
+                    };
+                    console.log(`[Download] Pre-fetched: ${prefetchedMeta.title} - ${prefetchedMeta.artist}`);
+                }
+            } catch (e) {
+                console.warn("[Download] Pre-fetch metadata failed (non-critical):", e);
+            }
+        }
+
         try {
             const { blob, headers } = await fetchWithChunks(downloadUrl, controller, onProgress);
             clearTimeout(timeout);
             if (fakeProgressInterval) clearInterval(fakeProgressInterval);
 
-            await processResolvedBlob(blob, headers, track, url, id);
+            await processResolvedBlob(blob, headers, track, url, id, prefetchedMeta);
             if (onComplete) onComplete();
             return { success: true };
         } catch (downloadErr: any) {

@@ -392,6 +392,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (!srcUrl) {
                 const sUrl = (currentTrack as any).sourceAudioUrl || currentTrack.streamUrl || "";
                 const isYouTubeId = isNaN(Number(currentTrack.id)) && String(currentTrack.id).length === 11;
+                const isLinkDownload = String(currentTrack.id).startsWith("link-");
 
                 if (sUrl) {
                     if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
@@ -401,9 +402,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     }
                 } else if (isYouTubeId) {
                     srcUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
-                } else if (currentTrack.id) {
+                } else if (isLinkDownload && currentTrack.title && currentTrack.title !== "Enlace Descargado" && currentTrack.artist) {
+                    // Link downloads should try YouTube/Download API by title+artist
+                    srcUrl = `${RAILWAY_API}/api/download?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                } else if (currentTrack.id && !isLinkDownload) {
                     srcUrl = `${RAILWAY_API}/api/deezer?id=${currentTrack.id}&title=${encodeURIComponent(currentTrack.title || "")}&artist=${encodeURIComponent(currentTrack.artist || "")}`;
-                } else if (currentTrack.title && currentTrack.artist) {
+                } else if (currentTrack.title && currentTrack.artist && currentTrack.title !== "Enlace Descargado") {
                     srcUrl = `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
                 } else if (currentTrack.previewUrl) {
                     srcUrl = currentTrack.previewUrl;
