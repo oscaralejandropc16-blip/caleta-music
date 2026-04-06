@@ -221,10 +221,86 @@ function LibraryContent() {
     const handleDownloadCloud = async (e: React.MouseEvent, track: UnifiedTrack) => {
         e.stopPropagation();
 
-        const isYouTube = (isNaN(Number(track.id)) && track.id.length === 11) || String(track.id).startsWith("link-");
+        // Block attempts with placeholder metadata — they'll always fail
+        const isPlaceholder = track.title === "Enlace Descargado" || track.artist === "Desconocido";
+        if (isPlaceholder && !track.sourceAudioUrl) {
+            alert("No se puede descargar esta canción porque no tiene metadatos válidos. Elimínala y vuelve a descargarla desde el enlace original.");
+            return;
+        }
+
+        const isLinkTrack = String(track.id).startsWith("link-");
+        const isYouTube = (isNaN(Number(track.id)) && track.id.length === 11) || isLinkTrack;
         const resolvedSource = isYouTube ? 'youtube' : 'deezer';
         const explicitYoutubeUrl = (track.id && track.id.length === 11 && isNaN(Number(track.id))) ? `https://youtube.com/watch?v=${track.id}` : null;
 
+        // Extract the original YouTube URL from a stored API streamUrl if available
+        // e.g., ".../api/download?url=https%3A%2F%youtube.com%2F..." → extract the original URL
+        let directUrl: string | null = null;
+        const sUrl = track.sourceAudioUrl || track.streamUrl || "";
+        if (sUrl.includes('/api/download?url=')) {
+            try {
+                const parsed = new URL(sUrl.startsWith('http') ? sUrl : `https://caleta-music-production.up.railway.app${sUrl}`);
+                directUrl = parsed.searchParams.get('url');
+            } catch { /* ignore */ }
+        } else if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
+            directUrl = sUrl;
+        }
+
+        // If we have a direct URL, use it directly via download API (no Deezer search)
+        if (directUrl || (isLinkTrack && !isPlaceholder)) {
+            const useTitle = isPlaceholder ? undefined : track.title;
+            const useArtist = isPlaceholder ? undefined : track.artist;
+
+            let isNative = false;
+            try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
+
+            if (isNative) {
+                let trackDownloadUrl = directUrl
+                    ? `https://caleta-music-production.up.railway.app/api/download?url=${encodeURIComponent(directUrl)}&play=true`
+                    : `https://caleta-music-production.up.railway.app/api/download?title=${encodeURIComponent(useTitle || "")}&artist=${encodeURIComponent(useArtist || "")}&play=true`;
+
+                const result = await downloadSong({
+                    id: track.id,
+                    title: track.title,
+                    artist: track.artist,
+                    coverUrl: track.coverUrl || "",
+                    downloadUrl: trackDownloadUrl
+                });
+
+                if (result.success) {
+                    await loadLibrary();
+                } else {
+                    alert(`Error al descargar: ${result.error || "Error desconocido"}`);
+                }
+            } else {
+                setDownloadingCloudIds(prev => new Set(prev).add(track.id));
+                setDownloadProgress(prev => ({ ...prev, [track.id]: 0 }));
+
+                const result = await downloadAndSaveTrack(null, directUrl || sUrl, track.id, (progress) => {
+                    setDownloadProgress(prev => ({ ...prev, [track.id]: progress }));
+                });
+
+                if (result.success) {
+                    await loadLibrary();
+                } else {
+                    alert(`Error al descargar: ${result.error || "Error desconocido"}`);
+                }
+
+                setDownloadingCloudIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(track.id);
+                    return next;
+                });
+                setDownloadProgress(prev => {
+                    const next = { ...prev };
+                    delete next[track.id];
+                    return next;
+                });
+            }
+            return;
+        }
+
+        // Standard flow for Deezer/iTunes sourced tracks
         const mockTrack = {
             trackId: isYouTube ? 0 : track.id,
             trackName: track.title,
@@ -240,8 +316,6 @@ function LibraryContent() {
 
         if (isNative) {
             let trackDownloadUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
-
-            // Fix 404 Native: Add play=true specifically so the API triggers a redirect to the MP3 URL
             trackDownloadUrl += '&play=true';
 
             const result = await downloadSong({
