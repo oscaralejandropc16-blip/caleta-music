@@ -5,7 +5,7 @@
  * Supports: Sonos (UPnP), DLNA, AirPlay (iOS), Alexa
  */
 
-const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+const RAILWAY_API = "https://caleta-music.netlify.app";
 
 export interface ExternalDevice {
     id: string;

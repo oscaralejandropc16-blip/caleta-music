@@ -7,7 +7,7 @@ import { Preferences } from '@capacitor/preferences';
 import { MediaSession } from '@capgo/capacitor-media-session';
 import { startKeepAwake, stopKeepAwake } from '@/lib/keepAwake';
 
-const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+const RAILWAY_API = "https://caleta-music.netlify.app";
 
 interface PlayerContextType {
     currentTrack: SavedTrack | null;

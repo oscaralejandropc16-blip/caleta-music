@@ -106,7 +106,7 @@ export default function DevicesPanel() {
 
         // If switching to a Sonos device, optionally start playing the current track there
         if (device !== 'local' && device.type === 'sonos' && currentTrack && isPlaying) {
-            const RAILWAY_API = "https://caleta-music-production.up.railway.app";
+            const RAILWAY_API = "https://caleta-music.netlify.app";
             // Determine real stream URL for external device
             let urlToPlay = '';
             if ((currentTrack as any).sourceAudioUrl) {

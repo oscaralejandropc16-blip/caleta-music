@@ -123,10 +123,10 @@ async function processResolvedBlob(
     let streamUrl = "";
     if (track) {
         // For iTunes/Deezer tracks, point to the Deezer API
-        streamUrl = `https://caleta-music-production.up.railway.app/api/deezer?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
+        streamUrl = `https://caleta-music.netlify.app/api/deezer?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
     } else if (url) {
         // For YouTube/direct links, point to the download API with the original URL
-        streamUrl = `https://caleta-music-production.up.railway.app/api/download?url=${encodeURIComponent(url)}`;
+        streamUrl = `https://caleta-music.netlify.app/api/download?url=${encodeURIComponent(url)}`;
     }
 
     const trackData = {
@@ -155,14 +155,12 @@ export const downloadAndSaveTrack = async (
     onComplete?: () => void
 ): Promise<DownloadResult> => {
     try {
-        // Use absolute URL for Native Capacitor (Android) since it cannot resolve relative paths.
-        // For YouTube downloads, ALWAYS use Railway since it has yt-dlp installed.
-        // Netlify serverless functions lack yt-dlp and rely on unreliable third-party proxies.
         let isNative = false;
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
-        const RAILWAY_API = "https://caleta-music-production.up.railway.app";
-        const runtimeApiBase = isNative ? RAILWAY_API : "";
+        // We use Netlify's fully qualified URL for Native, and relative "" path for web
+        const NETLIFY_API = "https://caleta-music.netlify.app";
+        const runtimeApiBase = isNative ? NETLIFY_API : "";
         let downloadUrl = "";
 
         if (track) {
@@ -172,8 +170,8 @@ export const downloadAndSaveTrack = async (
                 downloadUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
         } else if (url) {
-            // YouTube downloads ALWAYS go through Railway (has yt-dlp)
-            downloadUrl = `${RAILWAY_API}/api/download?url=${encodeURIComponent(url)}`;
+            // YouTube downloads must also go through Netlify now
+            downloadUrl = `${runtimeApiBase}/api/download?url=${encodeURIComponent(url)}`;
         } else {
             return { success: false, error: "No se proporcionó canción ni URL" };
         }
