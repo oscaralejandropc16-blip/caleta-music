@@ -240,6 +240,44 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
     }, [queue, currentIndex, isShuffle, repeatMode]); // Updating these ensures playNext/playPrev closures never go stale
 
+    // CRITICAL: Handle iOS/Android PWA background resume
+    // When the PWA returns from background (screen unlock, app switch back),
+    // iOS WKWebView may have suspended the audio element. We need to force-resume it.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                const audio = audioRef.current;
+                const track = currentTrackRef.current;
+                if (!audio || !track) return;
+
+                console.log('[Player] App returned to foreground, checking audio state...');
+
+                // Resume keepAwake silently to maintain audio session
+                startKeepAwake();
+
+                // If the audio was playing before going to background but iOS killed it,
+                // the audio element will be paused with currentTime > 0
+                // We detect this and force-resume
+                if (audio.paused && audio.currentTime > 0 && audio.src) {
+                    console.log('[Player] Detected suspended audio, attempting resume...');
+                    // Small delay to let iOS settle the audio route
+                    setTimeout(() => {
+                        if (audioRef.current && audioRef.current.paused && audioRef.current.src) {
+                            audioRef.current.play().catch((err) => {
+                                console.warn('[Player] Resume after background failed:', err.message);
+                            });
+                        }
+                    }, 300);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!audioRef.current) {
