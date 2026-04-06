@@ -279,7 +279,26 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
     artist: string;
     coverUrl: string;
 }> {
-    // Intentar Cobalt PRIMERO (más fiable para links directos)
+    // 1. INTENTAR PRIMERO ytdl-core (Nativo de Node, ideal para Netlify sin yt-dlp)
+    try {
+        console.log(`[Download] Try ytdl-core for videoId: ${videoId}`);
+        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const info = await ytdl.getInfo(ytUrl);
+        const format = ytdl.chooseFormat(info.formats, { quality: "highestaudio", filter: "audioonly" });
+        if (format && format.url) {
+            return {
+                audioUrl: format.url,
+                contentType: format.mimeType?.split(";")[0] || "audio/mp4",
+                title: info.videoDetails?.title || "Enlace Descargado",
+                artist: info.videoDetails?.author?.name || "Desconocido",
+                coverUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+            };
+        }
+    } catch (ytdlErr: any) {
+        console.warn(`[Download] ytdl-core failed: ${ytdlErr.message}`);
+    }
+
+    // 2. Intentar Cobalt (fiable pero puede bloquear IPs de Vercel/Netlify)
     try {
         const urlForCobalt = `https://www.youtube.com/watch?v=${videoId}`;
         return await resolveWithCobalt(urlForCobalt);
@@ -287,7 +306,7 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         console.warn("[Download] Cobalt fallback activated due to:", err);
     }
 
-    // Intentar Piped
+    // 3. Fallback Piped
     for (const instance of PIPED_INSTANCES) {
         try {
             const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(8000) });
@@ -312,7 +331,7 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    // Fallback: Invidious
+    // 4. Fallback Invidious
     for (const instance of INVIDIOUS_INSTANCES) {
         try {
             const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(10000) });
@@ -338,26 +357,8 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    // ULTÍMO FALLBACK: Usar @distube/ytdl-core (Nativo de Node, ideal para Netlify)
-    try {
-        console.log(`[Download] Try ytdl-core fallback for videoId: ${videoId}`);
-        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const info = await ytdl.getInfo(ytUrl);
-        const format = ytdl.chooseFormat(info.formats, { quality: "highestaudio", filter: "audioonly" });
-        if (format && format.url) {
-            return {
-                audioUrl: format.url,
-                contentType: format.mimeType?.split(";")[0] || "audio/mp4",
-                title: info.videoDetails?.title || "Enlace Descargado",
-                artist: info.videoDetails?.author?.name || "Desconocido",
-                coverUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-            };
-        }
-    } catch (ytdlErr: any) {
-        console.error(`[Download] ytdl-core failed: ${ytdlErr.message}`);
-    }
-
     throw new Error("Failed to resolve audio URL from all available proxies and ytdl-core");
+
 }
 
 // ============== YT-DLP (LOCAL/WINDOWS) ==============
@@ -504,14 +505,17 @@ export async function GET(request: NextRequest) {
             console.log(`[Download] YouTube URL detected: ${directUrl}, videoId: ${videoId}`);
 
             if (videoId) {
-                // Try Cobalt first as it's often the fastest and most reliable for links
+                // Safely extract metadata first using yt-search (highly reliable) to avoid "Enlace Descargado"
+                let safeTitle = "Enlace Descargado";
+                let safeArtist = "Desconocido";
                 try {
-                    const result = await resolveWithCobalt(directUrl);
-                    console.log(`[Download] Cobalt success for videoId: ${videoId}`);
-                    return await proxyAudioStream(request, result);
-                } catch (cobaltErr: any) {
-                    console.warn(`[Download] Cobalt failed, falling back: ${cobaltErr.message}`);
-                }
+                    const yts = (await import("yt-search")).default;
+                    const r = await yts({ videoId });
+                    if (r && r.title) {
+                        safeTitle = r.title;
+                        safeArtist = r.author?.name || "YouTube";
+                    }
+                } catch { }
 
                 // Try native yt-dlp if available
                 const hasYtDlp = fs.existsSync(YT_DLP_PATH);
@@ -545,8 +549,8 @@ export async function GET(request: NextRequest) {
                             headers: {
                                 "Content-Type": contentType,
                                 "Content-Length": fileBuffer.length.toString(),
-                                "X-Video-Title": encodeURIComponent(metadata.title),
-                                "X-Video-Artist": encodeURIComponent(metadata.uploader),
+                                "X-Video-Title": encodeURIComponent(safeTitle !== "Enlace Descargado" ? safeTitle : metadata.title),
+                                "X-Video-Artist": encodeURIComponent(safeArtist !== "Desconocido" ? safeArtist : metadata.uploader),
                                 "X-Video-Cover": `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                             },
                         }));
@@ -555,15 +559,22 @@ export async function GET(request: NextRequest) {
                     }
                 }
 
-                // Fallback to Piped/Invidious
+                // Fallback to pure Node.js methods (Netlify)
                 try {
                     const result = await resolveVideoAudioUrl(videoId);
+                    // Override with safe yt-search metadata so it never fails on Netlify
+                    if (safeTitle !== "Enlace Descargado") {
+                        result.title = safeTitle;
+                        result.artist = safeArtist;
+                    }
                     return await proxyAudioStream(request, result);
                 } catch (fallbackErr: any) {
                     console.error(`[Download] All YouTube methods failed: ${fallbackErr.message}`);
+                    return withCors(NextResponse.json({ error: "No se pudo extraer el audio del enlace de YouTube." }, { status: 500 }));
                 }
             } else {
                 console.warn(`[Download] Could not extract video ID from YouTube URL: ${directUrl}`);
+                return withCors(NextResponse.json({ error: "Enlace de YouTube inválido." }, { status: 400 }));
             }
         }
 
@@ -612,15 +623,7 @@ export async function GET(request: NextRequest) {
                 }
             }
 
-            // Fallback: Piped
-            try {
-                const result = await resolveAudioUrlWithPiped(query);
-                return await proxyAudioStream(request, result);
-            } catch (err: any) {
-                console.error(`[Download] Search query fallback failed: ${err.message}`);
-            }
-
-            // Last Fallback: yt-search + ytdl-core (Netlify safe)
+            // Fallback: yt-search + ytdl-core (Netlify safe, fast)
             try {
                 console.log(`[Download] Try yt-search fallback for query: ${query}`);
                 const yts = (await import("yt-search")).default;
@@ -632,6 +635,14 @@ export async function GET(request: NextRequest) {
                 }
             } catch (err: any) {
                 console.error(`[Download] yt-search fallback failed: ${err.message}`);
+            }
+
+            // Last Fallback: Piped
+            try {
+                const result = await resolveAudioUrlWithPiped(query);
+                return await proxyAudioStream(request, result);
+            } catch (err: any) {
+                console.error(`[Download] Search query fallback failed: ${err.message}`);
             }
         }
 
