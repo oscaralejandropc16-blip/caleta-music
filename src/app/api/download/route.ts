@@ -632,8 +632,8 @@ export async function GET(request: NextRequest) {
 
             // 1. Resolve accurately using yt-search (bypasses ytsearch1: blocks on Cloud IPs)
             let resolvedVideoId = "";
-            let resolvedTitle = safeTitle;
-            let resolvedArtist = safeArtist;
+            let resolvedTitle = title;
+            let resolvedArtist = artist;
 
             try {
                 console.log(`[Download] Searching video ID for query: ${query}`);
@@ -642,8 +642,8 @@ export async function GET(request: NextRequest) {
                 const firstVideo = r?.videos?.[0];
                 if (firstVideo && firstVideo.videoId) {
                     resolvedVideoId = firstVideo.videoId;
-                    resolvedTitle = firstVideo.title || safeTitle;
-                    resolvedArtist = firstVideo.author?.name || safeArtist;
+                    resolvedTitle = firstVideo.title || title;
+                    resolvedArtist = firstVideo.author?.name || artist;
                 }
             } catch (err: any) {
                 console.warn(`[Download] yt-search failed: ${err.message}`);
