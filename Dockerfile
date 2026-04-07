@@ -1,7 +1,7 @@
-# ── Base ──
-FROM node:20-slim AS base
+# ── Caleta Music – Lightweight YouTube API for Render ──
+FROM node:20-slim
 
-# Instalar dependencias del sistema: yt-dlp, ffmpeg, python3
+# Install yt-dlp, ffmpeg, python3
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     ffmpeg \
@@ -13,55 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# ── Dependencies ──
-FROM base AS deps
-COPY package.json package-lock.json* ./
-RUN npm install
+# Only install the minimal dependencies needed for the API server
+COPY package.json ./
+RUN npm install --omit=dev express cors yt-search
 
-# ── Builder ──
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Copy only the server file
+COPY render-server.js ./
 
-# Variables de entorno para el build
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-
-# NEXT_PUBLIC_* se incrustan en el bundle JS durante el build
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
-ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-# Para Railway/Docker necesitamos output: "standalone" (no "export" que es para Capacitor)
-# No seteamos STATIC_EXPORT=true, así next.config.ts NO usará output:"export"
-ENV NEXT_OUTPUT=standalone
-
-# Ejecutar next build directamente (sin cross-env/openssl-legacy-provider de Windows)
-RUN npx next build
-
-# ── Runner ──
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-# Railway usa un PORT dinámico; HOSTNAME 0.0.0.0 para que sea accesible externamente
-ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
-
-# Crear usuario no-root
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
-# Copiar archivos necesarios
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
+ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "render-server.js"]
