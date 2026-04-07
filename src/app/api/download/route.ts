@@ -630,58 +630,85 @@ export async function GET(request: NextRequest) {
             const query = `${artist} - ${title}`;
             console.log(`[Download] Resolving by query: ${query}`);
 
-            // Try local yt-dlp first
-            const hasYtDlp = fs.existsSync(YT_DLP_PATH);
-            if (hasYtDlp) {
-                try {
-                    const searchResult = await new Promise<{ streamUrl: string; title: string; uploader: string; videoId: string }>((res, rej) => {
-                        execFile(YT_DLP_PATH, [
-                            "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
-                            "--print", "url", "--print", "%(title)s", "--print", "%(uploader)s", "--print", "%(id)s",
-                            `ytsearch1:${query}`
-                        ], { timeout: 20000 }, (err, stdout) => {
-                            if (err) { rej(err); return; }
-                            const lines = stdout.trim().split("\n").map(l => l.trim());
-                            if (lines.length < 4) { rej(new Error("no output")); return; }
-                            res({ streamUrl: lines[0], title: lines[1], uploader: lines[2], videoId: lines[3] });
-                        });
-                    });
+            // 1. Resolve accurately using yt-search (bypasses ytsearch1: blocks on Cloud IPs)
+            let resolvedVideoId = "";
+            let resolvedTitle = safeTitle;
+            let resolvedArtist = safeArtist;
 
-                    const isPlay = searchParams.get("play") === "true";
-                    if (isPlay) return withCors(NextResponse.redirect(searchResult.streamUrl));
-
-                    const ytUrl = `https://www.youtube.com/watch?v=${searchResult.videoId}`;
-                    const { filePath, contentType } = await downloadWithYtDlp(ytUrl);
-                    const fileBuffer = fs.readFileSync(filePath);
-                    try { fs.unlinkSync(filePath); } catch { }
-
-                    return withCors(new NextResponse(fileBuffer, {
-                        status: 200,
-                        headers: {
-                            "Content-Type": contentType,
-                            "Content-Length": fileBuffer.length.toString(),
-                            "X-Video-Title": encodeURIComponent(searchResult.title),
-                            "X-Video-Artist": encodeURIComponent(searchResult.uploader),
-                            "X-Video-Cover": `https://i.ytimg.com/vi/${searchResult.videoId}/hqdefault.jpg`,
-                        },
-                    }));
-                } catch (err: any) {
-                    console.warn(`[Download] Search query with yt-dlp failed: ${err.message}`);
-                }
-            }
-
-            // Fallback: yt-search + ytdl-core (Netlify safe, fast)
             try {
-                console.log(`[Download] Try yt-search fallback for query: ${query}`);
+                console.log(`[Download] Searching video ID for query: ${query}`);
                 const yts = (await import("yt-search")).default;
                 const r = await yts(query);
                 const firstVideo = r?.videos?.[0];
                 if (firstVideo && firstVideo.videoId) {
-                    const result = await resolveVideoAudioUrl(firstVideo.videoId);
-                    return await proxyAudioStream(request, result);
+                    resolvedVideoId = firstVideo.videoId;
+                    resolvedTitle = firstVideo.title || safeTitle;
+                    resolvedArtist = firstVideo.author?.name || safeArtist;
                 }
             } catch (err: any) {
-                console.error(`[Download] yt-search fallback failed: ${err.message}`);
+                console.warn(`[Download] yt-search failed: ${err.message}`);
+            }
+
+            if (resolvedVideoId) {
+                const ytUrl = `https://www.youtube.com/watch?v=${resolvedVideoId}`;
+
+                // 2. Try native yt-dlp if available with the Resolved URL (highly reliable)
+                const hasYtDlp = fs.existsSync(YT_DLP_PATH);
+                if (hasYtDlp) {
+                    try {
+                        console.log(`[Download] Starting yt-dlp download for resolved URL: ${ytUrl}`);
+                        const isPlay = searchParams.get("play") === "true";
+
+                        if (isPlay) {
+                            const streamUrlRes = await new Promise<string>((res, rej) => {
+                                execFile(YT_DLP_PATH, [
+                                    "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
+                                    "--print", "url", ytUrl
+                                ], { timeout: 15000 }, (err, stdout) => {
+                                    if (err) { rej(err); return; }
+                                    const url = stdout.trim().split("\n")[0];
+                                    if (url && url.startsWith("http")) res(url);
+                                    else rej(new Error("no stream url"));
+                                });
+                            });
+                            return withCors(NextResponse.redirect(streamUrlRes));
+                        }
+
+                        const [{ filePath, contentType }, metadata] = await Promise.all([
+                            downloadWithYtDlp(ytUrl),
+                            getVideoMetadata(ytUrl).catch(() => ({ title: resolvedTitle, uploader: resolvedArtist }))
+                        ]);
+                        const fileBuffer = fs.readFileSync(filePath);
+                        try { fs.unlinkSync(filePath); } catch { }
+
+                        return withCors(new NextResponse(fileBuffer, {
+                            status: 200,
+                            headers: {
+                                "Content-Type": contentType,
+                                "Content-Length": fileBuffer.length.toString(),
+                                "X-Video-Title": encodeURIComponent(metadata.title !== "Enlace Descargado" ? metadata.title : resolvedTitle),
+                                "X-Video-Artist": encodeURIComponent(metadata.uploader !== "Desconocido" ? metadata.uploader : resolvedArtist),
+                                "X-Video-Cover": `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`,
+                            },
+                        }));
+                    } catch (ytdlpErr: any) {
+                        console.warn(`[Download] yt-dlp specific fetch failed: ${ytdlpErr.message}`);
+                    }
+                }
+
+                // 3. Fallback: ytdl-core + Community Proxies
+                try {
+                    console.log(`[Download] Falling back to proxy methods for ${resolvedVideoId}`);
+                    const result = await resolveVideoAudioUrl(resolvedVideoId);
+
+                    if (resolvedTitle !== "Enlace Descargado") {
+                        result.title = resolvedTitle;
+                        result.artist = resolvedArtist;
+                    }
+                    return await proxyAudioStream(request, result);
+                } catch (fallbackErr: any) {
+                    console.error(`[Download] All YouTube resolution methods failed: ${fallbackErr.message}`);
+                }
             }
 
             // Last Fallback: Piped
