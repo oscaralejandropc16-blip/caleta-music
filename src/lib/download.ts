@@ -123,10 +123,10 @@ async function processResolvedBlob(
     let streamUrl = "";
     if (track) {
         // For iTunes/Deezer tracks, point to the Deezer API
-        streamUrl = `https://caleta-music.netlify.app/api/deezer?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
+        streamUrl = `https://caleta-music.netlify.app/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
     } else if (url) {
         // For YouTube/direct links, point to the download API with the original URL on Render
-        streamUrl = `https://caleta-music.onrender.com/api/download?url=${encodeURIComponent(url)}`;
+        streamUrl = `https://caleta-music.onrender.com/api/download/?url=${encodeURIComponent(url)}`;
     }
 
     const trackData = {
@@ -168,13 +168,13 @@ export const downloadAndSaveTrack = async (
 
         if (track) {
             if ((track as any)._source === 'deezer' && track.trackId) {
-                downloadUrl = `${runtimeApiBase}/api/deezer?id=${track.trackId}`;
+                downloadUrl = `${runtimeApiBase}/api/deezer/?id=${track.trackId}`;
             } else {
-                downloadUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                downloadUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
         } else if (url) {
             // YouTube downloads routed strictly through the new Render backend (yt-dlp capable)
-            downloadUrl = `${RENDER_YOUTUBE_API}/api/download?url=${encodeURIComponent(url)}`;
+            downloadUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(url)}`;
         } else {
             return { success: false, error: "No se proporcionó canción ni URL" };
         }
@@ -220,7 +220,7 @@ export const downloadAndSaveTrack = async (
                 if (onProgress) onProgress(30);
 
                 try {
-                    const fallbackUrl = `https://caleta-music.onrender.com/api/download?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const fallbackUrl = `https://caleta-music.onrender.com/api/download/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
                     const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
 
                     await processResolvedBlob(blob, headers, track, url, id);
@@ -241,7 +241,7 @@ export const downloadAndSaveTrack = async (
                 if (onProgress) onProgress(30);
 
                 try {
-                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
                     const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
 
                     await processResolvedBlob(blob, headers, track, url, id);
