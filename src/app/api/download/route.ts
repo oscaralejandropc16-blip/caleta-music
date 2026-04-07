@@ -56,6 +56,60 @@ const INVIDIOUS_INSTANCES = [
     "https://invidious.protokolla.fi"
 ];
 
+// ============== COBALT V7 COMMUNITY INSTANCES ==============
+const COBALT_INSTANCES = [
+    "https://cobalt.kwiatekm.one",
+    "https://cobalt.twiwt.org",
+    "https://cobalt.canine.sc",
+    "https://co.eepy.today",
+    "https://cobalt.starnomi.net"
+];
+
+async function resolveWithCobaltCommunity(url: string, videoId: string): Promise<{ audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }> {
+    let lastError = "";
+
+    for (const instance of COBALT_INSTANCES) {
+        console.log(`[Cobalt Community] Trying to resolve with: ${instance}`);
+        try {
+            const res = await fetch(instance, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    url: url,
+                    isAudioOnly: true,
+                    aFormat: "mp3",
+                    filenamePattern: "pretty"
+                }),
+                signal: AbortSignal.timeout(3500)
+            });
+
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+
+            if (data.status === "error") throw new Error(data.text || "Cobalt error");
+
+            if (data.status === "redirect" || data.status === "stream" || data.status === "tunnel") {
+                return {
+                    audioUrl: data.url,
+                    contentType: "audio/mpeg",
+                    title: data.filename || "YouTube Audio",
+                    artist: "YouTube",
+                    coverUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+                };
+            }
+            throw new Error(`Unexpected status: ${data.status}`);
+        } catch (err: any) {
+            lastError = err.message;
+            console.warn(`[Cobalt Community] ${instance} failed: ${err.message}`);
+            continue;
+        }
+    }
+    throw new Error(`All Cobalt Community instances failed: ${lastError}`);
+}
+
 // ============== COBALT API (High Reliability YouTube Proxy) ==============
 async function resolveWithCobalt(url: string): Promise<{ audioUrl: string; contentType: string; title: string; artist: string; coverUrl: string }> {
     console.log(`[Cobalt] Trying to resolve: ${url}`);
@@ -298,18 +352,11 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         console.warn(`[Download] ytdl-core failed: ${ytdlErr.message}`);
     }
 
-    // 2. Intentar Cobalt (fiable pero puede bloquear IPs de Vercel/Netlify)
-    try {
-        const urlForCobalt = `https://www.youtube.com/watch?v=${videoId}`;
-        return await resolveWithCobalt(urlForCobalt);
-    } catch (err) {
-        console.warn("[Download] Cobalt fallback activated due to:", err);
-    }
-
-    // 3. Fallback Piped
+    // 2. Fallback Piped (Timeout rápido para probar varios antes de que Netlify nos mate)
     for (const instance of PIPED_INSTANCES) {
         try {
-            const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(8000) });
+            console.log(`[Download] Trying Piped: ${instance}`);
+            const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(3500) });
             if (!res.ok) continue;
 
             const data = await res.json();
@@ -331,10 +378,11 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    // 4. Fallback Invidious
+    // 3. Fallback Invidious
     for (const instance of INVIDIOUS_INSTANCES) {
         try {
-            const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(10000) });
+            console.log(`[Download] Trying Invidious: ${instance}`);
+            const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(3500) });
             if (!res.ok) continue;
 
             const data = await res.json();
@@ -358,7 +406,6 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
     }
 
     throw new Error("Failed to resolve audio URL from all available proxies and ytdl-core");
-
 }
 
 // ============== YT-DLP (LOCAL/WINDOWS) ==============
