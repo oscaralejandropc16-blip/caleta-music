@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod a+rx /usr/local/bin/yt-dlp \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Update yt-dlp to absolute latest nightly (fixes newest YouTube blocks)
+RUN /usr/local/bin/yt-dlp -U || true
+
 WORKDIR /app
 
-# Only install the minimal dependencies needed for the API server
-COPY package.json ./
-RUN npm install --omit=dev express cors yt-search
+# Install only the minimal dependencies needed
+RUN npm init -y && npm install express cors yt-search
 
 # Copy only the server file
 COPY render-server.js ./

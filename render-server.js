@@ -25,6 +25,16 @@ app.use(cors({
 // yt-dlp path (installed via Dockerfile)
 const YT_DLP_PATH = "/usr/local/bin/yt-dlp";
 
+// Anti-bot flags: Force iOS and web_creator clients to bypass datacenter IP blocks
+const YT_DLP_BASE_ARGS = [
+    "--encoding", "utf8",
+    "--no-playlist",
+    "--no-warnings",
+    "--extractor-args", "youtube:player_client=ios,web_creator",
+    "--no-check-certificates",
+    "--user-agent", "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+];
+
 // ============== UTILITY FUNCTIONS ==============
 
 function isYouTubeUrl(url) {
@@ -55,9 +65,9 @@ function extractYouTubeVideoId(url) {
 function getVideoMetadata(videoUrl) {
     return new Promise((resolve) => {
         execFile(YT_DLP_PATH, [
-            "--encoding", "utf8", "--no-playlist", "--no-warnings",
+            ...YT_DLP_BASE_ARGS,
             "--print", "%(title)s", "--print", "%(uploader)s", "--skip-download", videoUrl
-        ], { timeout: 15000 }, (error, stdout) => {
+        ], { timeout: 20000 }, (error, stdout) => {
             if (error || !stdout.trim()) {
                 resolve({ title: "YouTube Audio", uploader: "YouTube" });
                 return;
@@ -77,9 +87,12 @@ function downloadWithYtDlp(videoUrl) {
 
     return new Promise((resolve, reject) => {
         execFile(YT_DLP_PATH, [
-            "--encoding", "utf8", "--no-playlist", "-f", "ba", "-o", tmpFile,
-            "--no-warnings", "--force-overwrites", "--print", "after_move:filepath", videoUrl
-        ], { timeout: 90000 }, (error, stdout) => {
+            ...YT_DLP_BASE_ARGS,
+            "-f", "ba", "-o", tmpFile,
+            "--force-overwrites", "--print", "after_move:filepath", videoUrl
+        ], { timeout: 90000 }, (error, stdout, stderr) => {
+            if (stderr) console.warn(`[yt-dlp stderr] ${stderr.substring(0, 500)}`);
+
             const outputPath = stdout?.trim();
             if (outputPath && fs.existsSync(outputPath)) {
                 const ext = path.extname(outputPath).toLowerCase();
@@ -102,6 +115,56 @@ function downloadWithYtDlp(videoUrl) {
             reject(error ? new Error(`yt-dlp: ${error.message}`) : new Error("yt-dlp no output"));
         });
     });
+}
+
+function getStreamUrl(videoUrl) {
+    return new Promise((resolve, reject) => {
+        execFile(YT_DLP_PATH, [
+            ...YT_DLP_BASE_ARGS,
+            "-f", "ba",
+            "--print", "url", videoUrl
+        ], { timeout: 20000 }, (err, stdout) => {
+            if (err) { reject(err); return; }
+            const u = stdout.trim().split("\n")[0];
+            if (u && u.startsWith("http")) resolve(u);
+            else reject(new Error("no stream url"));
+        });
+    });
+}
+
+// ============== COBALT COMMUNITY FALLBACK ==============
+
+const COBALT_INSTANCES = [
+    "https://cobalt.canine.sc",
+    "https://co.eepy.today",
+    "https://cobalt.starnomi.net"
+];
+
+async function tryFallbackCobalt(videoUrl, videoId) {
+    for (const instance of COBALT_INSTANCES) {
+        try {
+            console.log(`[Cobalt] Trying: ${instance}`);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(instance, {
+                method: "POST",
+                headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                body: JSON.stringify({ url: videoUrl, isAudioOnly: true, aFormat: "mp3", filenamePattern: "pretty" }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data.status === "error") continue;
+
+            if (data.status === "redirect" || data.status === "stream" || data.status === "tunnel") {
+                return data.url;
+            }
+        } catch { continue; }
+    }
+    return null;
 }
 
 // ============== MAIN DOWNLOAD ENDPOINT ==============
@@ -135,28 +198,20 @@ app.get("/api/download", async (req, res) => {
                 }
             } catch { }
 
-            // play=true → redirect to stream URL (for audio element src)
+            // play=true → redirect to stream URL
             if (play === "true") {
                 try {
-                    const streamUrl = await new Promise((resolve, reject) => {
-                        execFile(YT_DLP_PATH, [
-                            "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
-                            "--print", "url", directUrl
-                        ], { timeout: 15000 }, (err, stdout) => {
-                            if (err) { reject(err); return; }
-                            const u = stdout.trim().split("\n")[0];
-                            if (u && u.startsWith("http")) resolve(u);
-                            else reject(new Error("no stream url"));
-                        });
-                    });
+                    const streamUrl = await getStreamUrl(directUrl);
                     return res.redirect(streamUrl);
                 } catch (e) {
-                    console.warn(`[Download] play=true redirect failed: ${e.message}`);
+                    console.warn(`[Download] yt-dlp stream redirect failed: ${e.message}, trying Cobalt...`);
+                    const cobaltUrl = await tryFallbackCobalt(directUrl, videoId);
+                    if (cobaltUrl) return res.redirect(cobaltUrl);
                     return res.status(500).json({ error: "No se pudo obtener el stream URL." });
                 }
             }
 
-            // Full download → return audio binary with metadata headers
+            // Full download → return audio binary
             try {
                 const [{ filePath, contentType }, metadata] = await Promise.all([
                     downloadWithYtDlp(directUrl),
@@ -178,6 +233,29 @@ app.get("/api/download", async (req, res) => {
                 return res.send(fileBuffer);
             } catch (dlErr) {
                 console.error(`[Download] yt-dlp download failed: ${dlErr.message}`);
+
+                // Fallback: proxy from Cobalt
+                try {
+                    const cobaltUrl = await tryFallbackCobalt(directUrl, videoId);
+                    if (cobaltUrl) {
+                        console.log(`[Download] Proxying from Cobalt: ${cobaltUrl.substring(0, 80)}...`);
+                        const audioRes = await fetch(cobaltUrl);
+                        if (!audioRes.ok) throw new Error("Cobalt stream fetch failed");
+
+                        const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+                        res.set({
+                            "Content-Type": "audio/mpeg",
+                            "Content-Length": audioBuffer.length.toString(),
+                            "X-Video-Title": encodeURIComponent(safeTitle),
+                            "X-Video-Artist": encodeURIComponent(safeArtist),
+                            "X-Video-Cover": `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                        });
+                        return res.send(audioBuffer);
+                    }
+                } catch (cobaltErr) {
+                    console.error(`[Download] Cobalt fallback also failed: ${cobaltErr.message}`);
+                }
+
                 return res.status(500).json({ error: "No se pudo extraer el audio del enlace de YouTube." });
             }
         }
@@ -187,7 +265,7 @@ app.get("/api/download", async (req, res) => {
             const query = `${artist} - ${title}`;
             console.log(`[Download] Resolving by query: ${query}`);
 
-            // Step 1: Resolve video ID with yt-search
+            // Resolve video ID with yt-search
             let resolvedVideoId = "";
             let resolvedTitle = title;
             let resolvedArtist = artist;
@@ -213,20 +291,12 @@ app.get("/api/download", async (req, res) => {
             // play=true → redirect
             if (play === "true") {
                 try {
-                    const streamUrl = await new Promise((resolve, reject) => {
-                        execFile(YT_DLP_PATH, [
-                            "--encoding", "utf8", "--no-playlist", "-f", "ba", "--no-warnings",
-                            "--print", "url", ytUrl
-                        ], { timeout: 15000 }, (err, stdout) => {
-                            if (err) { reject(err); return; }
-                            const u = stdout.trim().split("\n")[0];
-                            if (u && u.startsWith("http")) resolve(u);
-                            else reject(new Error("no stream url"));
-                        });
-                    });
+                    const streamUrl = await getStreamUrl(ytUrl);
                     return res.redirect(streamUrl);
                 } catch (e) {
-                    console.warn(`[Download] play=true redirect failed: ${e.message}`);
+                    console.warn(`[Download] yt-dlp stream redirect failed: ${e.message}, trying Cobalt...`);
+                    const cobaltUrl = await tryFallbackCobalt(ytUrl, resolvedVideoId);
+                    if (cobaltUrl) return res.redirect(cobaltUrl);
                     return res.status(500).json({ error: "No se pudo obtener el stream URL." });
                 }
             }
@@ -250,6 +320,27 @@ app.get("/api/download", async (req, res) => {
                 return res.send(fileBuffer);
             } catch (dlErr) {
                 console.error(`[Download] yt-dlp download failed: ${dlErr.message}`);
+
+                // Cobalt fallback
+                try {
+                    const cobaltUrl = await tryFallbackCobalt(ytUrl, resolvedVideoId);
+                    if (cobaltUrl) {
+                        const audioRes = await fetch(cobaltUrl);
+                        if (!audioRes.ok) throw new Error("Cobalt stream fetch failed");
+                        const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+                        res.set({
+                            "Content-Type": "audio/mpeg",
+                            "Content-Length": audioBuffer.length.toString(),
+                            "X-Video-Title": encodeURIComponent(resolvedTitle),
+                            "X-Video-Artist": encodeURIComponent(resolvedArtist),
+                            "X-Video-Cover": `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`,
+                        });
+                        return res.send(audioBuffer);
+                    }
+                } catch (cobaltErr) {
+                    console.error(`[Download] Cobalt fallback also failed: ${cobaltErr.message}`);
+                }
+
                 return res.status(500).json({ error: "No se pudo descargar el audio." });
             }
         }
@@ -264,7 +355,7 @@ app.get("/api/download", async (req, res) => {
 
 // Health check
 app.get("/", (req, res) => {
-    res.json({ status: "ok", service: "caleta-music-yt-api" });
+    res.json({ status: "ok", service: "caleta-music-yt-api", ytdlp: fs.existsSync(YT_DLP_PATH) });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
