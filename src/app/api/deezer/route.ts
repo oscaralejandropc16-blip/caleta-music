@@ -123,6 +123,33 @@ async function streamFromDeezer(request: NextRequest, trackId: string | null, ti
             }
         }
 
+        // Fallback: Try simplified search (strip feat, parentheses, extra artists)
+        if (!foundId && title) {
+            const cleanTitle = title.replace(/\s*[\(\[].*?[\)\]]\s*/g, '').replace(/\s*feat\.?\s*.*/i, '').replace(/\s*ft\.?\s*.*/i, '').trim();
+            const firstArtist = (artist || '').split(/[,&]/)[0].trim();
+            const simplifiedQueries = [
+                `${cleanTitle} ${firstArtist}`,
+                cleanTitle,
+                `${title}`,
+            ];
+
+            for (const sq of simplifiedQueries) {
+                if (foundId) break;
+                try {
+                    console.log(`[Deezer] Simplified search: "${sq}"`);
+                    const searchStr = encodeURIComponent(sq.trim());
+                    const res = await fetch(`https://api.deezer.com/search?q=${searchStr}&limit=3`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.data && data.data.length > 0) {
+                            foundId = data.data[0].id.toString();
+                            console.log(`[Deezer] Found via simplified: ${foundId} ("${data.data[0].title}" by ${data.data[0].artist?.name})`);
+                        }
+                    }
+                } catch { }
+            }
+        }
+
         if (foundId) {
             trackId = foundId;
             console.log(`[Deezer] Found valid track ID: ${trackId}`);
