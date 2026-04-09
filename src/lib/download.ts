@@ -252,45 +252,32 @@ export const downloadAndSaveTrack = async (
                     }
                 } catch { }
 
-                // Try Invidious instances directly from browser (CORS confirmed working)
-                const INVIDIOUS_INSTANCES = [
-                    "https://inv.thepixora.com",
-                    "https://inv.nadeko.net",
-                    "https://invidious.protokolla.fi",
-                    "https://inv.thepixora.com", // Retry thepixora if first attempt timed out
-                ];
-
+                // Instead of calling Invidious APIs from the browser (which causes CORS blocks),
+                // we call Vercel /api/youtube-resolve which executes on the backend without CORS.
                 if (onProgress) onProgress(10);
 
-                for (const instance of INVIDIOUS_INSTANCES) {
-                    try {
-                        console.log(`[Download] Trying Invidious: ${instance}`);
-                        const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-                            signal: AbortSignal.timeout(10000)
-                        });
-                        if (!res.ok) continue;
+                try {
+                    console.log(`[Download] Resolving via Vercel youtube-resolve (server-side)...`);
+                    const resolveUrl = `${runtimeApiBase}/api/youtube-resolve?id=${videoId}`;
+                    const resolveRes = await fetch(resolveUrl, { signal: AbortSignal.timeout(25000) });
 
-                        const data = await res.json();
-                        const audioStreams = (data.adaptiveFormats || []).filter((f: any) =>
-                            f.type?.startsWith("audio/") && f.url
-                        );
-                        if (audioStreams.length === 0) continue;
-
-                        const best = [...audioStreams]
-                            .sort((a: any, b: any) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0))[0];
-                        if (!best || !best.itag) continue;
-
-                        audioUrl = `${instance}/latest_version?id=${videoId}&itag=${best.itag}&local=true`;
+                    if (resolveRes.ok) {
+                        const data = await resolveRes.json();
+                        audioUrl = data.audioUrl || "";
                         if (data.title) resolvedTitle = data.title;
-                        if (data.author) resolvedArtist = data.author;
-                        if (data.videoThumbnails?.[0]?.url) resolvedCover = data.videoThumbnails[0].url;
-
-                        console.log(`[Download] ✅ Resolved via ${instance}: ${best.type} @ ${best.bitrate}bps`);
-                        break;
-                    } catch (err: any) {
-                        console.warn(`[Download] ${instance} failed: ${err.message}`);
-                        continue;
+                        if (data.artist) resolvedArtist = data.artist;
+                        if (data.coverUrl) resolvedCover = data.coverUrl;
+                        console.log(`[Download] ✅ Resolved via ${data.instance}: audioUrl ready`);
+                    } else {
+                        try {
+                            const errData = await resolveRes.json();
+                            if (errData.title && errData.title !== "Enlace Descargado") resolvedTitle = errData.title;
+                            if (errData.artist) resolvedArtist = errData.artist;
+                        } catch { }
+                        console.warn(`[Download] youtube-resolve returned ${resolveRes.status}`);
                     }
+                } catch (err: any) {
+                    console.warn(`[Download] youtube-resolve failed: ${err.message}`);
                 }
 
                 // ── Step 2: Download audio via Vercel CORS proxy → Invidious (residential IP) ──
