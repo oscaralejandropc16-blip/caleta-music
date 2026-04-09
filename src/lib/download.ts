@@ -256,12 +256,8 @@ export const downloadAndSaveTrack = async (
                 const INVIDIOUS_INSTANCES = [
                     "https://inv.thepixora.com",
                     "https://inv.nadeko.net",
-                    "https://invidious.jing.rocks",
-                    "https://iv.datura.network",
-                    "https://invidious.nerdvpn.de",
-                    "https://invidious.privacyredirect.com",
-                    "https://invidious.lunar.icu",
                     "https://invidious.protokolla.fi",
+                    "https://inv.thepixora.com", // Retry thepixora if first attempt timed out
                 ];
 
                 if (onProgress) onProgress(10);
@@ -270,7 +266,7 @@ export const downloadAndSaveTrack = async (
                     try {
                         console.log(`[Download] Trying Invidious: ${instance}`);
                         const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-                            signal: AbortSignal.timeout(5000)
+                            signal: AbortSignal.timeout(10000)
                         });
                         if (!res.ok) continue;
 
