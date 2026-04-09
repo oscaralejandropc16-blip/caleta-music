@@ -192,10 +192,20 @@ app.get("/api/download", async (req, res) => {
             videoId = extractYouTubeVideoId(directUrl);
             // Get metadata
             try {
-                const yts = require("yt-search");
-                const r = await yts({ videoId });
-                if (r && r.title) { safeTitle = r.title; safeArtist = r.author?.name || "YouTube"; }
+                const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, { signal: AbortSignal.timeout(3000) });
+                if (embedRes.ok) {
+                    const embedData = await embedRes.json();
+                    if (embedData.title) { safeTitle = embedData.title; safeArtist = embedData.author_name || safeArtist; }
+                }
             } catch { }
+
+            if (safeTitle === "YouTube Audio") {
+                try {
+                    const yts = require("yt-search");
+                    const r = await yts({ videoId });
+                    if (r && r.title) { safeTitle = r.title; safeArtist = r.author?.name || "YouTube"; }
+                } catch { }
+            }
         } else if (title && artist) {
             try {
                 const yts = require("yt-search");

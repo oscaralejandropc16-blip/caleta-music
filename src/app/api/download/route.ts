@@ -565,17 +565,30 @@ export async function GET(request: NextRequest) {
             console.log(`[Download] YouTube URL detected: ${directUrl}, videoId: ${videoId}`);
 
             if (videoId) {
-                // Safely extract metadata first using yt-search (highly reliable) to avoid "Enlace Descargado"
+                // Safely extract metadata first using robust external APIs to ensure Deezer fallback works if needed
                 let safeTitle = "Enlace Descargado";
                 let safeArtist = "Desconocido";
                 try {
-                    const yts = (await import("yt-search")).default;
-                    const r = await yts({ videoId });
-                    if (r && r.title) {
-                        safeTitle = r.title;
-                        safeArtist = r.author?.name || "YouTube";
+                    const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, { signal: AbortSignal.timeout(3000) });
+                    if (embedRes.ok) {
+                        const embedData = await embedRes.json();
+                        if (embedData.title) {
+                            safeTitle = embedData.title;
+                            safeArtist = embedData.author_name || safeArtist;
+                        }
                     }
                 } catch { }
+
+                if (safeTitle === "Enlace Descargado") {
+                    try {
+                        const yts = (await import("yt-search")).default;
+                        const r = await yts({ videoId });
+                        if (r && r.title) {
+                            safeTitle = r.title;
+                            safeArtist = r.author?.name || "YouTube";
+                        }
+                    } catch { }
+                }
 
                 // Try native yt-dlp if available
                 const hasYtDlp = fs.existsSync(YT_DLP_PATH);
