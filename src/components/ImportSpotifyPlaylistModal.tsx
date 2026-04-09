@@ -50,6 +50,7 @@ export default function ImportSpotifyPlaylistModal({
 
             const tracks = data.tracks || [];
             setProgress(`Agregando ${tracks.length} canciones...`);
+            const { addSongToLibrary } = await import('@/lib/syncLibrary');
 
             for (let i = 0; i < tracks.length; i++) {
                 const spTrack = tracks[i];
@@ -71,6 +72,8 @@ export default function ImportSpotifyPlaylistModal({
                 try {
                     await saveTrackToDB(newTrack);
                     await addTrackToPlaylist(newPl.id, newTrack.id);
+                    // Sync the individual track metadata to the cloud so the phone can see it inside the playlist!
+                    addSongToLibrary(newTrack, newTrack.streamUrl || '').catch(() => { });
                 } catch (e) {
                     console.warn("Skip track", e);
                 }
