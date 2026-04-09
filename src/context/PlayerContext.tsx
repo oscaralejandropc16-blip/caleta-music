@@ -189,7 +189,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             try {
                 MediaSession.setActionHandler({ action: 'play' }, () => {
                     if (audioRef.current && audioRef.current.paused) {
-                        audioRef.current.play().catch(console.warn);
+                        // Force a tiny seek to kickstart the iOS audio decoder if it suspended
+                        audioRef.current.currentTime = audioRef.current.currentTime + 0.001;
+                        audioRef.current.play().then(() => {
+                            startKeepAwake(); // Ensure the silent oscillator is running
+                        }).catch(console.warn);
                     }
                 });
                 MediaSession.setActionHandler({ action: 'pause' }, () => {
