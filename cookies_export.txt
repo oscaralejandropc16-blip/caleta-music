@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+.youtube.com	TRUE	/	TRUE	0	CONSENT	YES+
+www.youtube.com	FALSE	/	TRUE	0	PREF	f6=40000000

@@ -1,7 +1,7 @@
 async function test() {
     const url = "https://www.youtube.com/watch?v=hM5lO2PWnGk";
     try {
-        const res = await fetch("https://api.cobalt.tools/", {
+        const res = await fetch("https://co.eepy.today/", {
             method: "POST",
             headers: {
                 "Accept": "application/json",

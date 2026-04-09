@@ -34,6 +34,7 @@ import { getUserLibrary, removeSongFromLibrary, syncPlaylistToCloud, pullPlaylis
 import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
+import ImportDeezerPlaylistModal from "@/components/ImportDeezerPlaylistModal";
 import PlaylistDetailModal from "@/components/PlaylistDetailModal";
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
@@ -60,6 +61,7 @@ function LibraryContent() {
     const [savedAlbums, setSavedAlbums] = useState<SavedAlbum[]>([]);
 
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showDeezerModal, setShowDeezerModal] = useState(false);
     const [contextMenuTrackId, setContextMenuTrackId] = useState<string | null>(null);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -560,12 +562,22 @@ function LibraryContent() {
 
                 <div className="flex-1 min-w-[10px]"></div>
 
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-5 py-2.5 rounded-full font-bold text-sm hidden md:flex items-center gap-2 transition-all duration-300 ml-auto outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-95"
-                >
-                    <Plus size={18} strokeWidth={2.5} /> <span>Nueva Playlist</span>
-                </button>
+                <div className="flex-1 min-w-[10px]"></div>
+
+                <div className="hidden md:flex gap-3 ml-auto">
+                    <button
+                        onClick={() => setShowDeezerModal(true)}
+                        className="bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-purple-500/40 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-95"
+                    >
+                        <CloudDownload size={18} strokeWidth={2.5} /> <span>Importar de Deezer</span>
+                    </button>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] active:scale-95"
+                    >
+                        <Plus size={18} strokeWidth={2.5} /> <span>Nueva Playlist</span>
+                    </button>
+                </div>
             </div>
 
             {/* Playlists Tab */}
@@ -603,6 +615,18 @@ function LibraryContent() {
                                     <Plus size={32} strokeWidth={1.5} className="group-hover:text-brand-400 transition-colors" />
                                 </div>
                                 <span className="text-sm font-bold tracking-wide">Nueva Playlist</span>
+                            </button>
+
+                            {/* Import Deezer Card (Mobile visible, but also Desktop) */}
+                            <button
+                                onClick={() => setShowDeezerModal(true)}
+                                aria-label="Importar Playlist de Deezer"
+                                className="aspect-square rounded-[24px] border-2 border-dashed border-white/[0.05] hover:border-purple-500/30 hover:bg-white/[0.01] flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-purple-300 transition-all duration-300 group outline-none focus-visible:ring-4 focus-visible:ring-purple-500/40 active:scale-[0.98] card-glow md:hidden"
+                            >
+                                <div className="w-16 h-16 rounded-full bg-white/[0.03] group-hover:bg-purple-500/20 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-lg group-hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                                    <CloudDownload size={32} strokeWidth={1.5} className="group-hover:text-purple-400 transition-colors" />
+                                </div>
+                                <span className="text-sm font-bold tracking-wide">Importar Deezer</span>
                             </button>
 
                             {/* Existing Playlists */}
@@ -1019,6 +1043,12 @@ function LibraryContent() {
                     </div>
                 </div>
             )}
+
+            <ImportDeezerPlaylistModal
+                isOpen={showDeezerModal}
+                onClose={() => setShowDeezerModal(false)}
+                onSuccess={() => loadLibrary()}
+            />
         </main >
     );
 }

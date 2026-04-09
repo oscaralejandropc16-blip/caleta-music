@@ -442,7 +442,7 @@ export default function Home() {
 
           {recommendations.length > 0 && (
             <HorizontalScroller title="Álbumes y sencillos populares" icon={null}>
-              {recommendations.map((track) => <TrackCard key={`rec-${track.trackId}`} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => router.push(`/album?name=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}&coverUrl=${encodeURIComponent(cover)}`)} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+              {recommendations.map((track) => <TrackCard key={`rec-${track.trackId}`} track={track} size="large" savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, recommendations)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => router.push(`/album?name=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}&coverUrl=${encodeURIComponent(cover)}`)} onArtistClick={(artist) => router.push(`/artist?name=${encodeURIComponent(artist)}`)} />)}
             </HorizontalScroller>
           )}
 
@@ -535,7 +535,7 @@ export default function Home() {
                   </div>
                 ) : genreTracks.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, genreTracks)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => router.push(`/album?name=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}&coverUrl=${encodeURIComponent(cover)}`)} onArtistClick={(artist) => router.push(`/artist/${encodeURIComponent(artist)}`)} />)}
+                    {genreTracks.map(track => <TrackCard key={track.trackId} track={track} savedTrackIds={savedTrackIds} downloadingId={downloadingId} downloadProgress={downloadProgresses[track.trackId.toString()] || 0} likedIds={likedIds} onPlay={(e, t) => handlePlay(e, t, genreTracks)} onDownload={handleDownload} onToggleLike={handleToggleLike} onAlbumClick={(album, artist, cover) => router.push(`/album?name=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}&coverUrl=${encodeURIComponent(cover)}`)} onArtistClick={(artist) => router.push(`/artist?name=${encodeURIComponent(artist)}`)} />)}
                   </div>
                 ) : (
                   <p className="text-slate-500 text-center py-8">No se encontraron resultados.</p>

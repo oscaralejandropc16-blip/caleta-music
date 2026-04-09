@@ -580,7 +580,7 @@ export default function SearchPage() {
                                             </p>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); router.push(`/artist/${encodeURIComponent(track.artistName)}`); }}
+                                                    onClick={(e) => { e.stopPropagation(); router.push(`/artist?name=${encodeURIComponent(track.artistName)}`); }}
                                                     className="text-slate-400 font-medium text-[13px] truncate hover:text-brand-400 hover:underline transition-colors outline-none text-left"
                                                     title={track.artistName}
                                                 >

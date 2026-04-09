@@ -253,7 +253,7 @@ export default function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerPr
                                     i % 2 === 0 ? (
                                         <Link
                                             key={i}
-                                            href={`/artist/${encodeURIComponent(part.trim())}`}
+                                            href={`/artist?name=${encodeURIComponent(part.trim())}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onClose();
