@@ -298,7 +298,7 @@ export default function Home() {
 
         // Usar servidor remoto de Railway si corre en Android APK (Capacitor)
         let baseUrl = "";
-        try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music.netlify.app"; } catch { }
+        try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music.vercel.app"; } catch { }
 
         // MusicApiService maneja problemas de CORS y peticiones HTTP nativas
         const recData = await MusicApiService.get(`${baseUrl}/api/search?term=${encodeURIComponent(recTerm)}`);
@@ -387,7 +387,7 @@ export default function Home() {
       const topArtist = genre.artists[Math.floor(Math.random() * genre.artists.length)];
 
       let baseUrl = "";
-      try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music.netlify.app"; } catch { }
+      try { if (Capacitor.isNativePlatform()) baseUrl = "https://caleta-music.vercel.app"; } catch { }
 
       const data = await MusicApiService.get(`${baseUrl}/api/search?term=${encodeURIComponent(topArtist)}`);
       setGenreTracks(data.results?.slice(0, 12) || []);

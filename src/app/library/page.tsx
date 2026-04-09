@@ -158,7 +158,7 @@ function LibraryContent() {
                                 album: dzTrack.album?.title || '',
                                 coverUrl: dzTrack.album?.cover_xl || dzTrack.album?.cover_medium || '',
                                 previewUrl: dzTrack.preview,
-                                streamUrl: `https://caleta-music.netlify.app/api/deezer?id=${dzTrack.id}`,
+                                streamUrl: `https://caleta-music.vercel.app/api/deezer?id=${dzTrack.id}`,
                                 downloadedAt: Date.now()
                             };
                             await saveTrackToDB(newTrack);
@@ -243,7 +243,7 @@ function LibraryContent() {
         const sUrl = track.sourceAudioUrl || track.streamUrl || "";
         if (sUrl.includes('/api/download?url=')) {
             try {
-                const parsed = new URL(sUrl.startsWith('http') ? sUrl : `https://caleta-music.netlify.app${sUrl}`);
+                const parsed = new URL(sUrl.startsWith('http') ? sUrl : `https://caleta-music.vercel.app${sUrl}`);
                 directUrl = parsed.searchParams.get('url');
             } catch { /* ignore */ }
         } else if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
@@ -260,8 +260,8 @@ function LibraryContent() {
 
             if (isNative) {
                 let trackDownloadUrl = directUrl
-                    ? `https://caleta-music.netlify.app/api/download?url=${encodeURIComponent(directUrl)}&play=true`
-                    : `https://caleta-music.netlify.app/api/download?title=${encodeURIComponent(useTitle || "")}&artist=${encodeURIComponent(useArtist || "")}&play=true`;
+                    ? `https://caleta-music.vercel.app/api/download?url=${encodeURIComponent(directUrl)}&play=true`
+                    : `https://caleta-music.vercel.app/api/download?title=${encodeURIComponent(useTitle || "")}&artist=${encodeURIComponent(useArtist || "")}&play=true`;
 
                 const result = await downloadSong({
                     id: track.id,
@@ -319,7 +319,7 @@ function LibraryContent() {
         try { isNative = Capacitor.isNativePlatform(); } catch { /* web */ }
 
         if (isNative) {
-            let trackDownloadUrl = `https://caleta-music.netlify.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
+            let trackDownloadUrl = `https://caleta-music.vercel.app/api/deezer?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`;
             trackDownloadUrl += '&play=true';
 
             const result = await downloadSong({

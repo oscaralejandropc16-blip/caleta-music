@@ -123,7 +123,7 @@ async function processResolvedBlob(
     let streamUrl = "";
     if (track) {
         // For iTunes/Deezer tracks, point to the Deezer API
-        streamUrl = `https://caleta-music.netlify.app/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
+        streamUrl = `https://caleta-music.vercel.app/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
     } else if (url) {
         // For YouTube/direct links, point to the download API with the original URL on Render
         streamUrl = `https://caleta-music.onrender.com/api/download/?url=${encodeURIComponent(url)}`;
@@ -159,7 +159,7 @@ export const downloadAndSaveTrack = async (
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
         // We use Netlify's fully qualified URL for Native Deezer, and relative "" path for web
-        const NETLIFY_API = "https://caleta-music.netlify.app";
+        const NETLIFY_API = "https://caleta-music.vercel.app";
         // YouTube Backend on Render
         const RENDER_YOUTUBE_API = "https://caleta-music.onrender.com";
 

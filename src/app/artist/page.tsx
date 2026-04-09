@@ -132,7 +132,7 @@ function ArtistProfileContent() {
             return;
         }
 
-        const RAILWAY_API = "https://caleta-music.netlify.app";
+        const RAILWAY_API = "https://caleta-music.vercel.app";
         const downloadUrl = (track as any)._source === 'deezer'
             ? `${RAILWAY_API}/api/deezer?id=${track.trackId}`
             : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
@@ -163,7 +163,7 @@ function ArtistProfileContent() {
         e.stopPropagation();
         const strId = itunesTrack.trackId.toString();
 
-        const RAILWAY_API = "https://caleta-music.netlify.app";
+        const RAILWAY_API = "https://caleta-music.vercel.app";
         const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
             ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
             : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;

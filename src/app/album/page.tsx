@@ -51,7 +51,7 @@ export default function AlbumPage() {
             setAlbumMeta(null);
             try {
                 // Step 1: Search for the album to get collectionId (via Deezer)
-                const RAILWAY_API = "https://caleta-music.netlify.app";
+                const RAILWAY_API = "https://caleta-music.vercel.app";
                 const searchRes = await fetch(
                     `${RAILWAY_API}/api/deezer-proxy?endpoint=${encodeURIComponent(`/search/album?q=${albumName + " " + artistName}&limit=10`)}`
                 );
@@ -149,7 +149,7 @@ export default function AlbumPage() {
     const handleToggleLike = async (e: React.MouseEvent, itunesTrack: ItunesTrack) => {
         e.stopPropagation();
         const strId = itunesTrack.trackId.toString();
-        const RAILWAY_API = "https://caleta-music.netlify.app";
+        const RAILWAY_API = "https://caleta-music.vercel.app";
         const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
             ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
             : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
@@ -208,7 +208,7 @@ export default function AlbumPage() {
         artist: t.artistName,
         album: t.collectionName || "",
         coverUrl: t.artworkUrl100?.replace("100x100", "500x500") || "",
-        streamUrl: `https://caleta-music.netlify.app/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`,
+        streamUrl: `https://caleta-music.vercel.app/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`,
         downloadedAt: Date.now(),
     });
 

@@ -7,7 +7,7 @@ import { Preferences } from '@capacitor/preferences';
 import { MediaSession } from '@capgo/capacitor-media-session';
 import { startKeepAwake, stopKeepAwake } from '@/lib/keepAwake';
 
-const NETLIFY_API = "https://caleta-music.netlify.app";
+const NETLIFY_API = "https://caleta-music.vercel.app";
 const RENDER_YOUTUBE_API = "https://caleta-music.onrender.com";
 
 interface PlayerContextType {

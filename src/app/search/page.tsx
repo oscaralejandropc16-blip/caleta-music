@@ -100,7 +100,7 @@ export default function SearchPage() {
     const { playTrack } = usePlayer();
 
     const handlePlay = (track: ItunesTrack) => {
-        const RAILWAY_API = "https://caleta-music.netlify.app";
+        const RAILWAY_API = "https://caleta-music.vercel.app";
         const downloadUrl = (t: ItunesTrack) => (t as any)._source === 'deezer'
             ? `${RAILWAY_API}/api/deezer?id=${t.trackId}`
             : `${RAILWAY_API}/api/deezer?title=${encodeURIComponent(t.trackName)}&artist=${encodeURIComponent(t.artistName)}`;
@@ -141,8 +141,8 @@ export default function SearchPage() {
             // ── Flujo nativo (Capacitor) ──
             const appendPlayParam = (url: string) => url.includes('?') ? `${url}&play=true` : `${url}?play=true`;
             let trackDownloadUrl = (track as any)._source === 'deezer' && track.trackId
-                ? `https://caleta-music.netlify.app/api/deezer?id=${track.trackId}`
-                : `https://caleta-music.netlify.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
+                ? `https://caleta-music.vercel.app/api/deezer?id=${track.trackId}`
+                : `https://caleta-music.vercel.app/api/deezer?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
 
             trackDownloadUrl = appendPlayParam(trackDownloadUrl);
 
@@ -196,7 +196,7 @@ export default function SearchPage() {
 
             try {
                 // Fetch with minimal Range to extract actual metadata headers before download
-                const API_URL = "https://caleta-music.netlify.app";
+                const API_URL = "https://caleta-music.vercel.app";
                 const metaRes = await fetch(`${API_URL}/api/download?url=${encodeURIComponent(url)}`, {
                     method: "GET",
                     headers: { "Range": "bytes=0-0" },
@@ -214,7 +214,7 @@ export default function SearchPage() {
                 console.warn("Could not pre-fetch metadata for Native Link Download", e);
             }
 
-            const trackDownloadUrl = `https://caleta-music.netlify.app/api/download?url=${encodeURIComponent(url)}&play=true`;
+            const trackDownloadUrl = `https://caleta-music.vercel.app/api/download?url=${encodeURIComponent(url)}&play=true`;
 
             const result = await downloadSong({
                 id: directId,
