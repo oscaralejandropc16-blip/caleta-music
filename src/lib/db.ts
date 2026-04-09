@@ -32,6 +32,13 @@ const albumsStore = localforage.createInstance({
 });
 
 
+// Store para los BLOBs de audio (mejora masiva de rendimiento)
+const audioBlobsStore = localforage.createInstance({
+    name: "CaletaMusicDB",
+    storeName: "audio_blobs"
+});
+
+
 export interface SavedTrack {
     id: string;
     title: string;
@@ -44,6 +51,7 @@ export interface SavedTrack {
     downloadedAt: number;
     localPath?: string; // Ruta de guardado en móvil
     isNativeDownload?: boolean; // Para identificar que fue descargado con Capacitor
+    hasLocalBlob?: boolean; // Bandera para saber si el blob está en audioBlobsStore
 }
 
 export interface SavedAlbum {
@@ -70,7 +78,13 @@ export interface Playlist {
 
 export async function saveTrackToDB(track: SavedTrack): Promise<void> {
     try {
-        await tracksStore.setItem(track.id, track);
+        const toSave = { ...track };
+        if (toSave.blob) {
+            await audioBlobsStore.setItem(toSave.id, toSave.blob);
+            toSave.hasLocalBlob = true;
+            delete toSave.blob; // Save ram!
+        }
+        await tracksStore.setItem(toSave.id, toSave);
     } catch (err) {
         console.error("Error guardando pista:", err);
         throw err;
@@ -79,7 +93,17 @@ export async function saveTrackToDB(track: SavedTrack): Promise<void> {
 
 export async function getTrackFromDB(id: string): Promise<SavedTrack | null> {
     try {
-        return await tracksStore.getItem<SavedTrack>(id);
+        const track = await tracksStore.getItem<SavedTrack>(id);
+        if (track) {
+            // Restore legacy blob or load from new store
+            if (track.blob) {
+                return track;
+            } else if (track.hasLocalBlob) {
+                const blob = await audioBlobsStore.getItem<Blob>(id);
+                if (blob) track.blob = blob;
+            }
+        }
+        return track;
     } catch (err) {
         console.error("Error obteniendo pista:", err);
         return null;
@@ -89,8 +113,18 @@ export async function getTrackFromDB(id: string): Promise<SavedTrack | null> {
 export async function getAllTracksFromDB(): Promise<SavedTrack[]> {
     const tracks: SavedTrack[] = [];
     try {
-        await tracksStore.iterate((value: unknown) => {
-            tracks.push(value as SavedTrack);
+        await tracksStore.iterate((value: unknown, key: string) => {
+            const track = value as SavedTrack;
+
+            // Background migration: if legacy track has blob, move it to audioBlobsStore
+            if (track.blob) {
+                audioBlobsStore.setItem(key, track.blob).catch(() => { });
+                delete track.blob;
+                track.hasLocalBlob = true;
+                tracksStore.setItem(key, track).catch(() => { });
+            }
+
+            tracks.push(track);
         });
         return tracks.sort((a, b) => (b.downloadedAt || 0) - (a.downloadedAt || 0));
     } catch (err) {
@@ -102,6 +136,8 @@ export async function getAllTracksFromDB(): Promise<SavedTrack[]> {
 export async function removeTrackFromDB(id: string): Promise<void> {
     try {
         await tracksStore.removeItem(id);
+        await audioBlobsStore.removeItem(id); // Delete blob too
+
         // Remover la pista de todas las playlists
         const playlists = await getAllPlaylists();
         for (const pl of playlists) {
@@ -247,6 +283,7 @@ export async function removeTrackFromPlaylist(playlistId: string, trackId: strin
 export async function clearAllLocalData(): Promise<void> {
     try {
         await tracksStore.clear();
+        await audioBlobsStore.clear();
         await likesStore.clear();
         await playlistsStore.clear();
         await albumsStore.clear();
