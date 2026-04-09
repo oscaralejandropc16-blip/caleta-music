@@ -233,7 +233,11 @@ app.get("/api/download", async (req, res) => {
                 return res.send(fileBuffer);
             } catch (ytdlpErr) {
                 console.warn(`[yt-dlp] Failed: ${ytdlpErr.message}`);
-                return res.status(500).json({ error: "No se pudo extraer el audio (yt-dlp falló, posible bloqueo captcha/IP o token PO requerido)." });
+                return res.status(500).json({
+                    error: "No se pudo extraer el audio (yt-dlp falló, posible bloqueo captcha/IP o token PO requerido).",
+                    title: safeTitle,
+                    artist: safeArtist
+                });
             }
         }
 

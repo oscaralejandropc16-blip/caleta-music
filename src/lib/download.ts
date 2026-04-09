@@ -35,13 +35,20 @@ async function fetchWithChunks(
         });
 
         if (!res.ok) {
-            // Intentar extraer mensaje de error del API
+            // Intentar extraer mensaje de error del API y posible metadata de fallback
             let apiError = `HTTP ${res.status}`;
+            let extractedTitle = "";
+            let extractedArtist = "";
             try {
                 const errData = await res.json();
                 if (errData.error) apiError = errData.error;
+                if (errData.title) extractedTitle = errData.title;
+                if (errData.artist) extractedArtist = errData.artist;
             } catch { /* no es JSON */ }
-            throw new Error(`API error: ${apiError}`);
+            const error = new Error(`API error: ${apiError}`);
+            (error as any).extractedTitle = extractedTitle;
+            (error as any).extractedArtist = extractedArtist;
+            throw error;
         }
 
         if (!firstHeaders) firstHeaders = res.headers;
@@ -250,6 +257,38 @@ export const downloadAndSaveTrack = async (
                 } catch (dzErr: any) {
                     const dzError = dzErr?.message || "Error desconocido";
                     console.error(`[Download] Deezer also failed: ${dzError}`);
+                    return {
+                        success: false,
+                        error: `YouTube: ${deezerError} | Deezer: ${dzError}`
+                    };
+                }
+            } else if (downloadUrl.includes('/api/download') && !track && downloadErr?.extractedTitle && downloadErr.extractedTitle !== "Enlace Descargado") {
+                console.warn(`[Download] YouTube failed (${deezerError}), but captured metadata. Trying Deezer...`);
+                if (onProgress) onProgress(30);
+
+                const extractedTitle = downloadErr.extractedTitle;
+                const extractedArtist = downloadErr.extractedArtist || "Desconocido";
+
+                try {
+                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(extractedTitle)}&artist=${encodeURIComponent(extractedArtist)}`;
+                    const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
+
+                    // Reconstruct a faux track so processResolvedBlob knows title/artist
+                    const fauxTrack = {
+                        trackId: Date.now(),
+                        artistName: extractedArtist,
+                        trackName: extractedTitle,
+                        collectionName: "",
+                        artworkUrl100: "",
+                        previewUrl: ""
+                    };
+
+                    await processResolvedBlob(blob, headers, fauxTrack as ItunesTrack, null, id);
+                    if (onComplete) onComplete();
+                    return { success: true };
+                } catch (dzErr: any) {
+                    const dzError = dzErr?.message || "Error desconocido";
+                    console.error(`[Download] Deezer URL fallback also failed: ${dzError}`);
                     return {
                         success: false,
                         error: `YouTube: ${deezerError} | Deezer: ${dzError}`

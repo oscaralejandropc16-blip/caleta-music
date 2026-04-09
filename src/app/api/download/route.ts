@@ -617,7 +617,11 @@ export async function GET(request: NextRequest) {
                     return await proxyAudioStream(request, result);
                 } catch (fallbackErr: any) {
                     console.error(`[Download] All YouTube methods failed: ${fallbackErr.message}`);
-                    return withCors(NextResponse.json({ error: "No se pudo extraer el audio del enlace de YouTube." }, { status: 500 }));
+                    return withCors(NextResponse.json({
+                        error: "No se pudo extraer el audio del enlace de YouTube.",
+                        title: safeTitle,
+                        artist: safeArtist
+                    }, { status: 500 }));
                 }
             } else {
                 console.warn(`[Download] Could not extract video ID from YouTube URL: ${directUrl}`);
