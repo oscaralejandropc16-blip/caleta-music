@@ -35,7 +35,6 @@ async function fetchWithChunks(
         });
 
         if (!res.ok) {
-            // Intentar extraer mensaje de error del API y posible metadata de fallback
             let apiError = `HTTP ${res.status}`;
             let extractedTitle = "";
             let extractedArtist = "";
@@ -44,7 +43,7 @@ async function fetchWithChunks(
                 if (errData.error) apiError = errData.error;
                 if (errData.title) extractedTitle = errData.title;
                 if (errData.artist) extractedArtist = errData.artist;
-            } catch { /* no es JSON */ }
+            } catch { }
             const error = new Error(`API error: ${apiError}`);
             (error as any).extractedTitle = extractedTitle;
             (error as any).extractedArtist = extractedArtist;
@@ -55,11 +54,9 @@ async function fetchWithChunks(
 
         contentType = res.headers.get("Content-Type") || contentType;
 
-        // Vercel fallback: if JSON is returned with audioUrl, we must fetch from that URL instead
         if (contentType.includes("application/json") && downloadedBytes === 0) {
             const data = await res.json();
             if (data.audioUrl) {
-                // Restart process using the direct audio URL
                 url = data.audioUrl;
                 firstHeaders = null;
                 continue;
@@ -85,7 +82,6 @@ async function fetchWithChunks(
             onProgress(Math.min(99, Math.round((downloadedBytes / totalBytes) * 95)));
         }
 
-        // Break if server didn't return chunked, or we reached the end
         if (!contentRange || downloadedBytes >= totalBytes) {
             break;
         }
@@ -124,14 +120,11 @@ async function processResolvedBlob(
         console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
     }
 
-    // Build a functional streamUrl that can be used to re-stream this track later
     let streamUrl = "";
     if (track) {
-        // For iTunes/Deezer tracks, point to the Deezer API
         streamUrl = `https://caleta-music.vercel.app/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
     } else if (url) {
-        // For YouTube/direct links, point to the download API with the original URL on Render
-        streamUrl = `https://caleta-music.onrender.com/api/download/?url=${encodeURIComponent(url)}`;
+        streamUrl = `https://caleta-music.vercel.app/api/youtube-resolve?id=${url.match(/(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})/)?.[1] || ""}`;
     }
 
     const trackData = {
@@ -152,6 +145,20 @@ export interface DownloadResult {
     error?: string;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ * MAIN DOWNLOAD FUNCTION
+ * 
+ * Architecture for YouTube URLs (eliminates datacenter IP blocking):
+ *   1. Browser → Vercel /api/youtube-resolve (lightweight, only talks to Invidious API)
+ *   2. Vercel returns Invidious `local=true` audio URL + metadata
+ *   3. Browser fetches audio DIRECTLY from Invidious (residential proxy)
+ *   4. YouTube never sees a datacenter IP!
+ * 
+ * Architecture for Track-based downloads:
+ *   1. Browser → Vercel /api/deezer (Deezer streaming)
+ * ═══════════════════════════════════════════════════════════════════
+ */
 export const downloadAndSaveTrack = async (
     track: ItunesTrack | null,
     url: string | null,
@@ -163,29 +170,11 @@ export const downloadAndSaveTrack = async (
         let isNative = false;
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
-        // We use Vercel's fully qualified URL for Native, and relative "" path for web
-        const NETLIFY_API = "https://caleta-music.vercel.app";
-        // YouTube Backend on Render
-        const RENDER_YOUTUBE_API = isNative ? "https://caleta-music.onrender.com" : "";
-
-        const runtimeApiBase = isNative ? NETLIFY_API : "";
-        let downloadUrl = "";
-
-        if (track) {
-            if ((track as any)._source === 'deezer' && track.trackId) {
-                downloadUrl = `${runtimeApiBase}/api/deezer/?id=${track.trackId}`;
-            } else {
-                downloadUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
-            }
-        } else if (url) {
-            // YouTube downloads routed strictly through the new Render backend (yt-dlp capable)
-            downloadUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(url)}`;
-        } else {
-            return { success: false, error: "No se proporcionó canción ni URL" };
-        }
+        const VERCEL_API = "https://caleta-music.vercel.app";
+        const runtimeApiBase = isNative ? VERCEL_API : "";
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120000); // 2 mins total
+        const timeout = setTimeout(() => controller.abort(), 120000);
 
         let fakeProgressInterval: NodeJS.Timeout | null = null;
         if (onProgress) {
@@ -199,110 +188,155 @@ export const downloadAndSaveTrack = async (
             }, 600);
         }
 
-        let deezerError = "";
-
-        // Note: No pre-fetch needed since YouTube downloads now go through Railway 
-        // which has yt-dlp and reliably includes X-Video-* headers in the response.
-        // fetchWithChunks captures firstHeaders from the first response.
-        let prefetchedMeta: { title?: string; artist?: string; cover?: string } | undefined;
-
-        try {
-            const { blob, headers } = await fetchWithChunks(downloadUrl, controller, onProgress);
+        const cleanup = () => {
             clearTimeout(timeout);
             if (fakeProgressInterval) clearInterval(fakeProgressInterval);
+        };
 
-            await processResolvedBlob(blob, headers, track, url, id, prefetchedMeta);
-            if (onComplete) onComplete();
-            return { success: true };
-        } catch (downloadErr: any) {
-            clearTimeout(timeout);
-            if (fakeProgressInterval) clearInterval(fakeProgressInterval);
-            deezerError = downloadErr?.message || "Error desconocido";
-
-            // 1. Si era Deezer el primer intento, vamos a YouTube
-            if (downloadUrl.includes('/api/deezer') && track) {
-                console.warn(`[Download] Deezer failed (${deezerError}), trying YouTube...`);
-                if (onProgress) onProgress(30);
-
-                try {
-                    const fallbackUrl = `https://caleta-music.onrender.com/api/download/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
-                    const { blob, headers } = await fetchWithChunks(fallbackUrl, controller, onProgress);
-
-                    await processResolvedBlob(blob, headers, track, url, id);
-                    if (onComplete) onComplete();
-                    return { success: true };
-                } catch (ytErr: any) {
-                    const ytError = ytErr?.message || "Error desconocido";
-                    console.error(`[Download] YouTube also failed: ${ytError}`);
-                    return {
-                        success: false,
-                        error: `Deezer: ${deezerError} | YouTube: ${ytError}`
-                    };
-                }
+        // ═══════════════════════════════════════════════════
+        // PATH A: Track-based download (iTunes/Deezer)
+        // ═══════════════════════════════════════════════════
+        if (track) {
+            let downloadUrl = "";
+            if ((track as any)._source === 'deezer' && track.trackId) {
+                downloadUrl = `${runtimeApiBase}/api/deezer/?id=${track.trackId}`;
+            } else {
+                downloadUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
             }
-            // 2. Si era YouTube el primer intento, vamos a Deezer 
-            else if (downloadUrl.includes('/api/download') && track) {
-                console.warn(`[Download] YouTube failed (${deezerError}), trying Deezer...`);
-                if (onProgress) onProgress(30);
 
-                try {
-                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(track.trackName)}&artist=${encodeURIComponent(track.artistName)}`;
-                    const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
+            try {
+                const { blob, headers } = await fetchWithChunks(downloadUrl, controller, onProgress);
+                cleanup();
+                await processResolvedBlob(blob, headers, track, url, id);
+                if (onComplete) onComplete();
+                return { success: true };
+            } catch (dzErr: any) {
+                cleanup();
+                return { success: false, error: dzErr?.message || "Error desconocido" };
+            }
+        }
 
-                    await processResolvedBlob(blob, headers, track, url, id);
-                    if (onComplete) onComplete();
-                    return { success: true };
-                } catch (dzErr: any) {
-                    const dzError = dzErr?.message || "Error desconocido";
-                    console.error(`[Download] Deezer also failed: ${dzError}`);
-                    return {
-                        success: false,
-                        error: `YouTube: ${deezerError} | Deezer: ${dzError}`
-                    };
+        // ═══════════════════════════════════════════════════
+        // PATH B: YouTube URL → Direct Invidious Download
+        // ═══════════════════════════════════════════════════
+        if (url) {
+            const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+
+            if (isYouTube) {
+                const videoIdMatch = url.match(/(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})/);
+                const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+                if (!videoId) {
+                    cleanup();
+                    return { success: false, error: "No se pudo extraer el ID del video" };
                 }
-            } else if (downloadUrl.includes('/api/download') && !track && downloadErr?.extractedTitle && downloadErr.extractedTitle !== "Enlace Descargado") {
-                console.warn(`[Download] YouTube failed (${deezerError}), but captured metadata. Trying Deezer...`);
-                if (onProgress) onProgress(30);
 
-                const extractedTitle = downloadErr.extractedTitle;
-                const extractedArtist = downloadErr.extractedArtist || "Desconocido";
+                console.log(`[Download] YouTube detected. VideoId: ${videoId}. Using DIRECT Invidious path.`);
+
+                // ── Step 1: Resolve audio URL via Vercel (talks to Invidious, NOT YouTube) ──
+                let audioUrl = "";
+                let resolvedTitle = "Enlace Descargado";
+                let resolvedArtist = "Desconocido";
+                let resolvedCover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
                 try {
-                    const dzFallbackUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(extractedTitle)}&artist=${encodeURIComponent(extractedArtist)}`;
-                    const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
+                    if (onProgress) onProgress(10);
+                    const resolveUrl = `${runtimeApiBase}/api/youtube-resolve?id=${videoId}`;
+                    const resolveRes = await fetch(resolveUrl, { signal: AbortSignal.timeout(15000) });
 
-                    await processResolvedBlob(blob, headers, null, url, id, {
-                        title: extractedTitle,
-                        artist: extractedArtist
-                    });
-                    if (onComplete) onComplete();
-                    return { success: true };
-                } catch (dzErr: any) {
-                    const dzError = dzErr?.message || "Error desconocido";
-                    console.warn(`[Download] Deezer URL fallback failed: ${dzError}. Trying Vercel Proxies...`);
+                    if (resolveRes.ok) {
+                        const data = await resolveRes.json();
+                        audioUrl = data.audioUrl;
+                        resolvedTitle = data.title || resolvedTitle;
+                        resolvedArtist = data.artist || resolvedArtist;
+                        resolvedCover = data.coverUrl || resolvedCover;
+                        console.log(`[Download] ✅ Resolved: "${resolvedTitle}" via ${data.instance}`);
+                    } else {
+                        try {
+                            const errData = await resolveRes.json();
+                            if (errData.title) resolvedTitle = errData.title;
+                            if (errData.artist) resolvedArtist = errData.artist;
+                        } catch { }
+                        console.warn(`[Download] Resolver returned ${resolveRes.status}`);
+                    }
+                } catch (err: any) {
+                    console.warn(`[Download] Resolver error: ${err.message}`);
+                }
 
+                // ── Step 2: Download audio DIRECTLY from Invidious (browser residential IP) ──
+                if (audioUrl) {
                     try {
-                        const vProxyUrl = `${NETLIFY_API}/api/download/?url=${encodeURIComponent(url || "")}`;
-                        const { blob, headers } = await fetchWithChunks(vProxyUrl, controller, onProgress);
+                        if (onProgress) onProgress(25);
+                        console.log(`[Download] Fetching audio DIRECTLY from Invidious...`);
 
-                        await processResolvedBlob(blob, headers, null, url, id, {
-                            title: extractedTitle,
-                            artist: extractedArtist
+                        const audioRes = await fetch(audioUrl, { signal: controller.signal });
+                        if (!audioRes.ok) throw new Error(`Stream HTTP ${audioRes.status}`);
+
+                        const audioBlob = await audioRes.blob();
+                        if (onProgress) onProgress(90);
+
+                        const metaHeaders = new Headers();
+                        metaHeaders.set("x-video-title", encodeURIComponent(resolvedTitle));
+                        metaHeaders.set("x-video-artist", encodeURIComponent(resolvedArtist));
+                        metaHeaders.set("x-video-cover", resolvedCover);
+
+                        cleanup();
+                        await processResolvedBlob(audioBlob, metaHeaders, null, url, id, {
+                            title: resolvedTitle,
+                            artist: resolvedArtist,
+                            cover: resolvedCover
                         });
                         if (onComplete) onComplete();
                         return { success: true };
-                    } catch (vErr: any) {
-                        console.error(`[Download] Vercel Proxies also failed: ${vErr.message}`);
+                    } catch (streamErr: any) {
+                        console.warn(`[Download] Direct Invidious stream failed: ${streamErr.message}`);
+                    }
+                }
+
+                // ── Step 3: Last resort - Deezer with extracted metadata ──
+                if (resolvedTitle !== "Enlace Descargado") {
+                    console.warn(`[Download] Invidious failed. Last resort: Deezer search for "${resolvedTitle}"`);
+                    if (onProgress) onProgress(40);
+
+                    try {
+                        const dzUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
+                        const { blob, headers } = await fetchWithChunks(dzUrl, controller, onProgress);
+
+                        cleanup();
+                        await processResolvedBlob(blob, headers, null, url, id, {
+                            title: resolvedTitle,
+                            artist: resolvedArtist,
+                            cover: resolvedCover
+                        });
+                        if (onComplete) onComplete();
+                        return { success: true };
+                    } catch (dzErr: any) {
+                        cleanup();
                         return {
                             success: false,
-                            error: `YouTube (Main): ${deezerError} | Deezer: ${dzError} | YouTube (Proxies): ${vErr.message}`
+                            error: `Invidious: sin audio | Deezer: ${dzErr.message}`
                         };
                     }
                 }
-            } else {
-                return { success: false, error: deezerError };
+
+                cleanup();
+                return { success: false, error: "No se pudo resolver el audio. Ningún proxy respondió." };
+            }
+
+            // Non-YouTube URL: direct fetch
+            try {
+                const { blob, headers } = await fetchWithChunks(url, controller, onProgress);
+                cleanup();
+                await processResolvedBlob(blob, headers, null, url, id);
+                if (onComplete) onComplete();
+                return { success: true };
+            } catch (err: any) {
+                cleanup();
+                return { success: false, error: err.message || "Error descargando URL" };
             }
         }
+
+        return { success: false, error: "No se proporcionó canción ni URL" };
     } catch (error: any) {
         const msg = error?.name === 'AbortError'
             ? "Timeout: la descarga tardó más de 2 minutos"
