@@ -279,11 +279,25 @@ export const downloadAndSaveTrack = async (
                     return { success: true };
                 } catch (dzErr: any) {
                     const dzError = dzErr?.message || "Error desconocido";
-                    console.error(`[Download] Deezer URL fallback also failed: ${dzError}`);
-                    return {
-                        success: false,
-                        error: `YouTube: ${deezerError} | Deezer: ${dzError}`
-                    };
+                    console.warn(`[Download] Deezer URL fallback failed: ${dzError}. Trying Vercel Proxies...`);
+
+                    try {
+                        const vProxyUrl = `${NETLIFY_API}/api/download/?url=${encodeURIComponent(url || "")}`;
+                        const { blob, headers } = await fetchWithChunks(vProxyUrl, controller, onProgress);
+
+                        await processResolvedBlob(blob, headers, null, url, id, {
+                            title: extractedTitle,
+                            artist: extractedArtist
+                        });
+                        if (onComplete) onComplete();
+                        return { success: true };
+                    } catch (vErr: any) {
+                        console.error(`[Download] Vercel Proxies also failed: ${vErr.message}`);
+                        return {
+                            success: false,
+                            error: `YouTube (Main): ${deezerError} | Deezer: ${dzError} | YouTube (Proxies): ${vErr.message}`
+                        };
+                    }
                 }
             } else {
                 return { success: false, error: deezerError };

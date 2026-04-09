@@ -378,8 +378,21 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
         } catch { continue; }
     }
 
-    // 3. Fallback Invidious
-    for (const instance of INVIDIOUS_INSTANCES) {
+    // 3. Fallback Invidious Dinámico
+    let invidiousList = [...INVIDIOUS_INSTANCES, "https://inv.thepixora.com", "https://inv.nadeko.net"];
+    try {
+        const iRes = await fetch("https://api.invidious.io/instances.json", { signal: AbortSignal.timeout(3000) });
+        if (iRes.ok) {
+            const list = await iRes.json();
+            const fetched = list.filter((i: any) => i[1] && i[1].type === "https").map((i: any) => i[1].uri);
+            if (fetched.length > 0) {
+                // Ensure the pixora is high priority because it seems very stable
+                invidiousList = ["https://inv.thepixora.com", ...fetched];
+            }
+        }
+    } catch { }
+
+    for (const instance of invidiousList) {
         try {
             console.log(`[Download] Trying Invidious: ${instance}`);
             const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(3500) });
