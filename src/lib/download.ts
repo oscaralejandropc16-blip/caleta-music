@@ -233,34 +233,68 @@ export const downloadAndSaveTrack = async (
 
                 console.log(`[Download] YouTube detected. VideoId: ${videoId}. Using DIRECT Invidious path.`);
 
-                // ── Step 1: Resolve audio URL via Vercel (talks to Invidious, NOT YouTube) ──
+                // ── Step 1: Resolve audio URL DIRECTLY from browser to Invidious ──
+                // No server involved! Browser's residential IP talks directly to Invidious.
                 let audioUrl = "";
                 let resolvedTitle = "Enlace Descargado";
                 let resolvedArtist = "Desconocido";
                 let resolvedCover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
+                // Get title via noembed (always works, lightweight)
                 try {
-                    if (onProgress) onProgress(10);
-                    const resolveUrl = `${runtimeApiBase}/api/youtube-resolve?id=${videoId}`;
-                    const resolveRes = await fetch(resolveUrl, { signal: AbortSignal.timeout(15000) });
-
-                    if (resolveRes.ok) {
-                        const data = await resolveRes.json();
-                        audioUrl = data.audioUrl;
-                        resolvedTitle = data.title || resolvedTitle;
-                        resolvedArtist = data.artist || resolvedArtist;
-                        resolvedCover = data.coverUrl || resolvedCover;
-                        console.log(`[Download] ✅ Resolved: "${resolvedTitle}" via ${data.instance}`);
-                    } else {
-                        try {
-                            const errData = await resolveRes.json();
-                            if (errData.title) resolvedTitle = errData.title;
-                            if (errData.artist) resolvedArtist = errData.artist;
-                        } catch { }
-                        console.warn(`[Download] Resolver returned ${resolveRes.status}`);
+                    const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, { signal: AbortSignal.timeout(3000) });
+                    if (embedRes.ok) {
+                        const embedData = await embedRes.json();
+                        if (embedData.title) {
+                            resolvedTitle = embedData.title;
+                            resolvedArtist = embedData.author_name || resolvedArtist;
+                        }
                     }
-                } catch (err: any) {
-                    console.warn(`[Download] Resolver error: ${err.message}`);
+                } catch { }
+
+                // Try Invidious instances directly from browser (CORS confirmed working)
+                const INVIDIOUS_INSTANCES = [
+                    "https://inv.thepixora.com",
+                    "https://inv.nadeko.net",
+                    "https://invidious.jing.rocks",
+                    "https://iv.datura.network",
+                    "https://invidious.nerdvpn.de",
+                    "https://invidious.privacyredirect.com",
+                    "https://invidious.lunar.icu",
+                    "https://invidious.protokolla.fi",
+                ];
+
+                if (onProgress) onProgress(10);
+
+                for (const instance of INVIDIOUS_INSTANCES) {
+                    try {
+                        console.log(`[Download] Trying Invidious: ${instance}`);
+                        const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        if (!res.ok) continue;
+
+                        const data = await res.json();
+                        const audioStreams = (data.adaptiveFormats || []).filter((f: any) =>
+                            f.type?.startsWith("audio/") && f.url
+                        );
+                        if (audioStreams.length === 0) continue;
+
+                        const best = [...audioStreams]
+                            .sort((a: any, b: any) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0))[0];
+                        if (!best || !best.itag) continue;
+
+                        audioUrl = `${instance}/latest_version?id=${videoId}&itag=${best.itag}&local=true`;
+                        if (data.title) resolvedTitle = data.title;
+                        if (data.author) resolvedArtist = data.author;
+                        if (data.videoThumbnails?.[0]?.url) resolvedCover = data.videoThumbnails[0].url;
+
+                        console.log(`[Download] ✅ Resolved via ${instance}: ${best.type} @ ${best.bitrate}bps`);
+                        break;
+                    } catch (err: any) {
+                        console.warn(`[Download] ${instance} failed: ${err.message}`);
+                        continue;
+                    }
                 }
 
                 // ── Step 2: Download audio DIRECTLY from Invidious (browser residential IP) ──
