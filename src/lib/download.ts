@@ -107,23 +107,21 @@ async function processResolvedBlob(
     let resolvedCover = track?.artworkUrl100?.replace("100x100", "500x500") || "";
 
     if (!track) {
-        // 1. Try pre-fetched metadata first (from HEAD request)
+        console.log("[Download] Processing blob headers:", Array.from(headers.entries()));
+        const headerTitle = headers.get("x-video-title");
+        const headerArtist = headers.get("x-video-artist");
+        const headerCover = headers.get("x-video-cover");
+
+        if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
+        if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
+        if (headerCover) resolvedCover = headerCover;
+
         if (prefetchedMeta?.title && prefetchedMeta.title !== "Enlace Descargado") {
             resolvedTitle = prefetchedMeta.title;
-            resolvedArtist = prefetchedMeta.artist || resolvedArtist;
-            resolvedCover = prefetchedMeta.cover || resolvedCover;
-            console.log(`[Download] Using pre-fetched metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}`);
-        } else {
-            // 2. Fallback to response headers from the download stream
-            console.log("[Download] Processing blob headers:", Array.from(headers.entries()));
-            const headerTitle = headers.get("x-video-title");
-            const headerArtist = headers.get("x-video-artist");
-            const headerCover = headers.get("x-video-cover");
-            if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
-            if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
-            if (headerCover) resolvedCover = headerCover;
-            console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
+            if (prefetchedMeta.artist) resolvedArtist = prefetchedMeta.artist;
+            if (prefetchedMeta.cover) resolvedCover = prefetchedMeta.cover;
         }
+        console.log(`[Download] Extracted Metadata: Title=${resolvedTitle}, Artist=${resolvedArtist}, Cover=${resolvedCover}`);
     }
 
     // Build a functional streamUrl that can be used to re-stream this track later
@@ -273,17 +271,10 @@ export const downloadAndSaveTrack = async (
                     const dzFallbackUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(extractedTitle)}&artist=${encodeURIComponent(extractedArtist)}`;
                     const { blob, headers } = await fetchWithChunks(dzFallbackUrl, controller, onProgress);
 
-                    // Reconstruct a faux track so processResolvedBlob knows title/artist
-                    const fauxTrack = {
-                        trackId: Date.now(),
-                        artistName: extractedArtist,
-                        trackName: extractedTitle,
-                        collectionName: "",
-                        artworkUrl100: "",
-                        previewUrl: ""
-                    };
-
-                    await processResolvedBlob(blob, headers, fauxTrack as ItunesTrack, null, id);
+                    await processResolvedBlob(blob, headers, null, url, id, {
+                        title: extractedTitle,
+                        artist: extractedArtist
+                    });
                     if (onComplete) onComplete();
                     return { success: true };
                 } catch (dzErr: any) {
