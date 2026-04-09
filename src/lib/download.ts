@@ -1,4 +1,4 @@
-import { saveTrackToDB, SavedTrack } from "./db";
+import { saveTrackToDB, SavedTrack, getTrackFromDB } from "./db";
 import { addSongToLibrary } from "./syncLibrary";
 
 
@@ -167,6 +167,12 @@ export const downloadAndSaveTrack = async (
     onComplete?: () => void
 ): Promise<DownloadResult> => {
     try {
+        // Prevent duplicate downloads
+        const existingTrack = await getTrackFromDB(id);
+        if (existingTrack && existingTrack.blob !== undefined) {
+            return { success: false, error: "Esta canción ya está descargada en tu biblioteca." };
+        }
+
         let isNative = false;
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
