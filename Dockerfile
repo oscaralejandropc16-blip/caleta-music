@@ -1,4 +1,4 @@
-# ── Caleta Music – Lightweight YouTube API for Render ──
+# ── Caleta Music – YouTube API for Render (v3) ──
 FROM node:20-slim
 
 # Install yt-dlp, ffmpeg, python3
@@ -11,15 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod a+rx /usr/local/bin/yt-dlp \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Update yt-dlp to absolute latest nightly (fixes newest YouTube blocks)
 RUN /usr/local/bin/yt-dlp -U || true
 
 WORKDIR /app
 
-# Install only the minimal dependencies needed
-RUN npm init -y && npm install express cors yt-search
+# Install dependencies: youtubei.js is the primary extractor
+RUN npm init -y && npm install express cors yt-search youtubei.js
 
-# Copy only the server file
+# Copy server
 COPY render-server.js ./
 
 ENV PORT=3000
