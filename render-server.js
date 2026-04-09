@@ -39,8 +39,8 @@ async function ensureYtDlp() {
             return;
         }
 
-        console.log("[yt-dlp] Downloading latest yt-dlp release to bypass PoW blocks...");
-        const cmd = `curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${customPath} && chmod a+rx ${customPath}`;
+        console.log("[yt-dlp] Downloading latest yt-dlp_linux release to bypass dependencies...");
+        const cmd = `curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o ${customPath} && chmod a+rx ${customPath}`;
 
         const { exec } = require("child_process");
         exec(cmd, (err) => {
