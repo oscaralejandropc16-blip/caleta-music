@@ -253,15 +253,32 @@ export default function SearchPage() {
         setSearchTerm(term);
         setSearchError(false);
         try {
-            // Reemplazando el fetch estándar por el cliente nativo CapacitorHttp (sortea CORS)
-            // Utilizando base URL externa si el API interno fue eliminado en la app
-            const apiUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=30`;
+            // Reemplazamos iTunes por Deezer para búsquedas mucho más precisas.
+            let isNative = false;
+            try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
+
+            const VERCEL_API = "https://caleta-music.vercel.app";
+            const baseUrl = isNative ? VERCEL_API : "";
+            const apiUrl = `${baseUrl}/api/deezer-search?q=${encodeURIComponent(term)}`;
+
             const data = await MusicApiService.get(apiUrl);
 
-            // Format data from iTunes logic
-            setResults(data.results || []);
+            // Mapper from Deezer track to ItunesTrack so the rest of the app doesn't break
+            const mappedResults = (data.data || []).map((track: any) => ({
+                trackId: track.id,
+                artistName: track.artist?.name || "Desconocido",
+                trackName: track.title,
+                collectionName: track.album?.title || "",
+                // Replace Deezer small image with the large 1000x1000 or 500x500 version
+                artworkUrl100: track.album?.cover_xl || track.album?.cover_big || track.album?.cover || "",
+                previewUrl: track.preview || "",
+                trackTimeMillis: (track.duration || 0) * 1000,
+                _source: 'deezer' // Flag para usar Deezer ID directo
+            }));
+
+            setResults(mappedResults);
         } catch (error) {
-            console.error("Error fetching from iTunes via CapacitorHttp:", error);
+            console.error("Error fetching from Deezer:", error);
             setSearchError(true);
             setResults([]);
         } finally {
