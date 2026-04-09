@@ -314,34 +314,11 @@ export const downloadAndSaveTrack = async (
                     }
                 }
 
-                // ── Step 3: Last resort - Deezer with extracted metadata ──
-                if (resolvedTitle !== "Enlace Descargado") {
-                    console.warn(`[Download] Invidious failed. Last resort: Deezer search for "${resolvedTitle}"`);
-                    if (onProgress) onProgress(40);
-
-                    try {
-                        const dzUrl = `${runtimeApiBase}/api/deezer/?title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}`;
-                        const { blob, headers } = await fetchWithChunks(dzUrl, controller, onProgress);
-
-                        cleanup();
-                        await processResolvedBlob(blob, headers, null, url, id, {
-                            title: resolvedTitle,
-                            artist: resolvedArtist,
-                            cover: resolvedCover
-                        });
-                        if (onComplete) onComplete();
-                        return { success: true };
-                    } catch (dzErr: any) {
-                        cleanup();
-                        return {
-                            success: false,
-                            error: `Invidious: sin audio | Deezer: ${dzErr.message}`
-                        };
-                    }
-                }
-
+                // If we get here, absolutely all YouTube/Invidious download attempts failed
+                // WE NO LONGER FALLBACK TO DEEZER -- because Deezer often fetches the wrong song
+                // for remixes or specific live versions. The user only wants the exact YouTube audio.
                 cleanup();
-                return { success: false, error: "No se pudo resolver el audio. Ningún proxy respondió." };
+                return { success: false, error: "Servidores Invidious caídos. Intenta de nuevo más tarde." };
             }
 
             // Non-YouTube URL: direct fetch
