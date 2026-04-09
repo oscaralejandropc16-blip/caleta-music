@@ -27,6 +27,7 @@
     "react-dom": "19.2.3",
     "react-hot-toast": "^2.6.0",
     "soundcloud-downloader": "^1.0.0",
+    "spotify-url-info": "^3.3.0",
     "undici": "^7.22.0",
     "youtube-ext": "^1.1.25",
     "youtubei.js": "^17.0.1",

@@ -35,6 +35,7 @@ import { usePlayer } from "@/context/PlayerContext";
 import { useSearchParams, useRouter } from "next/navigation";
 import CreatePlaylistModal from "@/components/CreatePlaylistModal";
 import ImportDeezerPlaylistModal from "@/components/ImportDeezerPlaylistModal";
+import ImportSpotifyPlaylistModal from "@/components/ImportSpotifyPlaylistModal";
 import PlaylistDetailModal from "@/components/PlaylistDetailModal";
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
@@ -62,6 +63,7 @@ function LibraryContent() {
 
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showDeezerModal, setShowDeezerModal] = useState(false);
+    const [showSpotifyModal, setShowSpotifyModal] = useState(false);
     const [contextMenuTrackId, setContextMenuTrackId] = useState<string | null>(null);
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -566,6 +568,12 @@ function LibraryContent() {
 
                 <div className="hidden md:flex gap-3 ml-auto">
                     <button
+                        onClick={() => setShowSpotifyModal(true)}
+                        className="bg-green-500/10 hover:bg-green-500 text-green-400 hover:text-white border border-green-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-green-500/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] active:scale-95"
+                    >
+                        <CloudDownload size={18} strokeWidth={2.5} /> <span>Importar de Spotify</span>
+                    </button>
+                    <button
                         onClick={() => setShowDeezerModal(true)}
                         className="bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500/30 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-purple-500/40 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-95"
                     >
@@ -627,6 +635,18 @@ function LibraryContent() {
                                     <CloudDownload size={32} strokeWidth={1.5} className="group-hover:text-purple-400 transition-colors" />
                                 </div>
                                 <span className="text-sm font-bold tracking-wide">Importar Deezer</span>
+                            </button>
+
+                            {/* Import Spotify Card */}
+                            <button
+                                onClick={() => setShowSpotifyModal(true)}
+                                aria-label="Importar Playlist de Spotify"
+                                className="aspect-square rounded-[24px] border-2 border-dashed border-white/[0.05] hover:border-green-500/30 hover:bg-white/[0.01] flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-green-300 transition-all duration-300 group outline-none focus-visible:ring-4 focus-visible:ring-green-500/40 active:scale-[0.98] card-glow md:hidden"
+                            >
+                                <div className="w-16 h-16 rounded-full bg-white/[0.03] group-hover:bg-green-500/20 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shadow-lg group-hover:shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+                                    <CloudDownload size={32} strokeWidth={1.5} className="group-hover:text-green-400 transition-colors" />
+                                </div>
+                                <span className="text-sm font-bold tracking-wide">Importar Spotify</span>
                             </button>
 
                             {/* Existing Playlists */}
@@ -1047,6 +1067,12 @@ function LibraryContent() {
             <ImportDeezerPlaylistModal
                 isOpen={showDeezerModal}
                 onClose={() => setShowDeezerModal(false)}
+                onSuccess={() => loadLibrary()}
+            />
+
+            <ImportSpotifyPlaylistModal
+                isOpen={showSpotifyModal}
+                onClose={() => setShowSpotifyModal(false)}
                 onSuccess={() => loadLibrary()}
             />
         </main >
