@@ -297,14 +297,18 @@ export const downloadAndSaveTrack = async (
                     }
                 }
 
-                // ── Step 2: Download audio DIRECTLY from Invidious (browser residential IP) ──
+                // ── Step 2: Download audio via Vercel CORS proxy → Invidious (residential IP) ──
+                // Browser → Vercel (adds CORS) → Invidious (local=true, residential IP) → YouTube audio
+                // YouTube never sees Vercel's IP because Invidious handles it!
                 if (audioUrl) {
                     try {
                         if (onProgress) onProgress(25);
-                        console.log(`[Download] Fetching audio DIRECTLY from Invidious...`);
+                        // Route through our CORS proxy on Vercel
+                        const proxyUrl = `${runtimeApiBase}/api/audio-proxy?url=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}&cover=${encodeURIComponent(resolvedCover)}`;
+                        console.log(`[Download] Fetching via CORS proxy → Invidious...`);
 
-                        const audioRes = await fetch(audioUrl, { signal: controller.signal });
-                        if (!audioRes.ok) throw new Error(`Stream HTTP ${audioRes.status}`);
+                        const audioRes = await fetch(proxyUrl, { signal: controller.signal });
+                        if (!audioRes.ok) throw new Error(`Proxy stream HTTP ${audioRes.status}`);
 
                         const audioBlob = await audioRes.blob();
                         if (onProgress) onProgress(90);
