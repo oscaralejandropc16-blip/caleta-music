@@ -492,7 +492,7 @@ function LibraryContent() {
 
     // Obtenemos todos los trackIds que pertenecen a alguna playlist
     const playlistTrackIds = new Set<string>();
-    playlists.forEach(p => p.trackIds.forEach(id => playlistTrackIds.add(id)));
+    playlists.forEach(p => p.trackIds.forEach(id => playlistTrackIds.add(String(id))));
 
     // 'Canciones' tab should only show truly downloaded tracks or cloud library tracks
     // Excluimos las canciones que ya están dentro de una playlist (como pidió el usuario)
