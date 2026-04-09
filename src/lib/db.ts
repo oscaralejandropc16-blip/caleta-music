@@ -112,20 +112,35 @@ export async function getTrackFromDB(id: string): Promise<SavedTrack | null> {
 
 export async function getAllTracksFromDB(): Promise<SavedTrack[]> {
     const tracks: SavedTrack[] = [];
+    const migrations: { key: string, track: SavedTrack }[] = [];
+
     try {
         await tracksStore.iterate((value: unknown, key: string) => {
             const track = value as SavedTrack;
-
-            // Background migration: if legacy track has blob, move it to audioBlobsStore
             if (track.blob) {
-                audioBlobsStore.setItem(key, track.blob).catch(() => { });
-                delete track.blob;
-                track.hasLocalBlob = true;
-                tracksStore.setItem(key, track).catch(() => { });
+                migrations.push({ key, track });
+            } else {
+                tracks.push(track);
             }
-
-            tracks.push(track);
         });
+
+        // Run migrations sequentially to prevent out-of-memory crashes on iOS
+        for (const { key, track } of migrations) {
+            try {
+                const blob = track.blob;
+                const migratedTrack = { ...track };
+                delete migratedTrack.blob;
+                migratedTrack.hasLocalBlob = true;
+
+                tracks.push(migratedTrack);
+
+                await audioBlobsStore.setItem(key, blob);
+                await tracksStore.setItem(key, migratedTrack);
+            } catch (e) {
+                console.warn("Error migrating track blob", e);
+            }
+        }
+
         return tracks.sort((a, b) => (b.downloadedAt || 0) - (a.downloadedAt || 0));
     } catch (err) {
         console.error("Error obteniendo pistas:", err);

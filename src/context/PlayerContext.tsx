@@ -326,7 +326,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const onPause = () => {
             setIsPlaying(false);
             updateMediaSessionPlaybackState(false);
-            stopKeepAwake(); // Dually important to release the lock on background audio so MediaSession routing behaves!
+            // On native (iOS Wrapper) we MUST NOT stop keep-awake when paused, otherwise the OS
+            // forcefully kills the WebAudio context and the lock screen completely disappears.
+            if (!Capacitor.isNativePlatform()) {
+                stopKeepAwake();
+            }
         };
         const onPlay = () => {
             setIsPlaying(true);
