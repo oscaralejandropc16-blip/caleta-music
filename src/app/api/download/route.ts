@@ -409,7 +409,7 @@ async function resolveVideoAudioUrl(videoId: string): Promise<{
             if (!best || !best.url) continue;
 
             return {
-                audioUrl: best.url,
+                audioUrl: `${instance}/latest_version?id=${videoId}&itag=${best.itag}&local=true`,
                 contentType: best.type?.split(";")[0] || "audio/mp4",
                 title: data.title || "Enlace Descargado",
                 artist: data.author || "Desconocido",
