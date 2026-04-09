@@ -163,10 +163,10 @@ export const downloadAndSaveTrack = async (
         let isNative = false;
         try { const { Capacitor } = require('@capacitor/core'); isNative = Capacitor.isNativePlatform(); } catch { }
 
-        // We use Netlify's fully qualified URL for Native Deezer, and relative "" path for web
+        // We use Vercel's fully qualified URL for Native, and relative "" path for web
         const NETLIFY_API = "https://caleta-music.vercel.app";
         // YouTube Backend on Render
-        const RENDER_YOUTUBE_API = "https://caleta-music.onrender.com";
+        const RENDER_YOUTUBE_API = isNative ? "https://caleta-music.onrender.com" : "";
 
         const runtimeApiBase = isNative ? NETLIFY_API : "";
         let downloadUrl = "";

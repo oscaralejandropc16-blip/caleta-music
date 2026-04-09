@@ -8,7 +8,10 @@ import { MediaSession } from '@capgo/capacitor-media-session';
 import { startKeepAwake, stopKeepAwake } from '@/lib/keepAwake';
 
 const NETLIFY_API = "https://caleta-music.vercel.app";
-const RENDER_YOUTUBE_API = "https://caleta-music.onrender.com";
+const getYoutubeApiURL = () => {
+    try { if (Capacitor.isNativePlatform()) return "https://caleta-music.onrender.com"; } catch { }
+    return "";
+};
 
 interface PlayerContextType {
     currentTrack: SavedTrack | null;
@@ -392,12 +395,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                     initialUrl = URL.createObjectURL(currentTrack.blob);
                 } else if (sUrl) {
                     if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
-                        initialUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(sUrl)}`;
+                        initialUrl = `${getYoutubeApiURL()}/api/download/?url=${encodeURIComponent(sUrl)}`;
                     } else {
                         initialUrl = sUrl;
                     }
                 } else if (isYouTubeId) {
-                    initialUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
+                    initialUrl = `${getYoutubeApiURL()}/api/download/?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
                 } else if (currentTrack.previewUrl) {
                     initialUrl = currentTrack.previewUrl;
                 }
@@ -435,15 +438,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
                 if (sUrl) {
                     if (sUrl.includes('youtube.com/') || sUrl.includes('youtu.be/')) {
-                        srcUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(sUrl)}`;
+                        srcUrl = `${getYoutubeApiURL()}/api/download/?url=${encodeURIComponent(sUrl)}`;
                     } else {
                         srcUrl = sUrl;
                     }
                 } else if (isYouTubeId) {
-                    srcUrl = `${RENDER_YOUTUBE_API}/api/download/?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
+                    srcUrl = `${getYoutubeApiURL()}/api/download/?url=${encodeURIComponent(`https://youtube.com/watch?v=${currentTrack.id}`)}`;
                 } else if (isLinkDownload && currentTrack.title && currentTrack.title !== "Enlace Descargado" && currentTrack.artist) {
                     // Link downloads should try YouTube/Download API by title+artist
-                    srcUrl = `${RENDER_YOUTUBE_API}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
+                    srcUrl = `${getYoutubeApiURL()}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}`;
                 } else if (currentTrack.id && !isLinkDownload) {
                     srcUrl = `${NETLIFY_API}/api/deezer?id=${currentTrack.id}&title=${encodeURIComponent(currentTrack.title || "")}&artist=${encodeURIComponent(currentTrack.artist || "")}`;
                 } else if (currentTrack.title && currentTrack.artist && currentTrack.title !== "Enlace Descargado") {
@@ -501,7 +504,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                             if (fallbackLevel === 0 && currentTrack.title && currentTrack.artist) {
                                 console.log(`[Player] Audio error -> Searching alternative flow via ${isYouTubeId ? 'YouTube API' : 'Deezer API'}...`);
                                 if (isYouTubeId) {
-                                    const ytFallbackUrl = `${RENDER_YOUTUBE_API}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    const ytFallbackUrl = `${getYoutubeApiURL()}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(ytFallbackUrl, 1);
                                 } else {
                                     const deezerUrl = `${NETLIFY_API}/api/deezer/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
@@ -517,7 +520,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                                     attemptPlay(deezerFallbackUrl, 2);
                                 } else {
                                     // Si el primero fue Deezer, ahora toca YouTube
-                                    const ytFallbackUrl = `${RENDER_YOUTUBE_API}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
+                                    const ytFallbackUrl = `${getYoutubeApiURL()}/api/download/?title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.artist)}&play=true`;
                                     attemptPlay(ytFallbackUrl, 2);
                                 }
                             }
