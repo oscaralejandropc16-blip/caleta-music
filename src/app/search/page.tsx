@@ -185,7 +185,11 @@ export default function SearchPage() {
         if (url.includes('youtube.com/') || url.includes('youtu.be/')) {
             const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
             if (listMatch && listMatch[1]) {
-                playlistId = listMatch[1];
+                const pId = listMatch[1];
+                // Ignorar Mixes autogenerados de YouTube (empiezan con RD)
+                if (!pId.startsWith('RD') && !pId.startsWith('UL')) {
+                    playlistId = pId;
+                }
             }
         }
 
