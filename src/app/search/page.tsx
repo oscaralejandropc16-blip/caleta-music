@@ -179,6 +179,110 @@ export default function SearchPage() {
 
     const executeLinkDownload = async (url: string) => {
         if (linkDownloading) return;
+
+        // Check if it's a YouTube Playlist
+        let playlistId = null;
+        if (url.includes('youtube.com/') || url.includes('youtu.be/')) {
+            const listMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+            if (listMatch && listMatch[1]) {
+                playlistId = listMatch[1];
+            }
+        }
+
+        if (playlistId) {
+            setLinkDownloading(true);
+            setQuery("");
+            const toastId = toast.loading("Obteniendo información de la playlist de YouTube...");
+
+            try {
+                let isNative = false;
+                try { isNative = Capacitor.isNativePlatform(); } catch { }
+
+                const VERCEL_API = isNative ? "https://caleta-music.vercel.app" : "";
+                const plRes = await fetch(`${VERCEL_API}/api/youtube-playlist?list=${playlistId}`);
+                if (!plRes.ok) throw new Error("Error obteniendo la playlist");
+                const plData = await plRes.json();
+
+                if (plData.error || !plData.videos) throw new Error(plData.error || "Playlist vacía");
+
+                toast.loading(`Creando playlist y guardando ${plData.videos.length} canciones...`, { id: toastId });
+
+                const { createPlaylist, addTrackToPlaylist, saveTrackToDB } = await import('@/lib/db');
+                const { syncPlaylistToCloud, addSongToLibrary } = await import('@/lib/syncLibrary');
+
+                // create blob from cover
+                let coverBlob: Blob | undefined;
+                if (plData.coverUrl) {
+                    try {
+                        const imgRes = await fetch(plData.coverUrl);
+                        coverBlob = await imgRes.blob();
+                    } catch { }
+                }
+
+                const newPl = await createPlaylist(plData.title, plData.description || `YouTube Playlist`, coverBlob);
+
+                // Add items superficially to db (just like Spotify/Deezer import)
+                for (let i = 0; i < plData.videos.length; i++) {
+                    const video = plData.videos[i];
+                    // Save offline with "link-" prefix so they try to download via YT later on playback
+                    // Or save them directly using their YouTube video ID so playback resolves them
+                    const trackId = video.videoId;
+
+                    const newTrack: SavedTrack = {
+                        id: trackId,
+                        title: video.title,
+                        artist: video.author || 'YouTube',
+                        album: plData.title,
+                        coverUrl: `https://i.ytimg.com/vi/${trackId}/hqdefault.jpg`,
+                        previewUrl: `https://youtube.com/watch?v=${trackId}`,
+                        streamUrl: `/api/youtube-resolve?id=${trackId}`, // used for web playback
+                        downloadedAt: Date.now()
+                    };
+
+                    try {
+                        await saveTrackToDB(newTrack);
+                        await addTrackToPlaylist(newPl.id, newTrack.id);
+                        addSongToLibrary(newTrack, newTrack.previewUrl || '').catch(() => { });
+                    } catch (e) {
+                        console.warn("Skip track", e);
+                    }
+                }
+
+                try {
+                    const { getPlaylist } = await import('@/lib/db');
+                    const updated = await getPlaylist(newPl.id);
+                    if (updated) {
+                        await syncPlaylistToCloud(updated);
+                    }
+                } catch (e) { }
+
+                toast.success(`Playlist "${plData.title}" descargada. Aparecerá en tus Playlists.`, { id: toastId });
+                router.push(`/playlist?id=${newPl.id}`);
+            } catch (err: any) {
+                toast.error(`Error: ${err.message}`, { id: toastId });
+            } finally {
+                setLinkDownloading(false);
+            }
+            return;
+        }
+
+        // --- Check if it's a Deezer or Spotify Playlist ---
+        if (url.includes('deezer.com/playlist') || url.includes('deezer.com/es/playlist') || url.includes('deezer.page.link')) {
+            toast.success("Para importar Playlists de Deezer, ve a 'Tu Biblioteca' -> 'Playlists' y usa el botón morado de 'Importar de Deezer'.");
+            setLinkDownloading(false);
+            setQuery("");
+            return;
+        }
+
+        if (url.includes('spotify.com/playlist') || url.includes('spotify.link')) {
+            toast.success("Para importar Playlists de Spotify, ve a 'Tu Biblioteca' -> 'Playlists' y usa el botón verde de 'Importar de Spotify'.");
+            setLinkDownloading(false);
+            setQuery("");
+            return;
+        }
+
+        // --- Single Video Download / Standalone Link ---
+
         const directId = `link-${Date.now()}`;
         setLinkDownloading(true);
         setActiveLinkId(directId);

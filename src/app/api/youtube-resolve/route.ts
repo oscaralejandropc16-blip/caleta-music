@@ -130,6 +130,42 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // FALLBACK 1: PIPED API INSTANCES
+    const PIPED_INSTANCES = [
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.tokhmi.xyz",
+        "https://api.piped.projectsegfau.lt",
+        "https://pipedapi.smnz.de",
+        "https://piped-api.garudalinux.org"
+    ];
+
+    for (const instance of PIPED_INSTANCES) {
+        try {
+            console.log(`[YT-Resolve] Trying PIPED ${instance} for video ${resolvedVideoId}`);
+            const res = await fetch(`${instance}/streams/${resolvedVideoId}`, { signal: AbortSignal.timeout(6000) });
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            if (!data.audioStreams || data.audioStreams.length === 0) continue;
+
+            const bestAudio = data.audioStreams.sort((a: any, b: any) => b.bitrate - a.bitrate)[0];
+            if (!bestAudio || !bestAudio.url) continue;
+
+            console.log(`[YT-Resolve] ✅ Resolved via PIPED ${instance}`);
+            return withCors(NextResponse.json({
+                audioUrl: bestAudio.url,
+                contentType: bestAudio.mimeType || "audio/mp4",
+                title: data.title || "YouTube Audio",
+                artist: data.uploader || "Desconocido",
+                coverUrl: data.thumbnailUrl || `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`,
+                videoId: resolvedVideoId,
+                instance
+            }));
+        } catch (err: any) {
+            console.warn(`[YT-Resolve] PIPED ${instance} failed: ${err.message}`);
+        }
+    }
+
     // All instances failed - try noembed for at least metadata
     let fallbackTitle = "Enlace Descargado";
     let fallbackArtist = "Desconocido";
@@ -147,7 +183,7 @@ export async function GET(request: NextRequest) {
     }
 
     return withCors(NextResponse.json({
-        error: "All Invidious instances failed to resolve audio",
+        error: "All Invidious and Piped instances failed to resolve audio",
         title: fallbackTitle,
         artist: fallbackArtist,
         videoId: resolvedVideoId,
