@@ -92,6 +92,22 @@ export async function GET(req: NextRequest) {
 
         // Descargar el archivo de audio desde Telegram
         const rawBuf = (await client.downloadMedia(audioMsg, {})) as Buffer;
+
+        // --- LIMPIAR HISTORIAL DE CHAT ---
+        // Eliminar todos los mensajes generados durante esta solicitud (el link, el audio, y cualquier mensaje de "procesando")
+        try {
+            const allMessages = await client.getMessages(YT_BOT, { limit: 10 });
+            const messagesToDelete = allMessages
+                .filter((m: any) => m.date >= sentAt - 2)
+                .map((m: any) => m.id);
+
+            if (messagesToDelete.length > 0) {
+                await client.deleteMessages(YT_BOT, messagesToDelete, { revoke: true });
+            }
+        } catch (cleanupErr) {
+            console.warn("[telegram-download] Error al limpiar historial:", cleanupErr);
+        }
+
         await client.disconnect();
 
         if (!rawBuf || rawBuf.length === 0) {
