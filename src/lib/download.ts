@@ -226,10 +226,10 @@ export const downloadAndSaveTrack = async (
         // PATH B: YouTube URL → Telegram Bot (@BotYouTubeMusicBot)
         // ═══════════════════════════════════════════════════
         if (url) {
-            const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+            const isYouTube = url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-resolve');
 
             if (isYouTube) {
-                const videoIdMatch = url.match(/(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})/);
+                let videoIdMatch = url.match(/(?:v=|\/|youtu\.be\/|\?id=)([0-9A-Za-z_-]{11})/);
                 const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
                 if (!videoId) {
@@ -238,6 +238,8 @@ export const downloadAndSaveTrack = async (
                 }
 
                 console.log(`[Download] YouTube detectado. VideoId: ${videoId}. Usando Telegram Bot...`);
+                // Create clean Youtube URL to pass to the bot reliably
+                const cleanYoutubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
                 // Obtener título básico via noembed mientras descarga
                 let resolvedTitle = "Enlace Descargado";
@@ -246,7 +248,7 @@ export const downloadAndSaveTrack = async (
 
                 try {
                     const embedRes = await fetch(
-                        `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`,
+                        `https://noembed.com/embed?url=${cleanYoutubeUrl}`,
                         { signal: AbortSignal.timeout(4000) }
                     );
                     if (embedRes.ok) {
@@ -263,7 +265,7 @@ export const downloadAndSaveTrack = async (
                 // y espera la respuesta de audio (hasta 52 segs)
                 try {
                     console.log(`[Download] Enviando a Telegram Bot...`);
-                    const telegramUrl = `${runtimeApiBase}/api/telegram-download?url=${encodeURIComponent(url)}`;
+                    const telegramUrl = `${runtimeApiBase}/api/telegram-download?url=${encodeURIComponent(cleanYoutubeUrl)}`;
 
                     const telegramRes = await fetch(telegramUrl, {
                         signal: AbortSignal.timeout(58000) // 58s timeout
