@@ -223,7 +223,7 @@ export const downloadAndSaveTrack = async (
         }
 
         // ═══════════════════════════════════════════════════
-        // PATH B: YouTube URL → Direct Invidious Download
+        // PATH B: YouTube URL → Telegram Bot (@BotYouTubeMusicBot)
         // ═══════════════════════════════════════════════════
         if (url) {
             const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
@@ -234,97 +234,79 @@ export const downloadAndSaveTrack = async (
 
                 if (!videoId) {
                     cleanup();
-                    return { success: false, error: "No se pudo extraer el ID del video" };
+                    return { success: false, error: "No se pudo extraer el ID del video de YouTube" };
                 }
 
-                console.log(`[Download] YouTube detected. VideoId: ${videoId}. Using DIRECT Invidious path.`);
+                console.log(`[Download] YouTube detectado. VideoId: ${videoId}. Usando Telegram Bot...`);
 
-                // ── Step 1: Resolve audio URL DIRECTLY from browser to Invidious ──
-                // No server involved! Browser's residential IP talks directly to Invidious.
-                let audioUrl = "";
+                // Obtener título básico via noembed mientras descarga
                 let resolvedTitle = "Enlace Descargado";
-                let resolvedArtist = "Desconocido";
-                let resolvedCover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                let resolvedArtist = "YouTube";
+                const resolvedCover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-                // Get title via noembed (always works, lightweight)
                 try {
-                    const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, { signal: AbortSignal.timeout(3000) });
+                    const embedRes = await fetch(
+                        `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`,
+                        { signal: AbortSignal.timeout(4000) }
+                    );
                     if (embedRes.ok) {
                         const embedData = await embedRes.json();
-                        if (embedData.title) {
-                            resolvedTitle = embedData.title;
-                            resolvedArtist = embedData.author_name || resolvedArtist;
-                        }
+                        if (embedData.title) resolvedTitle = embedData.title;
+                        if (embedData.author_name) resolvedArtist = embedData.author_name;
                     }
                 } catch { }
 
-                // Instead of calling Invidious APIs from the browser (which causes CORS blocks),
-                // we call Vercel /api/youtube-resolve which executes on the backend without CORS.
                 if (onProgress) onProgress(10);
 
+                // ── Llamar al endpoint /api/telegram-download ──
+                // El servidor usa GramJS para enviar el link al @BotYouTubeMusicBot
+                // y espera la respuesta de audio (hasta 52 segs)
                 try {
-                    console.log(`[Download] Resolving via Vercel youtube-resolve (server-side)...`);
-                    const resolveUrl = `${runtimeApiBase}/api/youtube-resolve?id=${videoId}`;
-                    const resolveRes = await fetch(resolveUrl, { signal: AbortSignal.timeout(25000) });
+                    console.log(`[Download] Enviando a Telegram Bot...`);
+                    const telegramUrl = `${runtimeApiBase}/api/telegram-download?url=${encodeURIComponent(url)}`;
 
-                    if (resolveRes.ok) {
-                        const data = await resolveRes.json();
-                        audioUrl = data.audioUrl || "";
-                        if (data.title) resolvedTitle = data.title;
-                        if (data.artist) resolvedArtist = data.artist;
-                        if (data.coverUrl) resolvedCover = data.coverUrl;
-                        console.log(`[Download] ✅ Resolved via ${data.instance}: audioUrl ready`);
-                    } else {
+                    const telegramRes = await fetch(telegramUrl, {
+                        signal: AbortSignal.timeout(58000) // 58s timeout
+                    });
+
+                    if (!telegramRes.ok) {
+                        let errMsg = `HTTP ${telegramRes.status}`;
                         try {
-                            const errData = await resolveRes.json();
-                            if (errData.title && errData.title !== "Enlace Descargado") resolvedTitle = errData.title;
-                            if (errData.artist) resolvedArtist = errData.artist;
+                            const errData = await telegramRes.json();
+                            if (errData.error) errMsg = errData.error;
                         } catch { }
-                        console.warn(`[Download] youtube-resolve returned ${resolveRes.status}`);
+                        throw new Error(errMsg);
                     }
-                } catch (err: any) {
-                    console.warn(`[Download] youtube-resolve failed: ${err.message}`);
+
+                    if (onProgress) onProgress(70);
+
+                    const audioBlob = await telegramRes.blob();
+                    if (onProgress) onProgress(90);
+
+                    // Priorizar metadatos que vienen del bot de Telegram
+                    const headerTitle = telegramRes.headers.get("x-video-title");
+                    const headerArtist = telegramRes.headers.get("x-video-artist");
+                    if (headerTitle) resolvedTitle = decodeURIComponent(headerTitle);
+                    if (headerArtist) resolvedArtist = decodeURIComponent(headerArtist);
+
+                    const metaHeaders = new Headers();
+                    metaHeaders.set("x-video-title", encodeURIComponent(resolvedTitle));
+                    metaHeaders.set("x-video-artist", encodeURIComponent(resolvedArtist));
+                    metaHeaders.set("x-video-cover", resolvedCover);
+
+                    cleanup();
+                    await processResolvedBlob(audioBlob, metaHeaders, null, url, id, {
+                        title: resolvedTitle,
+                        artist: resolvedArtist,
+                        cover: resolvedCover
+                    });
+                    if (onComplete) onComplete();
+                    return { success: true };
+                } catch (tgErr: any) {
+                    console.warn(`[Download] Telegram Bot falló: ${tgErr.message}`);
+                    cleanup();
+                    return { success: false, error: `Error descargando via Telegram: ${tgErr.message}` };
                 }
-
-                // ── Step 2: Download audio via Vercel CORS proxy → Invidious (residential IP) ──
-                // Browser → Vercel (adds CORS) → Invidious (local=true, residential IP) → YouTube audio
-                // YouTube never sees Vercel's IP because Invidious handles it!
-                if (audioUrl) {
-                    try {
-                        if (onProgress) onProgress(25);
-                        // Route through our CORS proxy on Vercel
-                        const proxyUrl = `${runtimeApiBase}/api/audio-proxy?url=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(resolvedTitle)}&artist=${encodeURIComponent(resolvedArtist)}&cover=${encodeURIComponent(resolvedCover)}`;
-                        console.log(`[Download] Fetching via CORS proxy → Invidious...`);
-
-                        const audioRes = await fetch(proxyUrl, { signal: controller.signal });
-                        if (!audioRes.ok) throw new Error(`Proxy stream HTTP ${audioRes.status}`);
-
-                        const audioBlob = await audioRes.blob();
-                        if (onProgress) onProgress(90);
-
-                        const metaHeaders = new Headers();
-                        metaHeaders.set("x-video-title", encodeURIComponent(resolvedTitle));
-                        metaHeaders.set("x-video-artist", encodeURIComponent(resolvedArtist));
-                        metaHeaders.set("x-video-cover", resolvedCover);
-
-                        cleanup();
-                        await processResolvedBlob(audioBlob, metaHeaders, null, url, id, {
-                            title: resolvedTitle,
-                            artist: resolvedArtist,
-                            cover: resolvedCover
-                        });
-                        if (onComplete) onComplete();
-                        return { success: true };
-                    } catch (streamErr: any) {
-                        console.warn(`[Download] Direct Invidious stream failed: ${streamErr.message}`);
-                    }
-                }
-
-                // If we get here, absolutely all YouTube/Invidious download attempts failed
-                // WE NO LONGER FALLBACK TO DEEZER -- because Deezer often fetches the wrong song
-                // for remixes or specific live versions. The user only wants the exact YouTube audio.
-                cleanup();
-                return { success: false, error: "Servidores Invidious caídos. Intenta de nuevo más tarde." };
             }
 
             // Non-YouTube URL: direct fetch

@@ -457,8 +457,8 @@ function LibraryContent() {
 
         const mergedTracks: UnifiedTrack[] = tracks.map(t => {
             localTrackIds.add(t.id);
-            // Local tracks that lack a blob means they were pulled from cloud sync, but not downloaded locally
-            const isCloud = !t.blob && !(t as any).isNativeDownload;
+            // Local tracks that lack a blob/hasLocalBlob means they were pulled from cloud sync, but not downloaded locally
+            const isCloud = !t.blob && !t.hasLocalBlob && !(t as any).isNativeDownload;
             return {
                 ...t,
                 isCloudOnly: isCloud,

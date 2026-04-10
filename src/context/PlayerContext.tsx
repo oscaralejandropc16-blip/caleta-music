@@ -254,23 +254,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                const audio = audioRef.current;
-                const track = currentTrackRef.current;
-                if (!audio || !track) return;
+        let wasPlayingBeforeBackground = false;
 
-                console.log('[Player] App returned to foreground, checking audio state...');
+        const handleVisibilityChange = () => {
+            const audio = audioRef.current;
+            if (!audio) return;
+
+            if (document.visibilityState === 'hidden') {
+                // Guardar estado antes de que iOS o el navegador suspenda el audio
+                wasPlayingBeforeBackground = !audio.paused;
+            } else if (document.visibilityState === 'visible') {
+                const track = currentTrackRef.current;
+                if (!track) return;
 
                 // Resume keepAwake silently to maintain audio session
                 startKeepAwake();
 
-                // If the audio was playing before going to background but iOS killed it,
-                // the audio element will be paused with currentTime > 0
-                // We detect this and force-resume
-                if (audio.paused && audio.currentTime > 0 && audio.src) {
-                    console.log('[Player] Detected suspended audio, attempting resume...');
-                    // Small delay to let iOS settle the audio route
+                // SOLAMENTE reanudar si estaba reproduciéndose justo antes de ir a background
+                // Esto previene que se reanude solo cuando el usuario lo había pausado intencionalmente
+                if (wasPlayingBeforeBackground && audio.paused && audio.currentTime > 0 && audio.src) {
                     setTimeout(() => {
                         if (audioRef.current && audioRef.current.paused && audioRef.current.src) {
                             audioRef.current.play().catch((err) => {
@@ -279,6 +281,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                         }
                     }, 300);
                 }
+
+                wasPlayingBeforeBackground = false;
             }
         };
 

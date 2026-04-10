@@ -86,6 +86,58 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // FALLBACK 0: COBALT API (Most reliable right now)
+    try {
+        console.log(`[YT-Resolve] Trying COBALT API for video ${resolvedVideoId}`);
+        // Default to a public instance, typically api.cobalt.tools or a community one
+        const cobaltRes = await fetch("https://api.cobalt.tools/api/json", {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            },
+            body: JSON.stringify({
+                url: `https://www.youtube.com/watch?v=${resolvedVideoId}`,
+                isAudioOnly: true,
+                aFormat: "mp3",
+                isAudioMuted: false
+            }),
+            signal: AbortSignal.timeout(8000)
+        });
+
+        if (cobaltRes.ok) {
+            const cobaltData = await cobaltRes.json();
+            if (cobaltData.status === "stream" || cobaltData.status === "redirect") {
+                console.log(`[YT-Resolve] ✅ Resolved via COBALT API`);
+
+                // Extraer metadatos básicos ya que Cobalt a veces no los da
+                let title = "YouTube Audio";
+                let artist = "Desconocido";
+                try {
+                    const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${resolvedVideoId}`);
+                    if (embedRes.ok) {
+                        const embedData = await embedRes.json();
+                        title = embedData.title || title;
+                        artist = embedData.author_name || artist;
+                    }
+                } catch { }
+
+                return withCors(NextResponse.json({
+                    audioUrl: cobaltData.url,
+                    contentType: "audio/mpeg", // we requested mp3
+                    title,
+                    artist,
+                    coverUrl: `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`,
+                    videoId: resolvedVideoId,
+                    instance: "https://api.cobalt.tools"
+                }));
+            }
+        }
+    } catch (err: any) {
+        console.warn(`[YT-Resolve] COBALT API failed: ${err.message}`);
+    }
+
     // Now resolve audio URL from Invidious
     for (const instance of instances) {
         try {
@@ -166,24 +218,61 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // All instances failed - try noembed for at least metadata
+    // FALLBACK 2: DEEZER NATIVE FALLBACK (Most reliable way to get music directly)
+    // If all proxy methods fail, we extract the YT title via noembed and fetch the audio from Deezer!
     let fallbackTitle = "Enlace Descargado";
     let fallbackArtist = "Desconocido";
+    let fallbackCoverUrl = `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`;
+
     if (resolvedVideoId) {
         try {
+            console.log(`[YT-Resolve] Trying DEEZER FALLBACK for video ${resolvedVideoId}`);
+            // 1. Get exact video title from YouTube Noembed
             const embedRes = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${resolvedVideoId}`, { signal: AbortSignal.timeout(3000) });
+
             if (embedRes.ok) {
                 const embedData = await embedRes.json();
                 if (embedData.title) {
                     fallbackTitle = embedData.title;
                     fallbackArtist = embedData.author_name || fallbackArtist;
+                    fallbackCoverUrl = embedData.thumbnail_url || fallbackCoverUrl;
+
+                    // Cleanup title (remove 'Official Video', 'Lyrics', etc.)
+                    const cleanTitle = fallbackTitle
+                        .replace(/(\(|\[).*?(official|lyric|video|audio).*?(\)|\])/gi, '')
+                        .replace(/ft\..*/gi, '')
+                        .trim();
+
+                    // 2. Search Deezer natively
+                    const hostUrl = request.headers.get('host');
+                    const proto = request.headers.get('x-forwarded-proto') || 'http';
+                    const dRes = await fetch(`${proto}://${hostUrl}/api/deezer-search?q=${encodeURIComponent(cleanTitle + ' ' + fallbackArtist)}`, { signal: AbortSignal.timeout(4000) });
+
+                    if (dRes.ok) {
+                        const dData = await dRes.json();
+                        if (dData.data && dData.data.length > 0) {
+                            const bestMatch = dData.data[0];
+                            console.log(`[YT-Resolve] ✅ Resolved via DEEZER FALLBACK: ID ${bestMatch.id}`);
+                            return withCors(NextResponse.json({
+                                audioUrl: `${proto}://${hostUrl}/api/deezer?id=${bestMatch.id}`,
+                                contentType: "audio/mpeg",
+                                title: fallbackTitle,
+                                artist: fallbackArtist,
+                                coverUrl: fallbackCoverUrl,
+                                videoId: resolvedVideoId,
+                                instance: "Deezer Hybrid Fallback"
+                            }));
+                        }
+                    }
                 }
             }
-        } catch { }
+        } catch (err: any) {
+            console.warn(`[YT-Resolve] DEEZER FALLBACK failed: ${err.message}`);
+        }
     }
 
     return withCors(NextResponse.json({
-        error: "All Invidious and Piped instances failed to resolve audio",
+        error: "All Invidious, Piped and Deezer fallbacks failed to resolve audio",
         title: fallbackTitle,
         artist: fallbackArtist,
         videoId: resolvedVideoId,
