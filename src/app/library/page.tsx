@@ -855,13 +855,16 @@ function LibraryContent() {
                                             <div
                                                 key={track.id}
                                                 onClick={() => handlePlay(track)}
-                                                className={`group grid grid-cols-[32px_1fr_40px_70px] md:grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_70px] items-center gap-3 md:gap-4 px-3 md:px-5 py-3 rounded-[16px] transition-all duration-300 ease-out cursor-pointer ${isCurrent
-                                                    ? "bg-brand-500/10 shadow-[0_0_20px_rgba(99,102,241,0.15)] border border-brand-500/20"
-                                                    : "bg-transparent hover:bg-white/[0.04] border border-transparent hover:border-white/[0.03] hover:shadow-lg"
+                                                className={`group grid grid-cols-[32px_1fr_40px_70px] md:grid-cols-[40px_minmax(0,1.5fr)_minmax(0,1fr)_40px_70px] items-center gap-3 md:gap-4 px-3 md:px-5 py-3.5 rounded-[20px] transition-all duration-400 ease-out cursor-pointer relative overflow-hidden ${isCurrent
+                                                    ? "bg-brand-500/15 shadow-[0_10px_30px_rgba(99,102,241,0.15)] border border-brand-500/30"
+                                                    : "bg-white/[0.01] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] active:scale-[0.98]"
                                                     }`}
                                             >
+                                                {/* Animated background reflection on hover */}
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
+
                                                 {/* Track number */}
-                                                <div className="w-6 md:w-8 flex-shrink-0 flex items-center justify-center font-bold text-[13px] text-slate-500 group-hover:text-white transition-colors relative">
+                                                <div className="w-6 md:w-8 flex-shrink-0 flex items-center justify-center font-bold text-[13px] text-slate-500 group-hover:text-white transition-colors relative z-10">
                                                     {isCurrent && isPlaying ? (
                                                         <Music
                                                             size={16}
@@ -869,7 +872,7 @@ function LibraryContent() {
                                                             strokeWidth={3}
                                                         />
                                                     ) : (
-                                                        <span className="group-hover:opacity-0 transition-opacity duration-200">
+                                                        <span className="group-hover:opacity-0 transition-opacity duration-300">
                                                             {idx + 1}
                                                         </span>
                                                     )}
@@ -877,30 +880,27 @@ function LibraryContent() {
                                                         <Play
                                                             size={16}
                                                             fill="currentColor"
-                                                            className="text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                            className="text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-110"
                                                         />
                                                     )}
                                                     {isCurrent && !isPlaying && !track.isCloudOnly && (
                                                         <Play
                                                             size={16}
                                                             fill="currentColor"
-                                                            className="text-brand-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                            className="text-brand-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300"
                                                         />
                                                     )}
                                                 </div>
 
                                                 {/* Track info */}
-                                                <div className="flex items-center gap-4 min-w-0">
-                                                    <img
-                                                        src={
-                                                            track.coverUrl || "/placeholder.png"
-                                                        }
-                                                        className={`w-10 h-10 rounded shadow-md object-cover flex-shrink-0 ${isCurrent
-                                                            ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-[#0f172a]"
-                                                            : ""
-                                                            }`}
-                                                        alt=""
-                                                    />
+                                                <div className="flex items-center gap-4 min-w-0 z-10">
+                                                    <div className="relative flex-shrink-0 overflow-hidden rounded-xl shadow-lg">
+                                                        <img
+                                                            src={track.coverUrl || "/placeholder.png"}
+                                                            className={`w-11 h-11 object-cover transition-transform duration-500 group-hover:scale-110 ${isCurrent ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-[#0f172a]" : ""}`}
+                                                            alt=""
+                                                        />
+                                                    </div>
                                                     <div className="flex flex-col min-w-0">
                                                         <span
                                                             className={`font-bold text-[15px] truncate transition-colors leading-tight ${isCurrent

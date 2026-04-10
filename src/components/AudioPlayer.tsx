@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePlayer, usePlayerTime } from "@/context/PlayerContext";
-import { Play, Pause, SkipForward, SkipBack, Volume2, Volume1, VolumeX, Maximize2, Heart, Loader, Shuffle, Repeat, Mic2, ListMusic, MonitorSpeaker, Plus } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Volume2, Volume1, VolumeX, Maximize2, Heart, Loader, Shuffle, Repeat, Mic2, ListMusic, MonitorSpeaker, Plus, Music } from "lucide-react";
 import { isTrackLiked, toggleLike } from "@/lib/db";
 import toast from "react-hot-toast";
 import FullScreenPlayer from "./FullScreenPlayer";
@@ -74,47 +74,55 @@ export default function AudioPlayer() {
         <>
             <style jsx>{`
                 .mini-player-pos {
-                    bottom: calc(64px + env(safe-area-inset-bottom, 6px) + 8px);
+                    bottom: calc(100px + env(safe-area-inset-bottom, 6px));
+                    width: 96%;
+                    left: 2%;
                 }
                 @media (min-width: 768px) {
                     .mini-player-pos {
                         bottom: 0 !important;
+                        width: 100%;
+                        left: 0;
                     }
                 }
             `}</style>
             <div
-                className="mini-player-pos fixed left-2 right-2 md:left-0 md:right-0 h-[60px] md:h-[90px] bg-[#1e1e24] md:bg-[#121216] rounded-xl md:rounded-none border border-white/5 md:border-t md:border-white/[0.05] z-50 flex flex-col md:flex-row shadow-2xl transition-all duration-300 overflow-hidden"
+                className="mini-player-pos fixed h-[64px] md:h-[90px] bg-[#060913]/70 backdrop-blur-3xl md:bg-[#121216] rounded-2xl md:rounded-none border border-white/10 md:border-t md:border-white/[0.05] z-50 flex flex-col md:flex-row shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] transition-all duration-300 overflow-hidden"
             >
 
                 {/* MOBILE PROGRESS BAR (Line at the very bottom) */}
-                <div className="w-full h-[2px] bg-white/10 md:hidden absolute bottom-0 left-0">
-                    <div className="h-full bg-brand-500 transition-all duration-200" style={{ width: `${(progress / (duration || 1)) * 100}%` }}></div>
+                <div className="w-full h-[2px] bg-white/5 md:hidden absolute bottom-0 left-0">
+                    <div className="h-full bg-brand-500 shadow-[0_0_10px_rgba(99,102,241,0.8)] transition-all duration-200" style={{ width: `${(progress / (duration || 1)) * 100}%` }}></div>
                 </div>
 
-                {/* ---> MOBILE DEEZER-STYLE LAYOUT <--- */}
-                <div className="flex md:hidden w-full h-full items-center justify-between px-3" onClick={() => setIsFullScreen(true)}>
-                    <div className="flex items-center gap-2 overflow-hidden flex-1">
-                        {/* Play/Pause Button on Left */}
-                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} disabled={isLoading} className="p-2 -ml-1 text-white outline-none active:scale-90 flex items-center justify-center disabled:opacity-80">
-                            {isLoading ? <EqLoader size={18} /> : (isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />)}
-                        </button>
+                {/* ---> MOBILE PREMIUM LAYOUT <--- */}
+                <div className="flex md:hidden w-full h-full items-center justify-between px-2" onClick={() => setIsFullScreen(true)}>
+                    <div className="flex items-center gap-3 overflow-hidden flex-1">
+                        {/* Cover Image in mini player */}
+                        <div className="relative h-[44px] w-[44px] rounded-xl overflow-hidden bg-white/5 shadow-md flex-shrink-0 ml-1">
+                            {currentTrack.coverUrl ? (
+                                <img src={currentTrack.coverUrl} alt="cover" className="object-cover w-full h-full" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-white/5"><Music size={20} className="text-white/20" /></div>
+                            )}
+                        </div>
 
-                        <div className="flex flex-col min-w-0 flex-1 justify-center ml-1">
+                        <div className="flex flex-col min-w-0 flex-1 justify-center">
                             <span className="text-white font-bold text-[13px] truncate leading-tight w-full pointer-events-none">
                                 {currentTrack.title}
                             </span>
-                            <span className="text-neutral-400 text-[11px] font-medium truncate w-full pointer-events-none mt-[1px]">
+                            <span className="text-brand-200/70 text-[11px] font-medium truncate w-full pointer-events-none mt-[1px]">
                                 {currentTrack.artist}
                             </span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pl-2 flex-shrink-0 text-white">
-                        <button onClick={(e) => { e.stopPropagation(); handleToggleLike(); }} className="p-2 outline-none active:scale-90">
+                    <div className="flex items-center gap-1.5 pl-2 pr-1 flex-shrink-0 text-white">
+                        <button onClick={(e) => { e.stopPropagation(); handleToggleLike(); }} className="p-2 outline-none active:scale-90 transition-transform">
                             <Heart size={20} fill={liked ? "currentColor" : "none"} className={liked ? "text-brand-500" : ""} />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); playNext(); }} disabled={!hasNext} className={`p-2 outline-none active:scale-90 ${!hasNext ? 'opacity-30' : ''}`}>
-                            <SkipForward size={22} fill="currentColor" />
+                        <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} disabled={isLoading} className="h-[40px] w-[40px] bg-white/10 rounded-full text-white outline-none active:scale-95 flex items-center justify-center disabled:opacity-50 transition-all">
+                            {isLoading ? <EqLoader size={16} /> : (isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />)}
                         </button>
                     </div>
                 </div>

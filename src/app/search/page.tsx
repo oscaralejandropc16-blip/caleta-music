@@ -677,23 +677,26 @@ export default function SearchPage() {
                                 return (
                                     <div
                                         key={track.trackId}
-                                        className="group flex items-center gap-4 px-4 py-3 rounded-2xl hover:bg-white/[0.04] transition-all duration-300 cursor-pointer active:scale-[0.99]"
+                                        className="group relative flex items-center gap-4 px-3 md:px-5 py-3.5 rounded-[20px] bg-white/[0.01] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] hover:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] transition-all duration-400 cursor-pointer active:scale-[0.98] overflow-hidden"
                                         onClick={() => handlePlay(track)}
                                     >
+                                        {/* Animated background reflection on hover */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
+
                                         {/* Track number */}
-                                        <div className="w-8 text-center flex-shrink-0 relative">
-                                            <span className="text-[13px] font-bold text-slate-500 group-hover:opacity-0 transition-opacity">
+                                        <div className="w-8 flex-shrink-0 flex items-center justify-center font-bold text-[13px] text-slate-500 group-hover:text-white transition-colors relative z-10">
+                                            <span className="group-hover:opacity-0 transition-opacity duration-300">
                                                 {idx + 1}
                                             </span>
-                                            <Play size={14} fill="currentColor" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            <Play size={16} fill="currentColor" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-110" />
                                         </div>
 
                                         {/* Artwork */}
-                                        <div className="relative w-12 h-12 flex-shrink-0">
+                                        <div className="relative w-11 h-11 flex-shrink-0 overflow-hidden rounded-xl shadow-lg z-10">
                                             <img
                                                 src={track.artworkUrl100.replace("100x100", "200x200")}
                                                 alt=""
-                                                className="w-full h-full rounded-lg object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-all duration-300 group-hover:shadow-[0_4px_20px_rgba(99,102,241,0.2)]"
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                                 loading="lazy"
                                             />
                                         </div>

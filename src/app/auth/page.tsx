@@ -121,10 +121,10 @@ export default function AuthPage() {
                     <button
                         onClick={handleGoogleSignIn}
                         disabled={googleLoading}
-                        className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3.5 px-4 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-lg disabled:opacity-60 disabled:hover:scale-100 mb-4"
+                        className="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 px-4 rounded-[20px] transition-all hover:scale-[1.02] hover:shadow-[0_10px_20px_rgba(0,0,0,0.3)] hover:border-white/20 disabled:opacity-60 disabled:hover:scale-100 mb-4 backdrop-blur-md outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40"
                     >
                         {googleLoading ? (
-                            <Loader size={20} className="animate-spin text-gray-600" />
+                            <Loader size={20} className="animate-spin text-white" />
                         ) : (
                             <svg width="20" height="20" viewBox="0 0 24 24">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -137,76 +137,76 @@ export default function AuthPage() {
                     </button>
 
                     {/* Divider */}
-                    <div className="flex items-center gap-4 my-5">
-                        <div className="h-px bg-white/10 flex-1"></div>
-                        <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">o</span>
-                        <div className="h-px bg-white/10 flex-1"></div>
+                    <div className="flex items-center gap-4 my-6">
+                        <div className="h-px bg-white/5 flex-1"></div>
+                        <span className="text-slate-500 text-[11px] font-bold uppercase tracking-[0.2em]">o usa tu email</span>
+                        <div className="h-px bg-white/5 flex-1"></div>
                     </div>
 
                     {/* Email Form */}
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         {!isLogin && (
-                            <div className="relative">
-                                <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <div className="relative group/input">
+                                <User size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-brand-400 transition-colors" />
                                 <input
                                     type="text"
                                     value={username}
                                     onChange={e => setUsername(e.target.value)}
                                     placeholder="Nombre de usuario"
-                                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                    className="w-full bg-[#0c1225]/50 border border-white/[0.08] hover:border-white/[0.15] rounded-[18px] py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/30 transition-all font-medium text-[15px] shadow-inner"
                                 />
                             </div>
                         )}
 
-                        <div className="relative">
-                            <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <div className="relative group/input">
+                            <Mail size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-brand-400 transition-colors" />
                             <input
                                 type="email"
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="Email"
                                 required
-                                className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl py-3.5 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full bg-[#0c1225]/50 border border-white/[0.08] hover:border-white/[0.15] rounded-[18px] py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/30 transition-all font-medium text-[15px] shadow-inner"
                             />
                         </div>
 
-                        <div className="relative">
-                            <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <div className="relative group/input">
+                            <Lock size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-brand-400 transition-colors" />
                             <input
                                 type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 placeholder="Contraseña"
                                 required
-                                className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl py-3.5 pl-12 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full bg-[#0c1225]/50 border border-white/[0.08] hover:border-white/[0.15] rounded-[18px] py-4 pl-12 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/30 transition-all font-medium text-[15px] shadow-inner"
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors outline-none"
                             >
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
                         </div>
 
                         {error && (
-                            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 animate-fade-in-up">
-                                <AlertCircle size={16} />
-                                {error}
+                            <div className="flex items-start gap-2 text-red-300 text-[13px] font-medium bg-red-500/10 border border-red-500/20 rounded-[14px] px-4 py-3 animate-fade-in-up mt-1">
+                                <AlertCircle size={16} className="mt-[2px] flex-shrink-0" />
+                                <span>{error}</span>
                             </div>
                         )}
 
                         {success && (
-                            <div className="flex items-center gap-2 text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 animate-fade-in-up">
-                                <Mail size={16} />
-                                {success}
+                            <div className="flex items-start gap-2 text-emerald-300 text-[13px] font-medium bg-emerald-500/10 border border-emerald-500/20 rounded-[14px] px-4 py-3 animate-fade-in-up mt-1">
+                                <Mail size={16} className="mt-[2px] flex-shrink-0" />
+                                <span>{success}</span>
                             </div>
                         )}
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-brand-500 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-bold py-3.5 rounded-xl transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-brand-500/25 disabled:opacity-60 disabled:hover:scale-100 flex items-center justify-center gap-2"
+                            className="w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-brand-400 border border-brand-400/20 text-white font-bold py-4 rounded-[18px] transition-all duration-300 active:scale-[0.98] shadow-[0_10px_20px_-5px_rgba(99,102,241,0.4)] hover:shadow-[0_15px_30px_-5px_rgba(99,102,241,0.5)] disabled:opacity-60 disabled:active:scale-100 flex items-center justify-center gap-2 mt-2 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50"
                         >
                             {loading ? (
                                 <>
