@@ -130,24 +130,22 @@ import { playlistsStore } from '@/lib/db';
  * Sube una playlist a la nube (Supabase).
  */
 export async function syncPlaylistToCloud(playlist: Playlist): Promise<void> {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
 
-        const { error } = await supabase.from('user_playlists').upsert({
-            user_id: session.user.id,
-            playlist_id: playlist.id,
-            name: playlist.name,
-            description: playlist.description || '',
-            cover_url: playlist.coverUrl || '',
-            track_ids: playlist.trackIds,
-            created_at: playlist.createdAt,
-            updated_at: Date.now(),
-        }, { onConflict: 'user_id,playlist_id' });
+    const { error } = await supabase.from('user_playlists').upsert({
+        user_id: session.user.id,
+        playlist_id: playlist.id,
+        name: playlist.name,
+        description: playlist.description || '',
+        cover_url: playlist.coverUrl || '',
+        track_ids: playlist.trackIds || [],
+        created_at: playlist.createdAt || Date.now(),
+        updated_at: Date.now(),
+    }, { onConflict: 'user_id,playlist_id' });
 
-        if (error) console.warn('[Sync] Playlist sync error:', error.message);
-    } catch (err) {
-        console.error('[Sync] Playlist sync error:', err);
+    if (error) {
+        throw new Error(error.message);
     }
 }
 
@@ -155,17 +153,12 @@ export async function syncPlaylistToCloud(playlist: Playlist): Promise<void> {
  * Sube TODAS las playlists locales a la nube.
  */
 export async function pushAllPlaylistsToCloud(): Promise<void> {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
 
-        const playlists = await getAllPlaylists();
-        for (const pl of playlists) {
-            await syncPlaylistToCloud(pl);
-        }
-        console.log(`[Sync] Pushed ${playlists.length} playlists to cloud`);
-    } catch (err) {
-        console.error('[Sync] Push playlists error:', err);
+    const playlists = await getAllPlaylists();
+    for (const pl of playlists) {
+        await syncPlaylistToCloud(pl);
     }
 }
 

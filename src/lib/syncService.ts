@@ -163,14 +163,10 @@ export async function fullSync(userId: string): Promise<void> {
     await pushLibraryToCloud(userId);
 
     // 3. Sync playlists
-    try {
-        const { pullPlaylistsFromCloud, pushAllPlaylistsToCloud } = await import("./syncLibrary");
-        await pullPlaylistsFromCloud();
-        await pushAllPlaylistsToCloud();
-        console.log("[Sync] Playlists synced ✓");
-    } catch (err) {
-        console.warn("[Sync] Playlist sync error:", err);
-    }
+    const { pullPlaylistsFromCloud, pushAllPlaylistsToCloud } = await import("./syncLibrary");
+    await pullPlaylistsFromCloud();
+    await pushAllPlaylistsToCloud();
+    console.log("[Sync] Playlists synced ✓");
 
     console.log("[Sync] Full sync complete ✓");
 }
