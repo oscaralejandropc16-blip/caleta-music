@@ -54,6 +54,7 @@ function LibraryContent() {
     const [downloadingCloudIds, setDownloadingCloudIds] = useState<Set<string>>(new Set());
     const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
+    const [playlistsReady, setPlaylistsReady] = useState(false);
     const [query, setQuery] = useState("");
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
     const [activeTab, setActiveTab] = useState<"all" | "likes" | "playlists" | "albums">(
@@ -118,6 +119,7 @@ function LibraryContent() {
         // Set local playlists immediately so they appear instantly
         const pls = await getAllPlaylists();
         setPlaylists(pls);
+        setPlaylistsReady(true);
 
         // Pull playlists from the cloud and merge safely in the background
         let mergedPls = [...pls];
@@ -496,7 +498,8 @@ function LibraryContent() {
 
     // 'Canciones' tab should only show truly downloaded tracks or cloud library tracks
     // Excluimos las canciones que ya están dentro de una playlist (como pidió el usuario)
-    const libraryTracks = allMergedTracks.filter(t => {
+    // Si las playlists aún no han cargado, mostramos lista vacía para evitar el "flash" de contenido sin filtrar
+    const libraryTracks = !playlistsReady ? [] : allMergedTracks.filter(t => {
         const isOffline = t.blob || (t as any).isNativeDownload || cloudTracks.some(ct => ct.id === t.id) || t.isCloudOnly;
         // Solo mostramos en Canciones si no pertenece a ninguna Playlist (convertimos a String por seguridad de tipos de IndexedDB)
         return isOffline && !playlistTrackIds.has(String(t.id));
