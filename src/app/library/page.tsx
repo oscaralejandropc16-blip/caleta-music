@@ -539,7 +539,7 @@ function LibraryContent() {
                         : "bg-white/[0.04] text-slate-300 hover:bg-white/[0.1] hover:text-white border border-white/[0.05]"
                         }`}
                 >
-                    Canciones
+                    Descargas
                 </button>
                 <button
                     onClick={() => setActiveTab("likes")}
@@ -576,24 +576,25 @@ function LibraryContent() {
 
                 <div className="flex-1 min-w-[10px]"></div>
 
-                <div className="flex overflow-x-auto gap-2 md:gap-3 ml-auto pb-1 md:pb-0 scrollbar-hide py-1">
+                {/* Botones de importar/crear - solo visibles en desktop (en móvil están como tarjetas en la grid de Playlists) */}
+                <div className="hidden md:flex overflow-x-auto gap-2 md:gap-3 ml-auto pb-1 md:pb-0 scrollbar-hide py-1">
                     <button
                         onClick={() => setShowSpotifyModal(true)}
                         className="bg-green-500/10 hover:bg-green-500 text-green-400 hover:text-white border border-green-500/30 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-green-500/40 whitespace-nowrap active:scale-95"
                     >
-                        <CloudDownload size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Importar de Spotify</span>
+                        <CloudDownload size={16} strokeWidth={2.5} /> Importar de Spotify
                     </button>
                     <button
                         onClick={() => setShowDeezerModal(true)}
                         className="bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500/30 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-purple-500/40 whitespace-nowrap active:scale-95"
                     >
-                        <CloudDownload size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Importar de Deezer</span>
+                        <CloudDownload size={16} strokeWidth={2.5} /> Importar de Deezer
                     </button>
                     <button
                         onClick={() => setShowCreateModal(true)}
                         className="bg-brand-500 hover:bg-brand-400 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-brand-400/50 whitespace-nowrap active:scale-95 shadow-[0_4px_20px_rgba(99,102,241,0.3)]"
                     >
-                        <Plus size={16} strokeWidth={3} /> <span className="hidden sm:inline">Nueva Playlist</span>
+                        <Plus size={16} strokeWidth={3} /> Nueva Playlist
                     </button>
                 </div>
             </div>
