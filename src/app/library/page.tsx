@@ -575,28 +575,6 @@ function LibraryContent() {
 
                 <div className="flex overflow-x-auto gap-2 md:gap-3 ml-auto pb-1 md:pb-0 scrollbar-hide py-1">
                     <button
-                        onClick={async () => {
-                            const { toast } = await import("react-hot-toast");
-                            const tId = toast.loading("Sincronizando con la nube (Subiendo y descargando)...");
-                            try {
-                                const { fullSync } = await import("@/lib/syncService");
-                                if (user?.id) {
-                                    await fullSync(user.id);
-                                    await loadLibrary();
-                                    toast.success("Sincronización completada. Tus playlists deberían estar listas.", { id: tId });
-                                } else {
-                                    toast.error("No hay usuario activo", { id: tId });
-                                }
-                            } catch (e: any) {
-                                toast.error("Error al sincronizar: " + e.message, { id: tId });
-                            }
-                        }}
-                        className="bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/30 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-blue-500/40 whitespace-nowrap active:scale-95"
-                        title="Forzar sincronización nube"
-                    >
-                        <Cloud size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Sincronizar</span>
-                    </button>
-                    <button
                         onClick={() => setShowSpotifyModal(true)}
                         className="bg-green-500/10 hover:bg-green-500 text-green-400 hover:text-white border border-green-500/30 px-4 md:px-5 py-2 md:py-2.5 rounded-full font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-green-500/40 whitespace-nowrap active:scale-95"
                     >
