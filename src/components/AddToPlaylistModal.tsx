@@ -14,20 +14,32 @@ interface AddToPlaylistModalProps {
 }
 
 export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew, onSelectPlaylist }: AddToPlaylistModalProps) {
-    const [playlists, setPlaylists] = useState<Playlist[]>([]);
+    const [playlists, setPlaylists] = useState<(Playlist & { _coverObjUrl?: string })[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (isOpen) {
             loadPlaylists();
         }
+        return () => {
+            // Cleanup object URLs to prevent memory leaks
+            playlists.forEach(p => {
+                if (p._coverObjUrl) {
+                    try { URL.revokeObjectURL(p._coverObjUrl); } catch (e) { }
+                }
+            });
+        };
     }, [isOpen]);
 
     const loadPlaylists = async () => {
         setLoading(true);
         try {
             const data = await getAllPlaylists();
-            setPlaylists(data);
+            const modifiedData = data.map(p => ({
+                ...p,
+                _coverObjUrl: p.coverBlob ? URL.createObjectURL(p.coverBlob) : undefined
+            }));
+            setPlaylists(modifiedData);
         } catch (error) {
             console.error(error);
         } finally {
@@ -132,8 +144,8 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, onCreateNew
                                     <div
                                         className="w-14 h-14 rounded-[14px] bg-white/[0.05] flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden relative z-10 group-hover:scale-105 transition-transform"
                                         style={playlist.coverBlob || playlist.coverUrl ? {
-                                            backgroundImage: playlist.coverBlob
-                                                ? `url(${URL.createObjectURL(playlist.coverBlob)})`
+                                            backgroundImage: playlist._coverObjUrl
+                                                ? `url(${playlist._coverObjUrl})`
                                                 : `url(${playlist.coverUrl})`,
                                             backgroundSize: "cover",
                                             backgroundPosition: "center"
