@@ -229,7 +229,7 @@ export const downloadAndSaveTrack = async (
             const isYouTube = url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-resolve');
 
             if (isYouTube) {
-                let videoIdMatch = url.match(/(?:v=|\/|youtu\.be\/|\?id=)([0-9A-Za-z_-]{11})/);
+                let videoIdMatch = url.match(/(?:[?&]v=|youtu\.be\/|\/shorts\/|[?&]id=)([0-9A-Za-z_-]{11})(?=[^0-9A-Za-z_-]|$)/);
                 const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
                 if (!videoId) {
